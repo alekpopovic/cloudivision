@@ -15,4 +15,12 @@ describe('StatusBadgeComponent', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Succeeded');
   });
+
+  it('uses success classes for succeeded status', () => {
+    fixture.componentRef.setInput('status', 'Succeeded');
+    fixture.detectChanges();
+    const badge: HTMLElement = fixture.nativeElement.querySelector('span');
+    expect(badge.className).toContain('bg-emerald-50');
+    expect(badge.className).toContain('text-emerald-700');
+  });
 });

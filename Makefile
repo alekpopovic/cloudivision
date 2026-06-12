@@ -1,4 +1,4 @@
-.PHONY: fmt test vet lint build run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate install uninstall helm-template
+.PHONY: fmt test test-unit test-controller test-api test-web test-e2e test-all vet lint build run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate install uninstall helm-template
 
 IMAGE_REGISTRY ?= ghcr.io/cloudivision
 IMAGE_TAG ?= dev
@@ -19,6 +19,29 @@ fmt:
 test:
 	@mkdir -p $(GOTMPDIR)
 	go test ./...
+
+test-unit:
+	@mkdir -p $(GOTMPDIR)
+	go test ./api/... ./internal/domain/... ./internal/webhook/... ./internal/build/... ./internal/gitops/... ./internal/executor/... ./internal/audit/... ./internal/auth/... ./internal/redact/... ./internal/runner/...
+
+test-controller:
+	@mkdir -p $(GOTMPDIR)
+	@if [ -z "$${KUBEBUILDER_ASSETS:-}" ]; then \
+		echo "KUBEBUILDER_ASSETS is not set; running controller fake-client tests only. Set KUBEBUILDER_ASSETS to enable future envtest-backed tests."; \
+	fi
+	go test ./internal/controller/...
+
+test-api:
+	@mkdir -p $(GOTMPDIR)
+	go test ./internal/api/...
+
+test-web:
+	npm --prefix web test -- --watch=false
+
+test-e2e:
+	./test/e2e/kind_smoke.sh
+
+test-all: fmt test-unit test-controller test-api test-web vet build helm-template
 
 vet:
 	@mkdir -p $(GOTMPDIR)

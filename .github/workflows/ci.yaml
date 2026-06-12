@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: Check gofmt
+        run: |
+          test -z "$(gofmt -l api cmd internal)"
+
+      - name: Go test
+        run: go test ./...
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Web build
+        run: npm run build
+        working-directory: web
+
+      - name: Web tests
+        run: npm test -- --watch=false
+        working-directory: web
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Helm template
+        run: helm template cloudivision charts/cloudivision --include-crds

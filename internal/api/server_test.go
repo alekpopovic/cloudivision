@@ -54,6 +54,36 @@ func TestPostBuildRunCreatesCR(t *testing.T) {
 	}
 }
 
+func TestListBuildRuns(t *testing.T) {
+	buildRun := &cicdv1alpha1.BuildRun{
+		ObjectMeta: metav1.ObjectMeta{Name: "build-1", Namespace: "ci"},
+		Spec: cicdv1alpha1.BuildRunSpec{
+			ProjectRef:          "project",
+			RepositoryRef:       "repo",
+			PipelineTemplateRef: "template",
+			Revision:            "main",
+			TriggeredBy:         cicdv1alpha1.TriggeredBy{Type: cicdv1alpha1.TriggerTypeManual},
+			Image:               cicdv1alpha1.ImageRef{Repository: "ghcr.io/cloudivision/app"},
+		},
+	}
+	server, _ := newTestServer(t, buildRun)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/build-runs?namespace=ci", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var items []BuildRunResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &items); err != nil {
+		t.Fatalf("decode BuildRuns: %v", err)
+	}
+	if len(items) != 1 || items[0].Name != "build-1" {
+		t.Fatalf("items = %#v, want build-1", items)
+	}
+}
+
 func TestGitHubWebhookCreatesBuildRun(t *testing.T) {
 	body := readFixture(t, "github_push.json")
 	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitHub)
@@ -181,6 +211,25 @@ func TestBuildRunLogsReadsPodLogs(t *testing.T) {
 	}
 }
 
+func TestBuildRunLogsPodNotFound(t *testing.T) {
+	server, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/build-runs/ci/missing/logs", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var errResp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if errResp.Code != "not_found" {
+		t.Fatalf("code = %q, want not_found", errResp.Code)
+	}
+}
+
 func TestAuditEventsEndpointUsesConfiguredLister(t *testing.T) {
 	server, _ := newTestServer(t)
 	server.AuditEvents = fakeAuditLister{
@@ -229,6 +278,35 @@ func TestAuthNotDisabledReturnsNotImplemented(t *testing.T) {
 	}
 	if errResp.Code != "auth_not_implemented" {
 		t.Fatalf("code = %q", errResp.Code)
+	}
+}
+
+func TestAuthDisabledAllowsRequests(t *testing.T) {
+	server, _ := newTestServer(t)
+	server.AuthMode = "disabled"
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+func TestCORSAllowsConfiguredLocalUIOrigin(t *testing.T) {
+	server, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/build-runs", nil)
+	req.Header.Set("Origin", "http://localhost:4200")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:4200" {
+		t.Fatalf("Access-Control-Allow-Origin = %q", got)
 	}
 }
 

@@ -7,10 +7,16 @@ import { BuildRunsPageComponent } from './build-runs-page.component';
 
 class FakeApiClient {
   buildRunsCalls = 0;
+  createBuildRunCalls = 0;
 
   buildRuns() {
     this.buildRunsCalls++;
     return of([]);
+  }
+
+  createBuildRun() {
+    this.createBuildRunCalls++;
+    return of({});
   }
 }
 
@@ -35,4 +41,26 @@ describe('BuildRunsPageComponent', () => {
     tick(0);
     expect(api.buildRunsCalls).toBeGreaterThan(0);
   }));
+
+  it('keeps manual trigger form invalid until required fields are filled', () => {
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+
+    component.trigger();
+
+    expect(component.triggerForm.invalid).toBeTrue();
+    expect(api.createBuildRunCalls).toBe(0);
+
+    component.triggerForm.patchValue({
+      name: 'build-1',
+      namespace: 'ci',
+      projectRef: 'project',
+      repositoryRef: 'repo',
+      pipelineTemplateRef: 'template',
+      revision: 'main',
+      imageRepository: 'ghcr.io/cloudivision/app'
+    });
+
+    expect(component.triggerForm.valid).toBeTrue();
+  });
 });
