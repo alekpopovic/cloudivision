@@ -1,0 +1,128 @@
+openapi: 3.0.3
+info:
+  title: cloudivision API
+  version: 0.1.0
+  description: Thin HTTP API over cloudivision Kubernetes CRDs.
+paths:
+  /healthz:
+    get:
+      responses:
+        "200":
+          description: API process is healthy.
+  /readyz:
+    get:
+      responses:
+        "200":
+          description: API process is ready.
+  /api/v1/projects:
+    get:
+      responses:
+        "200":
+          description: List Project resources.
+    post:
+      responses:
+        "201":
+          description: Create a Project resource.
+  /api/v1/projects/{name}:
+    get:
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: namespace
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Get a Project resource.
+  /api/v1/repositories:
+    get:
+      responses:
+        "200":
+          description: List Repository resources.
+    post:
+      responses:
+        "201":
+          description: Create a Repository resource.
+  /api/v1/pipeline-templates:
+    get:
+      responses:
+        "200":
+          description: List PipelineTemplate resources.
+    post:
+      responses:
+        "201":
+          description: Create a PipelineTemplate resource.
+  /api/v1/build-runs:
+    get:
+      responses:
+        "200":
+          description: List BuildRun resources and status.
+    post:
+      responses:
+        "201":
+          description: Create a BuildRun resource.
+  /api/v1/build-runs/{namespace}/{name}:
+    get:
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Get a BuildRun resource and status.
+  /api/v1/build-runs/{namespace}/{name}/logs:
+    get:
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tailLines
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Return runner pod logs for a BuildRun.
+  /api/v1/environments:
+    get:
+      responses:
+        "200":
+          description: List Environment resources.
+  /api/v1/releases:
+    get:
+      responses:
+        "200":
+          description: List Release resources.
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string

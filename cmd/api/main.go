@@ -7,21 +7,63 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
+
+	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	cloudivisionapi "github.com/cloudivision/cloudivision/internal/api"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", okHandler)
-	mux.HandleFunc("GET /readyz", okHandler)
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		logger.Error("add Kubernetes scheme", "error", err)
+		os.Exit(1)
+	}
+	if err := cicdv1alpha1.AddToScheme(scheme); err != nil {
+		logger.Error("add cloudivision scheme", "error", err)
+		os.Exit(1)
+	}
 
-	addr := envOrDefault("CLOUDIVISION_API_ADDR", ":8080")
+	restConfig, err := kubernetesConfig()
+	if err != nil {
+		logger.Error("load Kubernetes config", "error", err)
+		os.Exit(1)
+	}
+	k8sClient, err := client.New(restConfig, client.Options{Scheme: scheme})
+	if err != nil {
+		logger.Error("create Kubernetes API client", "error", err)
+		os.Exit(1)
+	}
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		logger.Error("create Kubernetes clientset", "error", err)
+		os.Exit(1)
+	}
+
+	apiServer := cloudivisionapi.Server{
+		Client:           k8sClient,
+		LogReader:        cloudivisionapi.KubernetesPodLogReader{Client: clientset},
+		Logger:           logger,
+		DefaultNamespace: envOrDefault("CLOU_DIVISION_DEFAULT_NAMESPACE", "default"),
+		AuthMode:         envOrDefault("CLOU_DIVISION_AUTH_MODE", "disabled"),
+		CORSOrigins:      csvEnv("CLOU_DIVISION_CORS_ALLOWED_ORIGINS", "http://localhost:4200,http://localhost:4201"),
+	}
+
+	addr := envOrDefault("CLOU_DIVISION_API_ADDR", envOrDefault("CLOUDIVISION_API_ADDR", ":8080"))
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           apiServer.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -29,7 +71,7 @@ func main() {
 	defer stop()
 
 	go func() {
-		logger.Info("starting cloudivision API server", "addr", addr)
+		logger.Info("starting cloudivision API server", "addr", addr, "authMode", apiServer.AuthMode)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("api server failed", "error", err)
 			os.Exit(1)
@@ -48,10 +90,19 @@ func main() {
 	logger.Info("api server stopped")
 }
 
-func okHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status":"ok"}` + "\n"))
+func kubernetesConfig() (*rest.Config, error) {
+	if config, err := rest.InClusterConfig(); err == nil {
+		return config, nil
+	}
+	kubeconfig := os.Getenv("KUBECONFIG")
+	if kubeconfig == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		kubeconfig = filepath.Join(home, ".kube", "config")
+	}
+	return clientcmd.BuildConfigFromFlags("", kubeconfig)
 }
 
 func envOrDefault(name, fallback string) string {
@@ -59,4 +110,16 @@ func envOrDefault(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func csvEnv(name, fallback string) []string {
+	value := envOrDefault(name, fallback)
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
