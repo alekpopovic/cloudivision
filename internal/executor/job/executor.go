@@ -24,6 +24,12 @@ const (
 	DefaultRunnerImage                   = "cloudivision/runner:dev"
 	defaultTTLSecondsAfterFinished int32 = 3600
 	defaultBackoffLimit            int32 = 0
+	defaultActiveDeadlineSeconds   int64 = 3600
+	defaultRunnerServiceAccount          = "cloudivision-runner"
+	defaultCPURequest                    = "100m"
+	defaultCPULimit                      = "1000m"
+	defaultMemoryRequest                 = "128Mi"
+	defaultMemoryLimit                   = "1Gi"
 )
 
 type Executor struct {
@@ -34,6 +40,9 @@ type Executor struct {
 func (e Executor) EnsureRun(ctx context.Context, req executor.EnsureRunRequest) (*executor.RunRef, error) {
 	if err := validateRequest(req); err != nil {
 		return nil, err
+	}
+	if req.Template.Spec.Security.AllowPrivileged && !allowPrivilegedBuilds() {
+		return nil, fmt.Errorf("PipelineTemplate %q requests privileged build execution; set CLOU_DIVISION_ALLOW_PRIVILEGED_BUILDS=true to allow this unsupported mode", req.Template.Name)
 	}
 	key := types.NamespacedName{
 		Name:      NameForBuildRun(req.BuildRun.Name),
@@ -108,9 +117,15 @@ func buildJob(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, re
 		timeout := int64(template.Spec.Resources.TimeoutSeconds)
 		activeDeadlineSeconds = &timeout
 	}
+	if activeDeadlineSeconds == nil {
+		timeout := defaultActiveDeadlineSeconds
+		activeDeadlineSeconds = &timeout
+	}
 	runAsNonRoot := true
+	automountServiceAccountToken := true
 	allowPrivilegeEscalation := false
 	privileged := false
+	seccompProfile := corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      NameForBuildRun(buildRun.Name),
@@ -124,10 +139,12 @@ func buildJob(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, re
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{
-					RestartPolicy:      corev1.RestartPolicyNever,
-					ServiceAccountName: project.Spec.ServiceAccountName,
+					RestartPolicy:                corev1.RestartPolicyNever,
+					ServiceAccountName:           serviceAccountName(project),
+					AutomountServiceAccountToken: &automountServiceAccountToken,
 					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: &runAsNonRoot,
+						RunAsNonRoot:   &runAsNonRoot,
+						SeccompProfile: &seccompProfile,
 					},
 					Containers: []corev1.Container{
 						{
@@ -186,16 +203,10 @@ func resourceRequirements(resources cicdv1alpha1.PipelineResourceSpec) corev1.Re
 		Requests: corev1.ResourceList{},
 		Limits:   corev1.ResourceList{},
 	}
-	addQuantity(requirements.Requests, corev1.ResourceCPU, resources.CPURequest)
-	addQuantity(requirements.Limits, corev1.ResourceCPU, resources.CPULimit)
-	addQuantity(requirements.Requests, corev1.ResourceMemory, resources.MemoryRequest)
-	addQuantity(requirements.Limits, corev1.ResourceMemory, resources.MemoryLimit)
-	if len(requirements.Requests) == 0 {
-		requirements.Requests = nil
-	}
-	if len(requirements.Limits) == 0 {
-		requirements.Limits = nil
-	}
+	addQuantity(requirements.Requests, corev1.ResourceCPU, defaultString(resources.CPURequest, defaultCPURequest))
+	addQuantity(requirements.Limits, corev1.ResourceCPU, defaultString(resources.CPULimit, defaultCPULimit))
+	addQuantity(requirements.Requests, corev1.ResourceMemory, defaultString(resources.MemoryRequest, defaultMemoryRequest))
+	addQuantity(requirements.Limits, corev1.ResourceMemory, defaultString(resources.MemoryLimit, defaultMemoryLimit))
 	return requirements
 }
 
@@ -228,4 +239,22 @@ func validateRequest(req executor.EnsureRunRequest) error {
 		return fmt.Errorf("BuildRun name and namespace are required")
 	}
 	return nil
+}
+
+func serviceAccountName(project *cicdv1alpha1.Project) string {
+	if project.Spec.ServiceAccountName != "" {
+		return project.Spec.ServiceAccountName
+	}
+	return defaultRunnerServiceAccount
+}
+
+func allowPrivilegedBuilds() bool {
+	return strings.EqualFold(os.Getenv("CLOU_DIVISION_ALLOW_PRIVILEGED_BUILDS"), "true")
+}
+
+func defaultString(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }

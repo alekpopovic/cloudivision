@@ -11,7 +11,7 @@ import (
 	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
-	"github.com/cloudivision/cloudivision/internal/runner/redact"
+	"github.com/cloudivision/cloudivision/internal/redact"
 )
 
 type Runner struct {

@@ -3,6 +3,8 @@ package audit
 import (
 	"context"
 	"log/slog"
+
+	"github.com/cloudivision/cloudivision/internal/redact"
 )
 
 type Event struct {
@@ -27,11 +29,11 @@ func (r LoggerRecorder) Record(_ context.Context, event Event) error {
 		logger = slog.Default()
 	}
 	logger.Info("audit event",
-		"type", event.Type,
-		"actor", event.Actor,
-		"subject", event.Subject,
-		"eventID", event.EventID,
-		"message", event.Message,
+		"type", redact.MaskString(event.Type),
+		"actor", redact.MaskString(event.Actor),
+		"subject", redact.MaskString(event.Subject),
+		"eventID", redact.MaskString(event.EventID),
+		"message", redact.MaskString(event.Message),
 	)
 	return nil
 }

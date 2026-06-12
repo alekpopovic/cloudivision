@@ -13,7 +13,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/executor/steps"
 	cloudivisiongit "github.com/cloudivision/cloudivision/internal/git"
-	"github.com/cloudivision/cloudivision/internal/runner/redact"
+	"github.com/cloudivision/cloudivision/internal/redact"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"

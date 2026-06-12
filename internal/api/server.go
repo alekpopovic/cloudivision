@@ -14,6 +14,7 @@ import (
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/audit"
+	"github.com/cloudivision/cloudivision/internal/redact"
 	"github.com/cloudivision/cloudivision/internal/webhook"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -492,7 +493,7 @@ func (s Server) logging(next http.Handler) http.Handler {
 		logger = slog.Default()
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Info("api request", "method", r.Method, "path", r.URL.Path)
+		logger.Info("api request", "method", r.Method, "path", redact.MaskString(r.URL.RequestURI()))
 		next.ServeHTTP(w, r)
 	})
 }
