@@ -1,0 +1,13 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Environment
+metadata:
+  name: dev
+  namespace: cloudivision
+spec:
+  projectRef: demo-project
+  displayName: Development
+  namespace: demo-project
+  type: dev
+  requiresApproval: false
+  gitOps:
+    provider: generic

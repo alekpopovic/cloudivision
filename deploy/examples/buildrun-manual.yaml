@@ -1,0 +1,21 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: BuildRun
+metadata:
+  name: demo-buildrun-manual
+  namespace: cloudivision
+spec:
+  projectRef: demo-project
+  repositoryRef: demo-repository
+  pipelineTemplateRef: nodejs-demo
+  revision: main
+  branch: main
+  triggeredBy:
+    type: manual
+    actor: local-developer
+  image:
+    repository: localhost:5001/cloudivision-demo-app
+    tag: dev
+  params: {}
+  executor: job
+  gitOps:
+    enabled: false

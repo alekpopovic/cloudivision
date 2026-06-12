@@ -1,0 +1,36 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata:
+  name: nodejs-demo
+  namespace: cloudivision
+spec:
+  projectRef: demo-project
+  description: Demo pipeline for the sample Node.js app
+  steps:
+    - name: verify-demo-app
+      image: node:24-alpine
+      command:
+        - sh
+      args:
+        - -c
+        - test -f deploy/demo-app/package.json && test -f deploy/demo-app/Dockerfile
+      workingDir: .
+      timeoutSeconds: 120
+      continueOnError: false
+  build:
+    enabled: false
+    contextDir: deploy/demo-app
+    dockerfile: Dockerfile
+    builder: none
+    image: localhost:5001/cloudivision-demo-app
+    push: false
+  resources:
+    cpuRequest: 100m
+    cpuLimit: 500m
+    memoryRequest: 128Mi
+    memoryLimit: 512Mi
+    timeoutSeconds: 600
+  security:
+    allowPrivileged: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: false

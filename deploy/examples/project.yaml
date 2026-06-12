@@ -1,16 +1,17 @@
 apiVersion: cicd.cloudivision.io/v1alpha1
 kind: Project
 metadata:
-  name: sample-project
+  name: demo-project
+  namespace: cloudivision
 spec:
-  displayName: Sample Project
-  description: Example project managed by cloudivision
+  displayName: Demo Project
+  description: Local kind quickstart project
   ownerTeam: platform
-  namespace: sample-project
-  defaultRegistry: ghcr.io/cloudivision
+  namespace: cloudivision
+  defaultRegistry: localhost:5001
   defaultBranch: main
-  serviceAccountName: sample-builder
+  serviceAccountName: cloudivision-runner
   isolation:
     createNamespace: true
     podSecurityLevel: restricted
-    networkPolicyMode: defaultDeny
+    networkPolicyMode: disabled

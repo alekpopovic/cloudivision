@@ -1,21 +1,15 @@
 apiVersion: cicd.cloudivision.io/v1alpha1
 kind: Repository
 metadata:
-  name: sample-repository
+  name: demo-repository
+  namespace: cloudivision
 spec:
-  projectRef: sample-project
-  provider: github
-  url: https://github.com/cloudivision/example-app.git
+  projectRef: demo-project
+  provider: generic
+  url: https://github.com/cloudivision/cloudivision.git
   defaultBranch: main
-  credentialSecretRef:
-    name: sample-git-credentials
-    key: token
   webhook:
-    enabled: true
-    secretRef:
-      name: sample-webhook-secret
-      key: secret
+    enabled: false
     events:
       - push
-      - pull_request
-  pipelineTemplateRef: sample-template
+  pipelineTemplateRef: nodejs-demo
