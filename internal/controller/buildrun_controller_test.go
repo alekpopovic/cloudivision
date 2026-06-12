@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	jobexecutor "github.com/cloudivision/cloudivision/internal/executor/job"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -168,6 +169,63 @@ func TestTerminalBuildRunDoesNotCreateJob(t *testing.T) {
 	}
 }
 
+func TestTektonExecutorRequiresFeatureFlag(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv("CLOU_DIVISION_ENABLE_TEKTON", "false")
+	reconciler, buildRun := newBuildRunReconciler(t)
+	buildRun.Spec.Executor = cicdv1alpha1.ExecutorTypeTekton
+	if err := reconciler.Update(ctx, buildRun); err != nil {
+		t.Fatalf("update BuildRun error = %v", err)
+	}
+
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := reconciler.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatalf("get BuildRun error = %v", err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.BuildRunPhaseFailed {
+		t.Fatalf("phase = %q, want Failed", updated.Status.Phase)
+	}
+	if updated.Status.Failure.Reason != "TektonUnavailable" {
+		t.Fatalf("failure reason = %q, want TektonUnavailable", updated.Status.Failure.Reason)
+	}
+}
+
+func TestTektonExecutorSelectionCreatesPipelineRun(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv("CLOU_DIVISION_ENABLE_TEKTON", "true")
+	reconciler, buildRun := newBuildRunReconciler(t)
+	buildRun.Spec.Executor = cicdv1alpha1.ExecutorTypeTekton
+	if err := reconciler.Update(ctx, buildRun); err != nil {
+		t.Fatalf("update BuildRun error = %v", err)
+	}
+
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := reconciler.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatalf("get BuildRun error = %v", err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.BuildRunPhaseQueued {
+		t.Fatalf("phase = %q, want Queued", updated.Status.Phase)
+	}
+	if updated.Status.PipelineRunRef.Name == "" {
+		t.Fatalf("pipelineRunRef is empty")
+	}
+	jobs := &batchv1.JobList{}
+	if err := reconciler.List(ctx, jobs, client.InNamespace(buildRun.Namespace)); err != nil {
+		t.Fatalf("List Jobs error = %v", err)
+	}
+	if len(jobs.Items) != 0 {
+		t.Fatalf("len(jobs.Items) = %d, want 0", len(jobs.Items))
+	}
+}
+
 func newBuildRunReconciler(t *testing.T) (*BuildRunReconciler, *cicdv1alpha1.BuildRun) {
 	t.Helper()
 	scheme := runtime.NewScheme()
@@ -285,7 +343,7 @@ func testBuildRun() *cicdv1alpha1.BuildRun {
 func getRunnerJob(t *testing.T, ctx context.Context, reader client.Reader, buildRun *cicdv1alpha1.BuildRun) *batchv1.Job {
 	t.Helper()
 	job := &batchv1.Job{}
-	key := types.NamespacedName{Name: jobNameForBuildRun(buildRun.Name), Namespace: buildRun.Namespace}
+	key := types.NamespacedName{Name: jobexecutor.NameForBuildRun(buildRun.Name), Namespace: buildRun.Namespace}
 	if err := reader.Get(ctx, key, job); err != nil {
 		t.Fatalf("get Job error = %v", err)
 	}

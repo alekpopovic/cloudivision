@@ -2,38 +2,37 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/domain"
+	"github.com/cloudivision/cloudivision/internal/executor"
+	jobexecutor "github.com/cloudivision/cloudivision/internal/executor/job"
+	tektonexecutor "github.com/cloudivision/cloudivision/internal/executor/tekton"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
-	buildRunFinalizer                    = "cloudivision.io/buildrun-finalizer"
-	defaultRunnerImage                   = "cloudivision/runner:dev"
-	defaultTTLSecondsAfterFinished int32 = 3600
-	defaultBackoffLimit            int32 = 0
+	buildRunFinalizer = "cloudivision.io/buildrun-finalizer"
 )
 
 // BuildRunReconciler reconciles BuildRun resources.
 type BuildRunReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder EventRecorder
+	Scheme    *runtime.Scheme
+	Recorder  EventRecorder
+	Executors map[cicdv1alpha1.ExecutorType]executor.PipelineExecutor
 }
 
 // EventRecorder is the subset of Kubernetes event recording used by the reconciler.
@@ -47,11 +46,10 @@ type EventRecorder interface {
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=projects;repositories;pipelinetemplates,verbs=get;list;watch
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=releases,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=tekton.dev,resources=pipelineruns,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 func (r *BuildRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx).WithValues("buildRun", req.NamespacedName)
-
 	buildRun := &cicdv1alpha1.BuildRun{}
 	if err := r.Get(ctx, req.NamespacedName, buildRun); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -76,11 +74,6 @@ func (r *BuildRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, r.markReferenceError(ctx, buildRun, err)
 	}
 
-	if buildRun.Spec.Executor != "" && buildRun.Spec.Executor != cicdv1alpha1.ExecutorTypeJob {
-		logger.V(1).Info("BuildRun executor is not handled by Job reconciler", "executor", buildRun.Spec.Executor)
-		return ctrl.Result{}, nil
-	}
-
 	if isTerminalBuildRunPhase(buildRun.Status.Phase) {
 		if buildRun.Status.Phase == cicdv1alpha1.BuildRunPhaseSucceeded {
 			return ctrl.Result{}, r.ensureRelease(ctx, buildRun)
@@ -88,35 +81,34 @@ func (r *BuildRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
-	job := &batchv1.Job{}
-	jobKey := types.NamespacedName{
-		Name:      jobNameForBuildRun(buildRun.Name),
-		Namespace: buildRun.Namespace,
+	pipelineExecutor, executorType, err := r.executorFor(buildRun)
+	if err != nil {
+		return ctrl.Result{}, r.markExecutorError(ctx, buildRun, err)
 	}
-	if err := r.Get(ctx, jobKey, job); err != nil {
-		if !apierrors.IsNotFound(err) {
-			return ctrl.Result{}, fmt.Errorf("get Job %s: %w", jobKey, err)
-		}
-		job = r.buildJob(buildRun, project, repository, template)
-		if err := controllerutil.SetControllerReference(buildRun, job, r.Scheme); err != nil {
-			return ctrl.Result{}, fmt.Errorf("set Job owner reference: %w", err)
-		}
-		if err := r.Create(ctx, job); err != nil {
-			if !apierrors.IsAlreadyExists(err) {
-				return ctrl.Result{}, fmt.Errorf("create Job %s: %w", jobKey, err)
-			}
-		} else {
-			r.record(buildRun, corev1.EventTypeNormal, "JobCreated", "Created runner Job "+job.Name)
-		}
-		return ctrl.Result{}, r.markQueued(ctx, buildRun, job)
+	runRef, err := pipelineExecutor.EnsureRun(ctx, executor.EnsureRunRequest{
+		BuildRun:   buildRun,
+		Project:    project,
+		Repository: repository,
+		Template:   template,
+	})
+	if err != nil {
+		return ctrl.Result{}, r.markExecutorError(ctx, buildRun, err)
 	}
-
-	return ctrl.Result{}, r.syncStatusFromJob(ctx, buildRun, job)
+	if buildRun.Status.Phase == "" || buildRun.Status.Phase == cicdv1alpha1.BuildRunPhasePending {
+		r.recordRunCreated(buildRun, executorType, runRef)
+		return ctrl.Result{}, r.markQueued(ctx, buildRun, *runRef)
+	}
+	runStatus, err := pipelineExecutor.ReadRunStatus(ctx, *runRef)
+	if err != nil {
+		return ctrl.Result{}, r.markExecutorError(ctx, buildRun, err)
+	}
+	return ctrl.Result{}, r.syncStatusFromRun(ctx, buildRun, *runRef, runStatus)
 }
 
 func (r *BuildRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Scheme = mgr.GetScheme()
 	r.Recorder = mgr.GetEventRecorderFor("buildrun-controller")
+	r.ensureDefaultExecutors()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cicdv1alpha1.BuildRun{}).
 		Owns(&batchv1.Job{}).
@@ -150,66 +142,6 @@ func (r *BuildRunReconciler) loadReferences(ctx context.Context, buildRun *cicdv
 	return project, repository, template, nil
 }
 
-func (r *BuildRunReconciler) buildJob(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, repository *cicdv1alpha1.Repository, template *cicdv1alpha1.PipelineTemplate) *batchv1.Job {
-	labels := map[string]string{
-		"app.kubernetes.io/name":      "cloudivision",
-		"app.kubernetes.io/component": "runner",
-		"cloudivision.io/buildrun":    buildRun.Name,
-		"cloudivision.io/project":     project.Name,
-	}
-	backoffLimit := defaultBackoffLimit
-	ttlSeconds := defaultTTLSecondsAfterFinished
-	var activeDeadlineSeconds *int64
-	if template.Spec.Resources.TimeoutSeconds > 0 {
-		timeout := int64(template.Spec.Resources.TimeoutSeconds)
-		activeDeadlineSeconds = &timeout
-	}
-	runAsNonRoot := true
-	allowPrivilegeEscalation := false
-	privileged := false
-	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobNameForBuildRun(buildRun.Name),
-			Namespace: buildRun.Namespace,
-			Labels:    labels,
-		},
-		Spec: batchv1.JobSpec{
-			BackoffLimit:            &backoffLimit,
-			TTLSecondsAfterFinished: &ttlSeconds,
-			ActiveDeadlineSeconds:   activeDeadlineSeconds,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: corev1.PodSpec{
-					RestartPolicy:      corev1.RestartPolicyNever,
-					ServiceAccountName: project.Spec.ServiceAccountName,
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsNonRoot: &runAsNonRoot,
-					},
-					Containers: []corev1.Container{
-						{
-							Name:      "runner",
-							Image:     runnerImage(),
-							Env:       runnerEnv(buildRun, project, repository),
-							Resources: resourceRequirements(template.Spec.Resources),
-							SecurityContext: &corev1.SecurityContext{
-								RunAsNonRoot:             &runAsNonRoot,
-								AllowPrivilegeEscalation: &allowPrivilegeEscalation,
-								Privileged:               &privileged,
-								Capabilities: &corev1.Capabilities{
-									Drop: []corev1.Capability{"ALL"},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	return job
-}
-
 func (r *BuildRunReconciler) markReferenceError(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, err error) error {
 	now := metav1.Now()
 	buildRun.Status.Phase = cicdv1alpha1.BuildRunPhaseFailed
@@ -231,48 +163,58 @@ func (r *BuildRunReconciler) markReferenceError(ctx context.Context, buildRun *c
 	return r.updateBuildRunStatus(ctx, buildRun)
 }
 
-func (r *BuildRunReconciler) markQueued(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, job *batchv1.Job) error {
+func (r *BuildRunReconciler) markExecutorError(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, err error) error {
+	reason := "ExecutorFailed"
+	if errors.Is(err, tektonexecutor.ErrTektonUnavailable) {
+		reason = "TektonUnavailable"
+	}
+	now := metav1.Now()
+	if markErr := domain.MarkBuildRunFailed(buildRun, now, reason, err.Error()); markErr != nil {
+		return markErr
+	}
+	r.record(buildRun, corev1.EventTypeWarning, "BuildFailed", err.Error())
+	return r.updateBuildRunStatus(ctx, buildRun)
+}
+
+func (r *BuildRunReconciler) markQueued(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, ref executor.RunRef) error {
 	buildRun.Status.Phase = cicdv1alpha1.BuildRunPhaseQueued
 	buildRun.Status.ObservedGeneration = buildRun.Generation
-	buildRun.Status.JobRef = cicdv1alpha1.ObjectRef{Name: job.Name, Namespace: job.Namespace}
+	setRunRefStatus(buildRun, ref)
 	domain.SetCondition(&buildRun.Status.Conditions, metav1.Condition{
 		Type:               "Queued",
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: buildRun.Generation,
-		Reason:             "JobCreated",
-		Message:            "Runner Job has been created.",
+		Reason:             ref.Kind + "Created",
+		Message:            "Pipeline run has been created.",
 	})
 	return r.updateBuildRunStatus(ctx, buildRun)
 }
 
-func (r *BuildRunReconciler) syncStatusFromJob(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, job *batchv1.Job) error {
-	buildRun.Status.JobRef = cicdv1alpha1.ObjectRef{Name: job.Name, Namespace: job.Namespace}
+func (r *BuildRunReconciler) syncStatusFromRun(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, ref executor.RunRef, status *executor.RunStatus) error {
+	setRunRefStatus(buildRun, ref)
 	now := metav1.Now()
 
-	if job.Status.Succeeded > 0 {
+	switch status.Phase {
+	case executor.RunPhaseSucceeded:
 		if err := domain.MarkBuildRunSucceeded(buildRun, now, buildRun.Spec.Image); err != nil {
 			return err
 		}
-		r.record(buildRun, corev1.EventTypeNormal, "BuildSucceeded", "Runner Job completed successfully")
+		r.record(buildRun, corev1.EventTypeNormal, "BuildSucceeded", "Pipeline run completed successfully")
 		if err := r.updateBuildRunStatus(ctx, buildRun); err != nil {
 			return err
 		}
 		return r.ensureRelease(ctx, buildRun)
-	}
-
-	if jobFailed(job) {
-		if err := domain.MarkBuildRunFailed(buildRun, now, "JobFailed", "Runner Job failed"); err != nil {
+	case executor.RunPhaseFailed:
+		if err := domain.MarkBuildRunFailed(buildRun, now, status.Failure.Reason, status.Failure.Message); err != nil {
 			return err
 		}
-		r.record(buildRun, corev1.EventTypeWarning, "BuildFailed", "Runner Job failed")
+		r.record(buildRun, corev1.EventTypeWarning, "BuildFailed", status.Failure.Message)
 		return r.updateBuildRunStatus(ctx, buildRun)
-	}
-
-	if job.Status.Active > 0 {
+	case executor.RunPhaseRunning:
 		if err := domain.MarkBuildRunStarted(buildRun, now); err != nil {
 			return err
 		}
-		r.record(buildRun, corev1.EventTypeNormal, "BuildStarted", "Runner Job is running")
+		r.record(buildRun, corev1.EventTypeNormal, "BuildStarted", "Pipeline run is running")
 		return r.updateBuildRunStatus(ctx, buildRun)
 	}
 
@@ -282,6 +224,34 @@ func (r *BuildRunReconciler) syncStatusFromJob(ctx context.Context, buildRun *ci
 		return r.updateBuildRunStatus(ctx, buildRun)
 	}
 	return nil
+}
+
+func (r *BuildRunReconciler) executorFor(buildRun *cicdv1alpha1.BuildRun) (executor.PipelineExecutor, cicdv1alpha1.ExecutorType, error) {
+	r.ensureDefaultExecutors()
+	executorType := buildRun.Spec.Executor
+	if executorType == "" {
+		executorType = cicdv1alpha1.ExecutorTypeJob
+	}
+	if executorType == cicdv1alpha1.ExecutorTypeTekton && !tektonEnabled() {
+		return nil, executorType, fmt.Errorf("%w: set CLOU_DIVISION_ENABLE_TEKTON=true to use executor=tekton", tektonexecutor.ErrTektonUnavailable)
+	}
+	pipelineExecutor := r.Executors[executorType]
+	if pipelineExecutor == nil {
+		return nil, executorType, fmt.Errorf("unsupported BuildRun executor %q", executorType)
+	}
+	return pipelineExecutor, executorType, nil
+}
+
+func (r *BuildRunReconciler) ensureDefaultExecutors() {
+	if r.Executors == nil {
+		r.Executors = map[cicdv1alpha1.ExecutorType]executor.PipelineExecutor{}
+	}
+	if r.Executors[cicdv1alpha1.ExecutorTypeJob] == nil {
+		r.Executors[cicdv1alpha1.ExecutorTypeJob] = jobexecutor.Executor{Client: r.Client, Scheme: r.Scheme}
+	}
+	if r.Executors[cicdv1alpha1.ExecutorTypeTekton] == nil {
+		r.Executors[cicdv1alpha1.ExecutorTypeTekton] = tektonexecutor.Executor{Client: r.Client, Scheme: r.Scheme}
+	}
 }
 
 func (r *BuildRunReconciler) updateBuildRunStatus(ctx context.Context, buildRun *cicdv1alpha1.BuildRun) error {
@@ -337,65 +307,6 @@ func (r *BuildRunReconciler) record(buildRun *cicdv1alpha1.BuildRun, eventType, 
 	}
 }
 
-func runnerImage() string {
-	if image := os.Getenv("CLOU_DIVISION_RUNNER_IMAGE"); image != "" {
-		return image
-	}
-	return defaultRunnerImage
-}
-
-func runnerEnv(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, repository *cicdv1alpha1.Repository) []corev1.EnvVar {
-	return []corev1.EnvVar{
-		{Name: "BUILD_RUN_NAME", Value: buildRun.Name},
-		{Name: "BUILD_RUN_NAMESPACE", Value: buildRun.Namespace},
-		{Name: "PROJECT_NAME", Value: project.Name},
-		{Name: "REPOSITORY_URL", Value: repository.Spec.URL},
-		{Name: "REVISION", Value: buildRun.Spec.Revision},
-		{Name: "BRANCH", Value: buildRun.Spec.Branch},
-		{Name: "PIPELINE_TEMPLATE_NAME", Value: buildRun.Spec.PipelineTemplateRef},
-		{Name: "IMAGE_REPOSITORY", Value: buildRun.Spec.Image.Repository},
-		{Name: "IMAGE_TAG", Value: buildRun.Spec.Image.Tag},
-		{Name: "GITOPS_ENABLED", Value: strconv.FormatBool(buildRun.Spec.GitOps.Enabled)},
-	}
-}
-
-func resourceRequirements(resources cicdv1alpha1.PipelineResourceSpec) corev1.ResourceRequirements {
-	requirements := corev1.ResourceRequirements{
-		Requests: corev1.ResourceList{},
-		Limits:   corev1.ResourceList{},
-	}
-	addQuantity(requirements.Requests, corev1.ResourceCPU, resources.CPURequest)
-	addQuantity(requirements.Limits, corev1.ResourceCPU, resources.CPULimit)
-	addQuantity(requirements.Requests, corev1.ResourceMemory, resources.MemoryRequest)
-	addQuantity(requirements.Limits, corev1.ResourceMemory, resources.MemoryLimit)
-	if len(requirements.Requests) == 0 {
-		requirements.Requests = nil
-	}
-	if len(requirements.Limits) == 0 {
-		requirements.Limits = nil
-	}
-	return requirements
-}
-
-func addQuantity(list corev1.ResourceList, name corev1.ResourceName, value string) {
-	if value == "" {
-		return
-	}
-	quantity, err := resource.ParseQuantity(value)
-	if err != nil {
-		return
-	}
-	list[name] = quantity
-}
-
-func jobNameForBuildRun(buildRunName string) string {
-	name := strings.ToLower(buildRunName) + "-runner"
-	if len(name) <= 63 {
-		return name
-	}
-	return name[:63]
-}
-
 func releaseNameForBuildRun(buildRunName, environment string) string {
 	if environment == "" {
 		environment = "default"
@@ -421,12 +332,28 @@ func isTerminalBuildRunPhase(phase cicdv1alpha1.BuildRunPhase) bool {
 		phase == cicdv1alpha1.BuildRunPhaseCancelled
 }
 
-func jobFailed(job *batchv1.Job) bool {
-	if job.Status.Failed == 0 {
-		return false
+func setRunRefStatus(buildRun *cicdv1alpha1.BuildRun, ref executor.RunRef) {
+	switch ref.Kind {
+	case "PipelineRun":
+		buildRun.Status.PipelineRunRef = cicdv1alpha1.ObjectRef{Name: ref.Name, Namespace: ref.Namespace}
+	default:
+		buildRun.Status.JobRef = cicdv1alpha1.ObjectRef{Name: ref.Name, Namespace: ref.Namespace}
 	}
-	if job.Spec.BackoffLimit == nil {
-		return job.Status.Failed > defaultBackoffLimit
+}
+
+func (r *BuildRunReconciler) recordRunCreated(buildRun *cicdv1alpha1.BuildRun, executorType cicdv1alpha1.ExecutorType, ref *executor.RunRef) {
+	if ref == nil {
+		return
 	}
-	return job.Status.Failed > *job.Spec.BackoffLimit
+	reason := ref.Kind + "Created"
+	message := "Created pipeline run " + ref.Name
+	if executorType == cicdv1alpha1.ExecutorTypeJob {
+		reason = "JobCreated"
+		message = "Created runner Job " + ref.Name
+	}
+	r.record(buildRun, corev1.EventTypeNormal, reason, message)
+}
+
+func tektonEnabled() bool {
+	return strings.EqualFold(os.Getenv("CLOU_DIVISION_ENABLE_TEKTON"), "true")
 }

@@ -1,2 +1,2 @@
-// Package executor contains build execution abstractions for Kubernetes Jobs and future Tekton adapters.
+// Package executor contains build execution abstractions shared by Kubernetes Job and Tekton adapters.
 package executor
