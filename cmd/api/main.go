@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,6 +16,8 @@ import (
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	cloudivisionapi "github.com/cloudivision/cloudivision/internal/api"
+	"github.com/cloudivision/cloudivision/internal/audit"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -50,11 +54,20 @@ func main() {
 		logger.Error("create Kubernetes clientset", "error", err)
 		os.Exit(1)
 	}
+	auditRecorder, auditEvents, webhookIndex, closeAudit, err := configureAudit(context.Background(), logger)
+	if err != nil {
+		logger.Error("configure audit backend", "error", err)
+		os.Exit(1)
+	}
+	defer closeAudit()
 
 	apiServer := cloudivisionapi.Server{
 		Client:           k8sClient,
 		LogReader:        cloudivisionapi.KubernetesPodLogReader{Client: clientset},
 		Logger:           logger,
+		Audit:            auditRecorder,
+		AuditEvents:      auditEvents,
+		WebhookIndex:     webhookIndex,
 		DefaultNamespace: envOrDefault("CLOU_DIVISION_DEFAULT_NAMESPACE", "default"),
 		AuthMode:         envOrDefault("CLOU_DIVISION_AUTH_MODE", "disabled"),
 		CORSOrigins:      csvEnv("CLOU_DIVISION_CORS_ALLOWED_ORIGINS", "http://localhost:4200,http://localhost:4201"),
@@ -122,4 +135,33 @@ func csvEnv(name, fallback string) []string {
 		}
 	}
 	return out
+}
+
+func configureAudit(ctx context.Context, logger *slog.Logger) (audit.Recorder, audit.EventLister, audit.WebhookIndexer, func(), error) {
+	backend := strings.ToLower(envOrDefault("CLOU_DIVISION_AUDIT_BACKEND", "log"))
+	databaseURL := os.Getenv("CLOU_DIVISION_DATABASE_URL")
+	switch backend {
+	case "noop":
+		return audit.NoopRecorder{}, nil, nil, func() {}, nil
+	case "log", "":
+		return audit.LogRecorder{Logger: logger}, nil, nil, func() {}, nil
+	case "postgres":
+		if databaseURL == "" {
+			return nil, nil, nil, func() {}, fmt.Errorf("CLOU_DIVISION_DATABASE_URL is required when CLOU_DIVISION_AUDIT_BACKEND=postgres")
+		}
+		db, err := sql.Open("pgx", databaseURL)
+		if err != nil {
+			return nil, nil, nil, func() {}, fmt.Errorf("open postgres audit database: %w", err)
+		}
+		pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		if err := db.PingContext(pingCtx); err != nil {
+			_ = db.Close()
+			return nil, nil, nil, func() {}, fmt.Errorf("ping postgres audit database: %w", err)
+		}
+		recorder := audit.NewPostgresRecorder(db)
+		return recorder, recorder, recorder, func() { _ = db.Close() }, nil
+	default:
+		return nil, nil, nil, func() {}, fmt.Errorf("unsupported CLOU_DIVISION_AUDIT_BACKEND %q", backend)
+	}
 }

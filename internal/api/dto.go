@@ -1,7 +1,10 @@
 package api
 
 import (
+	"encoding/json"
+
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	"github.com/cloudivision/cloudivision/internal/audit"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -90,6 +93,19 @@ type WebhookResponse struct {
 	Created    bool             `json:"created"`
 }
 
+type AuditEventResponse struct {
+	ID         string          `json:"id,omitempty"`
+	Type       string          `json:"type"`
+	Actor      string          `json:"actor,omitempty"`
+	Project    string          `json:"project,omitempty"`
+	Repository string          `json:"repository,omitempty"`
+	BuildRun   string          `json:"buildRun,omitempty"`
+	Release    string          `json:"release,omitempty"`
+	Message    string          `json:"message,omitempty"`
+	Metadata   json.RawMessage `json:"metadata,omitempty"`
+	CreatedAt  metav1.Time     `json:"createdAt,omitempty"`
+}
+
 type HealthResponse struct {
 	Status string `json:"status"`
 }
@@ -116,6 +132,22 @@ func environmentDTO(environment cicdv1alpha1.Environment) EnvironmentResponse {
 
 func releaseDTO(release cicdv1alpha1.Release) ReleaseResponse {
 	return ReleaseResponse{Name: release.Name, Namespace: release.Namespace, Spec: release.Spec, Status: release.Status}
+}
+
+func auditEventDTO(event audit.Event) AuditEventResponse {
+	createdAt := metav1.NewTime(event.CreatedAt)
+	return AuditEventResponse{
+		ID:         event.ID,
+		Type:       event.Type,
+		Actor:      event.Actor,
+		Project:    event.Project,
+		Repository: event.Repository,
+		BuildRun:   event.BuildRun,
+		Release:    event.Release,
+		Message:    event.Message,
+		Metadata:   event.Metadata,
+		CreatedAt:  createdAt,
+	}
 }
 
 func objectMeta(name, namespace string) metav1.ObjectMeta {

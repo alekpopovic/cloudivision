@@ -114,6 +114,32 @@ paths:
       responses:
         "200":
           description: List Release resources.
+  /api/v1/audit/events:
+    get:
+      parameters:
+        - name: project
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: buildRun
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: release
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List audit events from the configured audit event store. Returns an empty list when no event lister is configured.
   /api/v1/webhooks/github/{repositoryName}:
     post:
       parameters:

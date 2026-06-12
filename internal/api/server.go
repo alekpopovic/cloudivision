@@ -27,6 +27,8 @@ type Server struct {
 	LogReader        PodLogReader
 	Logger           *slog.Logger
 	Audit            audit.Recorder
+	AuditEvents      audit.EventLister
+	WebhookIndex     audit.WebhookIndexer
 	DefaultNamespace string
 	AuthMode         string
 	CORSOrigins      []string
@@ -49,6 +51,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/build-runs/{namespace}/{name}/logs", s.buildRunLogs)
 	mux.HandleFunc("GET /api/v1/environments", s.environments)
 	mux.HandleFunc("GET /api/v1/releases", s.releases)
+	mux.HandleFunc("GET /api/v1/audit/events", s.auditEvents)
 	mux.HandleFunc("POST /api/v1/webhooks/github/{repositoryName}", s.webhook(webhook.ProviderGitHub))
 	mux.HandleFunc("POST /api/v1/webhooks/gitlab/{repositoryName}", s.webhook(webhook.ProviderGitLab))
 	mux.HandleFunc("POST /api/v1/webhooks/gitea/{repositoryName}", s.webhook(webhook.ProviderGitea))
@@ -276,6 +279,34 @@ func (s Server) releases(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
+func (s Server) auditEvents(w http.ResponseWriter, r *http.Request) {
+	lister := s.AuditEvents
+	if lister == nil {
+		if cast, ok := s.Audit.(audit.EventLister); ok {
+			lister = cast
+		}
+	}
+	if lister == nil {
+		writeJSON(w, http.StatusOK, []AuditEventResponse{})
+		return
+	}
+	events, err := lister.ListEvents(r.Context(), audit.EventFilter{
+		Project:  r.URL.Query().Get("project"),
+		BuildRun: r.URL.Query().Get("buildRun"),
+		Release:  r.URL.Query().Get("release"),
+		Type:     r.URL.Query().Get("type"),
+	})
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	items := make([]AuditEventResponse, 0, len(events))
+	for _, event := range events {
+		items = append(items, auditEventDTO(event))
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
 func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		repositoryName := r.PathValue("repositoryName")
@@ -335,7 +366,7 @@ func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
 			return
 		}
 
-		if existing, ok, err := s.existingBuildRunForEvent(r.Context(), namespace, repository.Name, event.EventID); err != nil {
+		if existing, ok, err := s.existingBuildRunForEvent(r.Context(), provider, namespace, repository.Name, event.EventID); err != nil {
 			s.writeError(w, err)
 			return
 		} else if ok {
@@ -364,12 +395,18 @@ func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
 			s.writeError(w, err)
 			return
 		}
+		if err := s.recordWebhookEvent(r.Context(), provider, repository, buildRun, event); err != nil {
+			s.writeError(w, err)
+			return
+		}
 		s.recordAudit(r.Context(), audit.Event{
-			Type:    "WebhookBuildRunCreated",
-			Actor:   event.Actor,
-			Subject: repository.Name,
-			EventID: event.EventID,
-			Message: "Created BuildRun from webhook push event.",
+			Type:       "WebhookBuildRunCreated",
+			Actor:      event.Actor,
+			Project:    repository.Spec.ProjectRef,
+			Repository: repository.Name,
+			BuildRun:   buildRun.Name,
+			EventID:    event.EventID,
+			Message:    "Created BuildRun from webhook push event.",
 		})
 		writeJSON(w, http.StatusCreated, WebhookResponse{
 			Repository: repository.Name,
@@ -396,7 +433,20 @@ func (s Server) webhookSecret(ctx context.Context, repository *cicdv1alpha1.Repo
 	return string(value), nil
 }
 
-func (s Server) existingBuildRunForEvent(ctx context.Context, namespace, repositoryName, eventID string) (cicdv1alpha1.BuildRun, bool, error) {
+func (s Server) existingBuildRunForEvent(ctx context.Context, provider webhook.Provider, namespace, repositoryName, eventID string) (cicdv1alpha1.BuildRun, bool, error) {
+	if s.WebhookIndex != nil {
+		indexed, err := s.WebhookIndex.FindWebhookEvent(ctx, string(provider), repositoryName, eventID)
+		if err != nil {
+			return cicdv1alpha1.BuildRun{}, false, err
+		}
+		if indexed != nil && indexed.BuildRun != "" {
+			buildRun := cicdv1alpha1.BuildRun{}
+			if err := s.Client.Get(ctx, client.ObjectKey{Name: indexed.BuildRun, Namespace: namespace}, &buildRun); err != nil {
+				return cicdv1alpha1.BuildRun{}, false, err
+			}
+			return buildRun, true, nil
+		}
+	}
 	var list cicdv1alpha1.BuildRunList
 	if err := s.Client.List(ctx, &list, client.InNamespace(namespace)); err != nil {
 		return cicdv1alpha1.BuildRun{}, false, err
@@ -407,6 +457,19 @@ func (s Server) existingBuildRunForEvent(ctx context.Context, namespace, reposit
 		}
 	}
 	return cicdv1alpha1.BuildRun{}, false, nil
+}
+
+func (s Server) recordWebhookEvent(ctx context.Context, provider webhook.Provider, repository *cicdv1alpha1.Repository, buildRun cicdv1alpha1.BuildRun, event webhook.Event) error {
+	if s.WebhookIndex == nil {
+		return nil
+	}
+	return s.WebhookIndex.RecordWebhookEvent(ctx, audit.WebhookEvent{
+		Provider:   string(provider),
+		Repository: repository.Name,
+		EventID:    event.EventID,
+		Project:    repository.Spec.ProjectRef,
+		BuildRun:   buildRun.Name,
+	})
 }
 
 func (s Server) recordAudit(ctx context.Context, event audit.Event) {

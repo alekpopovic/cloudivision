@@ -9,8 +9,10 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/webhook"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -82,7 +84,7 @@ func TestGitHubWebhookCreatesBuildRun(t *testing.T) {
 	}
 }
 
-func TestGitLabWebhookIsIdempotent(t *testing.T) {
+func TestWebhookIdempotencyFallsBackToKubernetesLookup(t *testing.T) {
 	body := readFixture(t, "gitlab_push.json")
 	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitLab)
 	for i := 0; i < 2; i++ {
@@ -176,6 +178,37 @@ func TestBuildRunLogsReadsPodLogs(t *testing.T) {
 	}
 	if logs.PodName != "runner-pod" || len(logs.Lines) != 2 {
 		t.Fatalf("logs response = %#v", logs)
+	}
+}
+
+func TestAuditEventsEndpointUsesConfiguredLister(t *testing.T) {
+	server, _ := newTestServer(t)
+	server.AuditEvents = fakeAuditLister{
+		events: []audit.Event{
+			{
+				ID:        "audit-1",
+				Type:      "BuildRunCreated",
+				Project:   "project",
+				BuildRun:  "build-1",
+				Message:   "created",
+				CreatedAt: time.Now().UTC(),
+			},
+		},
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events?project=project&buildRun=build-1&type=BuildRunCreated", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var events []AuditEventResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &events); err != nil {
+		t.Fatalf("decode audit events: %v", err)
+	}
+	if len(events) != 1 || events[0].ID != "audit-1" {
+		t.Fatalf("events = %#v", events)
 	}
 }
 
@@ -316,4 +349,18 @@ func (r fakeLogReader) Logs(context.Context, string, string, *int64) ([]byte, er
 		return nil, r.err
 	}
 	return r.data, nil
+}
+
+type fakeAuditLister struct {
+	events []audit.Event
+	filter audit.EventFilter
+	err    error
+}
+
+func (l fakeAuditLister) ListEvents(_ context.Context, filter audit.EventFilter) ([]audit.Event, error) {
+	if l.err != nil {
+		return nil, l.err
+	}
+	l.filter = filter
+	return l.events, nil
 }
