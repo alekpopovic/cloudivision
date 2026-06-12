@@ -45,6 +45,7 @@ type EventRecorder interface {
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=buildruns/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=buildruns/finalizers,verbs=update
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=projects;repositories;pipelinetemplates,verbs=get;list;watch
+// +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=releases,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
@@ -81,6 +82,9 @@ func (r *BuildRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	if isTerminalBuildRunPhase(buildRun.Status.Phase) {
+		if buildRun.Status.Phase == cicdv1alpha1.BuildRunPhaseSucceeded {
+			return ctrl.Result{}, r.ensureRelease(ctx, buildRun)
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -250,7 +254,10 @@ func (r *BuildRunReconciler) syncStatusFromJob(ctx context.Context, buildRun *ci
 			return err
 		}
 		r.record(buildRun, corev1.EventTypeNormal, "BuildSucceeded", "Runner Job completed successfully")
-		return r.updateBuildRunStatus(ctx, buildRun)
+		if err := r.updateBuildRunStatus(ctx, buildRun); err != nil {
+			return err
+		}
+		return r.ensureRelease(ctx, buildRun)
 	}
 
 	if jobFailed(job) {
@@ -280,6 +287,46 @@ func (r *BuildRunReconciler) syncStatusFromJob(ctx context.Context, buildRun *ci
 func (r *BuildRunReconciler) updateBuildRunStatus(ctx context.Context, buildRun *cicdv1alpha1.BuildRun) error {
 	if err := r.Status().Update(ctx, buildRun); err != nil {
 		return fmt.Errorf("update BuildRun status: %w", err)
+	}
+	return nil
+}
+
+func (r *BuildRunReconciler) ensureRelease(ctx context.Context, buildRun *cicdv1alpha1.BuildRun) error {
+	if !buildRun.Spec.GitOps.Enabled {
+		return nil
+	}
+	name := releaseNameForBuildRun(buildRun.Name, buildRun.Spec.GitOps.EnvironmentRef)
+	release := &cicdv1alpha1.Release{}
+	key := types.NamespacedName{Name: name, Namespace: buildRun.Namespace}
+	if err := r.Get(ctx, key, release); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("get Release %s: %w", key, err)
+		}
+		release = &cicdv1alpha1.Release{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: buildRun.Namespace,
+				Labels: map[string]string{
+					"app.kubernetes.io/name":   "cloudivision",
+					"cloudivision.io/buildrun": buildRun.Name,
+					"cloudivision.io/project":  buildRun.Spec.ProjectRef,
+				},
+			},
+			Spec: cicdv1alpha1.ReleaseSpec{
+				ProjectRef:     buildRun.Spec.ProjectRef,
+				BuildRunRef:    buildRun.Name,
+				EnvironmentRef: buildRun.Spec.GitOps.EnvironmentRef,
+				Image:          releaseImage(buildRun),
+				Strategy:       cicdv1alpha1.ReleaseStrategyGitOps,
+			},
+		}
+		if err := controllerutil.SetControllerReference(buildRun, release, r.Scheme); err != nil {
+			return fmt.Errorf("set Release owner reference: %w", err)
+		}
+		if err := r.Create(ctx, release); err != nil && !apierrors.IsAlreadyExists(err) {
+			return fmt.Errorf("create Release %s: %w", key, err)
+		}
+		return nil
 	}
 	return nil
 }
@@ -347,6 +394,25 @@ func jobNameForBuildRun(buildRunName string) string {
 		return name
 	}
 	return name[:63]
+}
+
+func releaseNameForBuildRun(buildRunName, environment string) string {
+	if environment == "" {
+		environment = "default"
+	}
+	name := strings.ToLower(buildRunName + "-" + environment)
+	name = strings.NewReplacer("_", "-", ".", "-").Replace(name)
+	if len(name) <= 63 {
+		return name
+	}
+	return name[:63]
+}
+
+func releaseImage(buildRun *cicdv1alpha1.BuildRun) cicdv1alpha1.ImageRef {
+	if buildRun.Status.Image.Repository != "" {
+		return buildRun.Status.Image
+	}
+	return buildRun.Spec.Image
 }
 
 func isTerminalBuildRunPhase(phase cicdv1alpha1.BuildRunPhase) bool {

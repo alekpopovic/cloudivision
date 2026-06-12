@@ -80,6 +80,45 @@ func TestBuildRunReconcileMarksSucceeded(t *testing.T) {
 	}
 }
 
+func TestBuildRunSuccessCreatesReleaseOnce(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	job := getRunnerJob(t, ctx, reconciler, buildRun)
+	job.Status.Succeeded = 1
+	if err := reconciler.Status().Update(ctx, job); err != nil {
+		t.Fatalf("update Job status error = %v", err)
+	}
+
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("Reconcile() after success error = %v", err)
+	}
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("second Reconcile() after success error = %v", err)
+	}
+
+	releases := &cicdv1alpha1.ReleaseList{}
+	if err := reconciler.List(ctx, releases, client.InNamespace(buildRun.Namespace)); err != nil {
+		t.Fatalf("List Releases error = %v", err)
+	}
+	if len(releases.Items) != 1 {
+		t.Fatalf("len(releases.Items) = %d, want 1", len(releases.Items))
+	}
+	release := releases.Items[0]
+	if release.Name != "sample-buildrun-sample-environment" {
+		t.Fatalf("release name = %q", release.Name)
+	}
+	if release.Spec.BuildRunRef != buildRun.Name {
+		t.Fatalf("buildRunRef = %q, want %q", release.Spec.BuildRunRef, buildRun.Name)
+	}
+	if release.Spec.Strategy != cicdv1alpha1.ReleaseStrategyGitOps {
+		t.Fatalf("strategy = %q, want gitops", release.Spec.Strategy)
+	}
+}
+
 func TestBuildRunReconcileMarksFailed(t *testing.T) {
 	ctx := context.Background()
 	reconciler, buildRun := newBuildRunReconciler(t)
@@ -145,7 +184,7 @@ func newBuildRunReconciler(t *testing.T) (*BuildRunReconciler, *cicdv1alpha1.Bui
 	buildRun := testBuildRun()
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
-		WithStatusSubresource(&cicdv1alpha1.BuildRun{}, &batchv1.Job{}).
+		WithStatusSubresource(&cicdv1alpha1.BuildRun{}, &cicdv1alpha1.Release{}, &batchv1.Job{}).
 		WithObjects(project, repository, template, buildRun).
 		Build()
 

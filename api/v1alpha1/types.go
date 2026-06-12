@@ -546,8 +546,8 @@ type ReleaseApprovalSpec struct {
 type ReleaseSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	ProjectRef string `json:"projectRef"`
-	// +kubebuilder:validation:MinLength=1
-	EnvironmentRef string `json:"environmentRef"`
+	// +optional
+	EnvironmentRef string `json:"environmentRef,omitempty"`
 	// +kubebuilder:validation:MinLength=1
 	BuildRunRef string              `json:"buildRunRef"`
 	Image       ImageRef            `json:"image"`
