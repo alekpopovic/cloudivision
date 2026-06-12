@@ -56,6 +56,9 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 	)
 
 	if release.Spec.Approval.RejectedBy != "" {
+		if release.Status.Phase == cicdv1alpha1.ReleasePhaseFailed && hasConditionReason(release.Status.Conditions, domain.ConditionFailed, "ReleaseRejected") {
+			return ctrl.Result{}, nil
+		}
 		return ctrl.Result{}, r.markFailed(ctx, release, "ReleaseRejected", fmt.Sprintf("Release was rejected by %s.", release.Spec.Approval.RejectedBy))
 	}
 
@@ -269,4 +272,13 @@ func (r *ReleaseReconciler) updateReleaseStatus(ctx context.Context, release *ci
 		return fmt.Errorf("update Release status: %w", err)
 	}
 	return nil
+}
+
+func hasConditionReason(conditions []metav1.Condition, conditionType, reason string) bool {
+	for _, condition := range conditions {
+		if condition.Type == conditionType && condition.Reason == reason && condition.Status == metav1.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }

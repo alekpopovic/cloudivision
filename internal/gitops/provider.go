@@ -75,10 +75,14 @@ func (ExecGit) AddAll(ctx context.Context, repositoryDir string) error {
 }
 
 func (ExecGit) Commit(ctx context.Context, repositoryDir, message string) error {
-	return runGit(ctx, repositoryDir, "commit GitOps changes", "git",
+	err := runGit(ctx, repositoryDir, "commit GitOps changes", "git",
 		"-c", "user.name=cloudivision",
 		"-c", "user.email=cloudivision@cloudivision.io",
 		"commit", "-m", message)
+	if err != nil && isNothingToCommit(err) {
+		return nil
+	}
+	return err
 }
 
 func (ExecGit) Push(ctx context.Context, repositoryDir, branch string) error {
@@ -159,9 +163,17 @@ func (p GitRepositoryProvider) ReadDeploymentStatus(context.Context, DeploymentS
 func updateImageFiles(repoDir, targetPath string, strategy cicdv1alpha1.GitOpsStrategy, image cicdv1alpha1.ImageRef) error {
 	switch strategy {
 	case cicdv1alpha1.GitOpsStrategyHelmValues:
-		return updateHelmValues(resolveGitOpsFile(repoDir, targetPath, "values.yaml"), image)
+		path, err := safeGitOpsFile(repoDir, targetPath, "values.yaml")
+		if err != nil {
+			return err
+		}
+		return updateHelmValues(path, image)
 	case cicdv1alpha1.GitOpsStrategyKustomizeImage, "":
-		return updateKustomization(resolveGitOpsFile(repoDir, targetPath, "kustomization.yaml"), image)
+		path, err := safeGitOpsFile(repoDir, targetPath, "kustomization.yaml")
+		if err != nil {
+			return err
+		}
+		return updateKustomization(path, image)
 	case cicdv1alpha1.GitOpsStrategyRawYAML:
 		return updateRawYAML(repoDir, targetPath, image)
 	default:
@@ -169,15 +181,34 @@ func updateImageFiles(repoDir, targetPath string, strategy cicdv1alpha1.GitOpsSt
 	}
 }
 
-func resolveGitOpsFile(repoDir, targetPath, defaultFile string) string {
+func safeGitOpsFile(repoDir, targetPath, defaultFile string) (string, error) {
 	if targetPath == "" {
-		return filepath.Join(repoDir, defaultFile)
+		return filepath.Join(repoDir, defaultFile), nil
 	}
-	path := filepath.Join(repoDir, filepath.Clean(targetPath))
+	path, err := safeRepoPath(repoDir, targetPath)
+	if err != nil {
+		return "", err
+	}
 	if strings.HasSuffix(targetPath, ".yaml") || strings.HasSuffix(targetPath, ".yml") {
-		return path
+		return path, nil
 	}
-	return filepath.Join(path, defaultFile)
+	return filepath.Join(path, defaultFile), nil
+}
+
+func safeRepoPath(repoDir, targetPath string) (string, error) {
+	cleaned := filepath.Clean(targetPath)
+	if filepath.IsAbs(cleaned) || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("gitops target path %q escapes repository root", targetPath)
+	}
+	path := filepath.Join(repoDir, cleaned)
+	rel, err := filepath.Rel(repoDir, path)
+	if err != nil {
+		return "", fmt.Errorf("resolve gitops target path: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("gitops target path %q escapes repository root", targetPath)
+	}
+	return path, nil
 }
 
 func updateHelmValues(path string, image cicdv1alpha1.ImageRef) error {
@@ -241,7 +272,10 @@ func updateKustomization(path string, image cicdv1alpha1.ImageRef) error {
 }
 
 func updateRawYAML(repoDir, targetPath string, image cicdv1alpha1.ImageRef) error {
-	path := filepath.Join(repoDir, filepath.Clean(targetPath))
+	path, err := safeRepoPath(repoDir, targetPath)
+	if err != nil {
+		return err
+	}
 	if targetPath == "" {
 		path = repoDir
 	}
@@ -371,4 +405,12 @@ func runGit(ctx context.Context, dir, action string, name string, args ...string
 		return fmt.Errorf("%s: %s: %w", action, string(output), err)
 	}
 	return nil
+}
+
+func isNothingToCommit(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, "nothing to commit") || strings.Contains(message, "no changes added to commit")
 }

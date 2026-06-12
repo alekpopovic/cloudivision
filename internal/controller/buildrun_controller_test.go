@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
@@ -149,6 +150,34 @@ func TestBuildRunReconcileMarksFailed(t *testing.T) {
 	}
 }
 
+func TestBuildRunReconcileFailsWhenProjectNamespaceDiffers(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+	project := &cicdv1alpha1.Project{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: buildRun.Spec.ProjectRef, Namespace: buildRun.Namespace}, project); err != nil {
+		t.Fatalf("get Project error = %v", err)
+	}
+	project.Spec.Namespace = "other-namespace"
+	if err := reconciler.Update(ctx, project); err != nil {
+		t.Fatalf("update Project error = %v", err)
+	}
+
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := reconciler.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatalf("get BuildRun error = %v", err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.BuildRunPhaseFailed {
+		t.Fatalf("phase = %q, want Failed", updated.Status.Phase)
+	}
+	if !strings.Contains(updated.Status.Failure.Message, "must match BuildRun namespace") {
+		t.Fatalf("failure message = %q", updated.Status.Failure.Message)
+	}
+}
+
 func TestTerminalBuildRunDoesNotCreateJob(t *testing.T) {
 	ctx := context.Background()
 	reconciler, buildRun := newBuildRunReconciler(t)
@@ -267,7 +296,7 @@ func testProject() *cicdv1alpha1.Project {
 		Spec: cicdv1alpha1.ProjectSpec{
 			DisplayName:        "Sample Project",
 			OwnerTeam:          "platform",
-			Namespace:          "sample-project",
+			Namespace:          "ci",
 			DefaultRegistry:    "ghcr.io/cloudivision",
 			DefaultBranch:      "main",
 			ServiceAccountName: "sample-builder",

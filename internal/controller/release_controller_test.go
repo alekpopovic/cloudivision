@@ -373,12 +373,3 @@ func hasCondition(conditions []metav1.Condition, conditionType string) bool {
 	}
 	return false
 }
-
-func hasConditionReason(conditions []metav1.Condition, conditionType, reason string) bool {
-	for _, condition := range conditions {
-		if condition.Type == conditionType && condition.Reason == reason && condition.Status == metav1.ConditionTrue {
-			return true
-		}
-	}
-	return false
-}

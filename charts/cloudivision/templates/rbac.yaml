@@ -62,11 +62,20 @@ metadata:
     app.kubernetes.io/component: api
 rules:
   - apiGroups: ["cicd.cloudivision.io"]
-    resources: ["projects", "repositories", "pipelinetemplates", "buildruns", "environments", "releases"]
+    resources: ["projects", "repositories", "pipelinetemplates", "buildruns", "environments"]
     verbs: ["get", "list", "watch", "create"]
+  - apiGroups: ["cicd.cloudivision.io"]
+    resources: ["releases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["cicd.cloudivision.io"]
+    resources: ["releases/status"]
+    verbs: ["get", "update", "patch"]
   - apiGroups: [""]
-    resources: ["pods", "pods/log", "secrets"]
+    resources: ["pods", "pods/log"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

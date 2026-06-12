@@ -46,6 +46,30 @@ func TestGitRepositoryProviderUpdatesKustomizeImage(t *testing.T) {
 	}
 }
 
+func TestGitRepositoryProviderTreatsNoOpImageUpdateAsSuccess(t *testing.T) {
+	ctx := context.Background()
+	remote := createRemoteGitOpsRepo(t, map[string]string{
+		"kustomization.yaml": "resources:\n- deployment.yaml\nimages:\n- name: ghcr.io/cloudivision/example\n  newName: ghcr.io/cloudivision/example\n  newTag: current\n",
+	})
+
+	result, err := (GitRepositoryProvider{}).UpdateImage(ctx, UpdateImageRequest{
+		RepositoryURL: remote,
+		Branch:        "main",
+		Strategy:      cicdv1alpha1.GitOpsStrategyKustomizeImage,
+		ReleaseName:   "sample-release",
+		Image: cicdv1alpha1.ImageRef{
+			Repository: "ghcr.io/cloudivision/example",
+			Tag:        "current",
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateImage() error = %v", err)
+	}
+	if result.Commit == "" {
+		t.Fatal("commit is empty")
+	}
+}
+
 func TestUpdateHelmValues(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "values.yaml")
@@ -65,6 +89,16 @@ func TestUpdateHelmValues(t *testing.T) {
 	image := values["image"].(map[string]any)
 	if image["repository"] != "ghcr.io/cloudivision/example" || image["tag"] != "v1" || image["digest"] != "sha256:123" {
 		t.Fatalf("image values = %#v", image)
+	}
+}
+
+func TestUpdateImageFilesRejectsPathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	if err := updateImageFiles(dir, "../outside.yaml", cicdv1alpha1.GitOpsStrategyHelmValues, cicdv1alpha1.ImageRef{Repository: "example"}); err == nil {
+		t.Fatal("updateImageFiles() error = nil, want path traversal rejection")
+	}
+	if err := updateImageFiles(dir, "/tmp/outside.yaml", cicdv1alpha1.GitOpsStrategyKustomizeImage, cicdv1alpha1.ImageRef{Repository: "example"}); err == nil {
+		t.Fatal("updateImageFiles() error = nil, want absolute path rejection")
 	}
 }
 

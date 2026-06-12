@@ -150,6 +150,9 @@ func (r *BuildRunReconciler) loadReferences(ctx context.Context, buildRun *cicdv
 	if err := r.Get(ctx, types.NamespacedName{Name: buildRun.Spec.ProjectRef, Namespace: buildRun.Namespace}, project); err != nil {
 		return nil, nil, nil, fmt.Errorf("load Project %q: %w", buildRun.Spec.ProjectRef, err)
 	}
+	if project.Spec.Namespace != "" && project.Spec.Namespace != buildRun.Namespace {
+		return nil, nil, nil, fmt.Errorf("Project %q spec.namespace %q must match BuildRun namespace %q so runner ownerReferences and namespaced RBAC remain valid", project.Name, project.Spec.Namespace, buildRun.Namespace)
+	}
 	repository := &cicdv1alpha1.Repository{}
 	if err := r.Get(ctx, types.NamespacedName{Name: buildRun.Spec.RepositoryRef, Namespace: buildRun.Namespace}, repository); err != nil {
 		return nil, nil, nil, fmt.Errorf("load Repository %q: %w", buildRun.Spec.RepositoryRef, err)
