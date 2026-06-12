@@ -122,8 +122,6 @@ After modifying Helm chart:
 ## How to work
 
 - Before coding, inspect relevant files.
-- After every user prompt, save the prompt as a Markdown file in /prompts before finishing the task.
-- Prompt archive filenames should be timestamped and descriptive, for example /prompts/2026-06-12-add-agent-git-rule.md.
 - After completing each prompt, run git add for the changed files, create a git commit with a concise message, and push the commit to the configured remote.
 - If git push is not possible because credentials, network access, or a remote are unavailable, clearly report the blocker and leave the commit created locally.
 - For large changes, make a concise implementation plan.
