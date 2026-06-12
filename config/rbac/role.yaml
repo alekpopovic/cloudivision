@@ -1,55 +1,123 @@
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: manager-role
 rules:
-  - apiGroups:
-      - cicd.cloudivision.io
-    resources:
-      - buildruns
-    verbs:
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - cicd.cloudivision.io
-    resources:
-      - projects
-      - repositories
-      - pipelinetemplates
-    verbs:
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - cicd.cloudivision.io
-    resources:
-      - buildruns/status
-    verbs:
-      - get
-      - patch
-      - update
-  - apiGroups:
-      - cicd.cloudivision.io
-    resources:
-      - buildruns/finalizers
-    verbs:
-      - update
-  - apiGroups:
-      - batch
-    resources:
-      - jobs
-    verbs:
-      - create
-      - get
-      - list
-      - watch
-  - apiGroups:
-      - ""
-    resources:
-      - events
-    verbs:
-      - create
-      - patch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  - namespaces
+  - serviceaccounts
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - argoproj.io
+  resources:
+  - applications
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cicd.cloudivision.io
+  resources:
+  - buildruns
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cicd.cloudivision.io
+  resources:
+  - buildruns/finalizers
+  - projects/finalizers
+  - releases/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cicd.cloudivision.io
+  resources:
+  - buildruns/status
+  - projects/status
+  - releases/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - cicd.cloudivision.io
+  resources:
+  - environments
+  - pipelinetemplates
+  - repositories
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cicd.cloudivision.io
+  resources:
+  - projects
+  - releases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - tekton.dev
+  resources:
+  - pipelineruns
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

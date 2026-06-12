@@ -17,6 +17,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
 	"github.com/cloudivision/cloudivision/internal/domain"
+	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	"github.com/cloudivision/cloudivision/internal/redact"
 	"github.com/cloudivision/cloudivision/internal/webhook"
@@ -403,7 +404,7 @@ func (s Server) rejectRelease(w http.ResponseWriter, r *http.Request) {
 		Message:            "Release was rejected by " + actor + ".",
 		LastTransitionTime: now,
 	})
-	if err := s.Client.Status().Update(r.Context(), release); err != nil {
+	if err := kube.UpdateStatusWithRetry(r.Context(), s.Client, release); err != nil {
 		s.writeError(w, err)
 		return
 	}

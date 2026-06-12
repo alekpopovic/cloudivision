@@ -2,7 +2,7 @@
 
 This repository uses a Kubebuilder-compatible layout for the cloudivision controller, API types, RBAC markers, and config manifests.
 
-The `kubebuilder` and `controller-gen` CLIs were not available when this foundation was created, so the initial layout was written manually.
+The initial layout was written manually, then CRDs, RBAC, and deepcopy code were generated with `controller-gen`.
 
 When the tools are available, the intended setup commands are:
 
@@ -19,11 +19,13 @@ kubebuilder create api --group cicd --version v1alpha1 --kind Release --resource
 Generate CRDs and RBAC from Go markers with:
 
 ```sh
-controller-gen rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+make manifests
 ```
 
 Generate deepcopy code with:
 
 ```sh
-controller-gen object:headerFile="hack/boilerplate.go.txt" paths="./..."
+make generate
 ```
+
+The Makefile intentionally scopes generation to `./api/...` and `./internal/controller/...` instead of `./...`. This avoids accidentally scanning local caches such as `.cache/go-mod` while still covering API schemas and controller RBAC markers.

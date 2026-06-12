@@ -13,6 +13,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/executor/steps"
 	cloudivisiongit "github.com/cloudivision/cloudivision/internal/git"
+	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	"github.com/cloudivision/cloudivision/internal/redact"
 	"github.com/cloudivision/cloudivision/internal/supplychain"
@@ -292,7 +293,7 @@ func (r Runner) fail(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, reaso
 }
 
 func (r Runner) updateStatus(ctx context.Context, buildRun *cicdv1alpha1.BuildRun) error {
-	if err := r.Client.Status().Update(ctx, buildRun); err != nil {
+	if err := kube.UpdateStatusWithRetry(ctx, r.Client, buildRun); err != nil {
 		return fmt.Errorf("update BuildRun status: %w", err)
 	}
 	return nil

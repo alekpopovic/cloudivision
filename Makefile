@@ -5,8 +5,11 @@ IMAGE_TAG ?= dev
 GOCACHE ?= $(CURDIR)/.cache/go-build
 GOMODCACHE ?= $(CURDIR)/.cache/go-mod
 GOTMPDIR ?= $(CURDIR)/.cache/go-tmp
+CODEGEN_GOMODCACHE ?= /tmp/cloudivision-go-mod
 GOFLAGS ?= -p=1
 CONTROLLER_GEN ?= controller-gen
+CONTROLLER_GEN_API_PATHS ?= ./api/...
+CONTROLLER_GEN_MANIFEST_PATHS ?= ./api/...;./internal/controller/...
 
 export GOCACHE
 export GOMODCACHE
@@ -87,18 +90,18 @@ docker-build-web:
 
 manifests:
 	@if command -v $(CONTROLLER_GEN) >/dev/null 2>&1; then \
-		$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases; \
+		GOMODCACHE=$(CODEGEN_GOMODCACHE) $(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="$(CONTROLLER_GEN_MANIFEST_PATHS)" output:crd:artifacts:config=config/crd/bases; \
 	else \
 		echo "controller-gen is not installed; CRD/RBAC generation skipped."; \
-		echo "Run: controller-gen rbac:roleName=manager-role crd webhook paths=\"./...\" output:crd:artifacts:config=config/crd/bases"; \
+		echo "Run: controller-gen rbac:roleName=manager-role crd webhook paths=\"$(CONTROLLER_GEN_MANIFEST_PATHS)\" output:crd:artifacts:config=config/crd/bases"; \
 	fi
 
 generate:
 	@if command -v $(CONTROLLER_GEN) >/dev/null 2>&1; then \
-		$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."; \
+		GOMODCACHE=$(CODEGEN_GOMODCACHE) $(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="$(CONTROLLER_GEN_API_PATHS)"; \
 	else \
 		echo "controller-gen is not installed; deepcopy generation skipped."; \
-		echo "Run: controller-gen object:headerFile=\"hack/boilerplate.go.txt\" paths=\"./...\""; \
+		echo "Run: controller-gen object:headerFile=\"hack/boilerplate.go.txt\" paths=\"$(CONTROLLER_GEN_API_PATHS)\""; \
 	fi
 
 install: manifests

@@ -13,6 +13,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/executor"
 	jobexecutor "github.com/cloudivision/cloudivision/internal/executor/job"
 	tektonexecutor "github.com/cloudivision/cloudivision/internal/executor/tekton"
+	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -48,7 +49,7 @@ type EventRecorder interface {
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=buildruns/finalizers,verbs=update
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=projects;repositories;pipelinetemplates,verbs=get;list;watch
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=releases,verbs=get;list;watch;create
-// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups=tekton.dev,resources=pipelineruns,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
@@ -277,7 +278,7 @@ func (r *BuildRunReconciler) ensureDefaultExecutors() {
 }
 
 func (r *BuildRunReconciler) updateBuildRunStatus(ctx context.Context, buildRun *cicdv1alpha1.BuildRun) error {
-	if err := r.Status().Update(ctx, buildRun); err != nil {
+	if err := kube.UpdateStatusWithRetry(ctx, r.Client, buildRun); err != nil {
 		return fmt.Errorf("update BuildRun status: %w", err)
 	}
 	if buildRun.Status.Phase != "" {

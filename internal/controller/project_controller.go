@@ -7,6 +7,7 @@ import (
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/domain"
+	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -200,7 +201,7 @@ func (r *ProjectReconciler) markProjectReady(ctx context.Context, project *cicdv
 		Reason:             "ProjectReady",
 		Message:            "Project isolation resources are ready.",
 	})
-	if err := r.Status().Update(ctx, project); err != nil {
+	if err := kube.UpdateStatusWithRetry(ctx, r.Client, project); err != nil {
 		return fmt.Errorf("update Project status: %w", err)
 	}
 	return nil
@@ -216,7 +217,7 @@ func (r *ProjectReconciler) markProjectError(ctx context.Context, project *cicdv
 		Reason:             "ReconcileFailed",
 		Message:            err.Error(),
 	})
-	if updateErr := r.Status().Update(ctx, project); updateErr != nil {
+	if updateErr := kube.UpdateStatusWithRetry(ctx, r.Client, project); updateErr != nil {
 		return fmt.Errorf("update Project error status after %v: %w", err, updateErr)
 	}
 	return err

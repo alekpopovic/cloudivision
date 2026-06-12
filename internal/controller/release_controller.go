@@ -9,6 +9,7 @@ import (
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/gitops"
+	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -268,7 +269,7 @@ func (r *ReleaseReconciler) syncArgoCDStatus(ctx context.Context, release *cicdv
 }
 
 func (r *ReleaseReconciler) updateReleaseStatus(ctx context.Context, release *cicdv1alpha1.Release) error {
-	if err := r.Status().Update(ctx, release); err != nil {
+	if err := kube.UpdateStatusWithRetry(ctx, r.Client, release); err != nil {
 		return fmt.Errorf("update Release status: %w", err)
 	}
 	return nil

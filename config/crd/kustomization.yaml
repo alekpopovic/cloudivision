@@ -1,4 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-resources: []
+resources:
+- bases/cicd.cloudivision.io_buildruns.yaml
+- bases/cicd.cloudivision.io_environments.yaml
+- bases/cicd.cloudivision.io_pipelinetemplates.yaml
+- bases/cicd.cloudivision.io_projects.yaml
+- bases/cicd.cloudivision.io_releases.yaml
+- bases/cicd.cloudivision.io_repositories.yaml
