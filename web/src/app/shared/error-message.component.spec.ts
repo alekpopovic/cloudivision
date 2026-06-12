@@ -10,10 +10,11 @@ describe('ErrorMessageComponent', () => {
     fixture = TestBed.createComponent(ErrorMessageComponent);
   });
 
-  it('displays backend code and message', () => {
-    fixture.componentRef.setInput('error', { code: 'unauthorized', message: 'not allowed' });
+  it('displays backend code, message and request ID', () => {
+    fixture.componentRef.setInput('error', { code: 'unauthorized', message: 'not allowed', requestId: 'req-1' });
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('unauthorized');
     expect(fixture.nativeElement.textContent).toContain('not allowed');
+    expect(fixture.nativeElement.textContent).toContain('req-1');
   });
 });

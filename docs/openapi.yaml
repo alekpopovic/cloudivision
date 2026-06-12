@@ -14,6 +14,11 @@ paths:
       responses:
         "200":
           description: API process is ready.
+  /metrics:
+    get:
+      responses:
+        "200":
+          description: Prometheus metrics when API metrics are enabled.
   /api/v1/projects:
     get:
       responses:
@@ -196,3 +201,6 @@ components:
           type: string
         message:
           type: string
+        requestId:
+          type: string
+          description: Request ID for correlating API errors with server logs.

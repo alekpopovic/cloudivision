@@ -6,6 +6,7 @@ import (
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	cloudivisioncontroller "github.com/cloudivision/cloudivision/internal/controller"
+	"github.com/cloudivision/cloudivision/internal/observability"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -17,6 +18,7 @@ import (
 func main() {
 	scheme := runtime.NewScheme()
 	ctrl.SetLogger(zap.New(zap.UseDevMode(envBool("CLOUDIVISION_CONTROLLER_DEV_LOGS", false))))
+	observability.RegisterMetrics()
 
 	setupLog := ctrl.Log.WithName("setup")
 

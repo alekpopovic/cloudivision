@@ -232,6 +232,47 @@ func TestAuthNotDisabledReturnsNotImplemented(t *testing.T) {
 	}
 }
 
+func TestErrorResponseIncludesRequestID(t *testing.T) {
+	server, _ := newTestServer(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/build-runs", bytes.NewBufferString(`{"namespace":"ci"}`))
+	req.Header.Set("X-Request-ID", "req-test")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	var errResp ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if errResp.RequestID != "req-test" {
+		t.Fatalf("requestId = %q, want req-test", errResp.RequestID)
+	}
+	if got := rec.Header().Get("X-Request-ID"); got != "req-test" {
+		t.Fatalf("X-Request-ID = %q, want req-test", got)
+	}
+}
+
+func TestMetricsEndpointCanBeEnabled(t *testing.T) {
+	server, _ := newTestServer(t)
+	server.MetricsEnabled = true
+	warmup := httptest.NewRecorder()
+	server.Handler().ServeHTTP(warmup, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "cloudivision_http_requests_total") {
+		t.Fatalf("metrics response did not contain cloudivision HTTP metric")
+	}
+}
+
 func TestErrorResponsesAreJSON(t *testing.T) {
 	server, _ := newTestServer(t)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/build-runs", bytes.NewBufferString(`{"namespace":"ci"}`))

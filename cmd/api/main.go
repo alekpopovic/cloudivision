@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -71,6 +72,7 @@ func main() {
 		DefaultNamespace: envOrDefault("CLOU_DIVISION_DEFAULT_NAMESPACE", "default"),
 		AuthMode:         envOrDefault("CLOU_DIVISION_AUTH_MODE", "disabled"),
 		CORSOrigins:      csvEnv("CLOU_DIVISION_CORS_ALLOWED_ORIGINS", "http://localhost:4200,http://localhost:4201"),
+		MetricsEnabled:   envBool("CLOU_DIVISION_METRICS_ENABLED", true),
 	}
 
 	addr := envOrDefault("CLOU_DIVISION_API_ADDR", envOrDefault("CLOUDIVISION_API_ADDR", ":8080"))
@@ -135,6 +137,18 @@ func csvEnv(name, fallback string) []string {
 		}
 	}
 	return out
+}
+
+func envBool(name string, fallback bool) bool {
+	value := os.Getenv(name)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func configureAudit(ctx context.Context, logger *slog.Logger) (audit.Recorder, audit.EventLister, audit.WebhookIndexer, func(), error) {

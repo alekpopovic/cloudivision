@@ -33,6 +33,8 @@ The API defaults to development auth mode:
 api:
   auth:
     mode: disabled
+  metrics:
+    enabled: true
   defaultNamespace: default
   cors:
     allowedOrigins:

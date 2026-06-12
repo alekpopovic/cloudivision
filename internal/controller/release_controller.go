@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/gitops"
+	"github.com/cloudivision/cloudivision/internal/observability"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -30,8 +32,16 @@ type ReleaseReconciler struct {
 // +kubebuilder:rbac:groups=argoproj.io,resources=applications,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-func (r *ReleaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx).WithValues("release", req.NamespacedName)
+func (r *ReleaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
+	started := time.Now()
+	defer func() {
+		observability.ObserveReconcile("release", started, err)
+	}()
+	return r.reconcile(ctx, req)
+}
+
+func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx).WithValues("controller", "release", "namespace", req.Namespace, "release", req.Name)
 	release := &cicdv1alpha1.Release{}
 	if err := r.Get(ctx, req.NamespacedName, release); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -39,6 +49,11 @@ func (r *ReleaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		return ctrl.Result{}, fmt.Errorf("get Release %s: %w", req.NamespacedName, err)
 	}
+	logger = logger.WithValues(
+		"project", release.Spec.ProjectRef,
+		"buildRun", release.Spec.BuildRunRef,
+		"correlationId", release.Annotations[observability.CorrelationIDAnno],
+	)
 
 	if release.Spec.Approval.Required && release.Spec.Approval.ApprovedBy == "" {
 		return ctrl.Result{}, r.markAwaitingApproval(ctx, release)

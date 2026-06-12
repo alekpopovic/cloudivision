@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/executor"
 	jobexecutor "github.com/cloudivision/cloudivision/internal/executor/job"
 	tektonexecutor "github.com/cloudivision/cloudivision/internal/executor/tekton"
+	"github.com/cloudivision/cloudivision/internal/observability"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,6 +23,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -49,7 +52,16 @@ type EventRecorder interface {
 // +kubebuilder:rbac:groups=tekton.dev,resources=pipelineruns,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-func (r *BuildRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *BuildRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
+	started := time.Now()
+	defer func() {
+		observability.ObserveReconcile("buildrun", started, err)
+	}()
+	return r.reconcile(ctx, req)
+}
+
+func (r *BuildRunReconciler) reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx).WithValues("controller", "buildrun", "namespace", req.Namespace, "buildRun", req.Name)
 	buildRun := &cicdv1alpha1.BuildRun{}
 	if err := r.Get(ctx, req.NamespacedName, buildRun); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -57,8 +69,13 @@ func (r *BuildRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 		return ctrl.Result{}, fmt.Errorf("get BuildRun %s: %w", req.NamespacedName, err)
 	}
+	logger = logger.WithValues(
+		"project", buildRun.Spec.ProjectRef,
+		"correlationId", buildRun.Annotations[observability.CorrelationIDAnno],
+	)
 
 	if !buildRun.ObjectMeta.DeletionTimestamp.IsZero() {
+		logger.Info("removing BuildRun finalizer")
 		return ctrl.Result{}, r.removeFinalizer(ctx, buildRun)
 	}
 
@@ -67,6 +84,7 @@ func (r *BuildRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		if err := r.Update(ctx, buildRun); err != nil {
 			return ctrl.Result{}, fmt.Errorf("add BuildRun finalizer: %w", err)
 		}
+		logger.Info("added BuildRun finalizer")
 	}
 
 	project, repository, template, err := r.loadReferences(ctx, buildRun)
@@ -95,6 +113,7 @@ func (r *BuildRunReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, r.markExecutorError(ctx, buildRun, err)
 	}
 	if buildRun.Status.Phase == "" || buildRun.Status.Phase == cicdv1alpha1.BuildRunPhasePending {
+		logger.Info("pipeline run ensured", "executor", executorType, "runKind", runRef.Kind, "runName", runRef.Name)
 		r.recordRunCreated(buildRun, executorType, runRef)
 		return ctrl.Result{}, r.markQueued(ctx, buildRun, *runRef)
 	}
@@ -257,6 +276,12 @@ func (r *BuildRunReconciler) ensureDefaultExecutors() {
 func (r *BuildRunReconciler) updateBuildRunStatus(ctx context.Context, buildRun *cicdv1alpha1.BuildRun) error {
 	if err := r.Status().Update(ctx, buildRun); err != nil {
 		return fmt.Errorf("update BuildRun status: %w", err)
+	}
+	if buildRun.Status.Phase != "" {
+		observability.BuildRunTotal.WithLabelValues(string(buildRun.Status.Phase)).Inc()
+	}
+	if buildRun.Status.StartedAt != nil && buildRun.Status.CompletedAt != nil {
+		observability.BuildRunDuration.Observe(buildRun.Status.CompletedAt.Sub(buildRun.Status.StartedAt.Time).Seconds())
 	}
 	return nil
 }

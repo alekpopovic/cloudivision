@@ -35,6 +35,8 @@ api:
     port: 8080
   auth:
     mode: disabled
+  metrics:
+    enabled: true
   defaultNamespace: default
   cors:
     allowedOrigins:

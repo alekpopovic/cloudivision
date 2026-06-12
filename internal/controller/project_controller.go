@@ -3,9 +3,11 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/domain"
+	"github.com/cloudivision/cloudivision/internal/observability"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -14,6 +16,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -40,7 +43,16 @@ type ProjectReconciler struct {
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch
 
-func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
+	started := time.Now()
+	defer func() {
+		observability.ObserveReconcile("project", started, err)
+	}()
+	return r.reconcile(ctx, req)
+}
+
+func (r *ProjectReconciler) reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx).WithValues("controller", "project", "namespace", req.Namespace, "project", req.Name)
 	project := &cicdv1alpha1.Project{}
 	if err := r.Get(ctx, req.NamespacedName, project); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -48,8 +60,10 @@ func (r *ProjectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		return ctrl.Result{}, fmt.Errorf("get Project %s: %w", req.NamespacedName, err)
 	}
+	logger = logger.WithValues("correlationId", project.Annotations[observability.CorrelationIDAnno])
 
 	if project.Spec.Isolation.CreateNamespace {
+		logger.Info("ensuring project namespace", "targetNamespace", project.Spec.Namespace)
 		if err := r.ensureNamespace(ctx, project); err != nil {
 			return ctrl.Result{}, r.markProjectError(ctx, project, err)
 		}

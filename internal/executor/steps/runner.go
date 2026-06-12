@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 
 type Runner struct {
 	Output io.Writer
+	Logger *slog.Logger
 }
 
 func (r Runner) Run(ctx context.Context, sourceDir string, pipelineSteps []cicdv1alpha1.PipelineStep, redactor redact.Redactor) error {
@@ -37,6 +39,12 @@ func (r Runner) runStep(ctx context.Context, sourceDir string, step cicdv1alpha1
 	if len(step.Command) == 0 {
 		return fmt.Errorf("step %q command is required", step.Name)
 	}
+	logger := r.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	started := time.Now()
+	logger.Info("pipeline step started", "step", step.Name)
 	stepCtx := ctx
 	cancel := func() {}
 	if step.TimeoutSeconds > 0 {
@@ -57,13 +65,22 @@ func (r Runner) runStep(ctx context.Context, sourceDir string, step cicdv1alpha1
 	cmd.Stdout = &output
 	cmd.Stderr = &output
 	err := cmd.Run()
+	exitCode := 0
+	if err != nil {
+		exitCode = 1
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		}
+	}
 	redacted := redactor.Mask(output.String())
 	if r.Output != nil && redacted != "" {
 		_, _ = r.Output.Write([]byte(redacted))
 	}
 	if err != nil {
+		logger.Warn("pipeline step failed", "step", step.Name, "durationMs", time.Since(started).Milliseconds(), "exitCode", exitCode)
 		return fmt.Errorf("step %q failed: %s: %w", step.Name, redacted, err)
 	}
+	logger.Info("pipeline step completed", "step", step.Name, "durationMs", time.Since(started).Milliseconds(), "exitCode", exitCode)
 	return nil
 }
 

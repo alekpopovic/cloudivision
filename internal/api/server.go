@@ -11,9 +11,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/audit"
+	"github.com/cloudivision/cloudivision/internal/observability"
 	"github.com/cloudivision/cloudivision/internal/redact"
 	"github.com/cloudivision/cloudivision/internal/webhook"
 	corev1 "k8s.io/api/core/v1"
@@ -32,12 +34,16 @@ type Server struct {
 	DefaultNamespace string
 	AuthMode         string
 	CORSOrigins      []string
+	MetricsEnabled   bool
 }
 
 func (s Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.health)
 	mux.HandleFunc("GET /readyz", s.health)
+	if s.MetricsEnabled {
+		mux.Handle("GET /metrics", observability.MetricsHandler())
+	}
 	mux.HandleFunc("GET /api/v1/projects", s.projects)
 	mux.HandleFunc("POST /api/v1/projects", s.projects)
 	mux.HandleFunc("GET /api/v1/projects/{name}", s.project)
@@ -56,7 +62,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/webhooks/gitlab/{repositoryName}", s.webhook(webhook.ProviderGitLab))
 	mux.HandleFunc("POST /api/v1/webhooks/gitea/{repositoryName}", s.webhook(webhook.ProviderGitea))
 	mux.HandleFunc("POST /api/v1/webhooks/generic/{repositoryName}", s.webhook(webhook.ProviderGeneric))
-	return s.logging(s.cors(s.auth(mux)))
+	return s.requestID(s.logging(s.cors(s.auth(mux))))
 }
 
 func (s Server) health(w http.ResponseWriter, _ *http.Request) {
@@ -524,6 +530,16 @@ func (s Server) auth(next http.Handler) http.Handler {
 	})
 }
 
+func (s Server) requestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// TODO(observability): extract and propagate W3C trace context here when OpenTelemetry is introduced.
+		requestID := observability.RequestIDFromRequest(r)
+		w.Header().Set(observability.RequestIDHeader, requestID)
+		ctx := observability.WithRequestID(r.Context(), requestID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
 func (s Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -556,8 +572,20 @@ func (s Server) logging(next http.Handler) http.Handler {
 		logger = slog.Default()
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Info("api request", "method", r.Method, "path", redact.MaskString(r.URL.RequestURI()))
-		next.ServeHTTP(w, r)
+		started := time.Now()
+		recorder := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(recorder, r)
+		route := routeLabel(r)
+		observability.ObserveHTTPRequest(r.Method, route, recorder.status, started)
+		logger.Info(
+			"api request",
+			"method", r.Method,
+			"route", route,
+			"path", redact.MaskString(r.URL.RequestURI()),
+			"status", recorder.status,
+			"durationMs", time.Since(started).Milliseconds(),
+			"requestId", observability.RequestIDFromContext(r.Context()),
+		)
 	})
 }
 
@@ -581,7 +609,11 @@ func (s Server) writeError(w http.ResponseWriter, err error) {
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
-	writeJSONStatus(w, status, ErrorResponse{Code: code, Message: message})
+	writeJSONStatus(w, status, ErrorResponse{
+		Code:      code,
+		Message:   redact.MaskString(message),
+		RequestID: w.Header().Get(observability.RequestIDHeader),
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
@@ -592,6 +624,23 @@ func writeJSONStatus(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+type responseRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *responseRecorder) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
+}
+
+func routeLabel(r *http.Request) string {
+	if r.Pattern != "" {
+		return r.Pattern
+	}
+	return "unmatched"
 }
 
 type apiError struct {

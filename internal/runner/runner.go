@@ -13,6 +13,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/executor/steps"
 	cloudivisiongit "github.com/cloudivision/cloudivision/internal/git"
+	"github.com/cloudivision/cloudivision/internal/observability"
 	"github.com/cloudivision/cloudivision/internal/redact"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -43,7 +44,7 @@ func New(k8sClient client.Client, logger *slog.Logger) Runner {
 	return Runner{
 		Client:    k8sClient,
 		Git:       cloudivisiongit.ExecClient{},
-		Steps:     steps.Runner{Output: os.Stdout},
+		Steps:     steps.Runner{Output: os.Stdout, Logger: logger},
 		Builder:   build.BuildKitBuilder{},
 		Workspace: "/workspace",
 		Logger:    logger,
@@ -55,7 +56,7 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 		r.Git = cloudivisiongit.ExecClient{}
 	}
 	if r.Steps == nil {
-		r.Steps = steps.Runner{Output: os.Stdout}
+		r.Steps = steps.Runner{Output: os.Stdout, Logger: r.Logger}
 	}
 	if r.Builder == nil {
 		r.Builder = build.BuildKitBuilder{}
@@ -68,6 +69,20 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 	key := types.NamespacedName{Name: cfg.BuildRunName, Namespace: cfg.BuildRunNamespace}
 	if err := r.Client.Get(ctx, key, buildRun); err != nil {
 		return fmt.Errorf("load BuildRun %s: %w", key, err)
+	}
+	logger := r.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger = logger.With(
+		"namespace", buildRun.Namespace,
+		"buildRun", buildRun.Name,
+		"project", buildRun.Spec.ProjectRef,
+		"correlationId", buildRun.Annotations[observability.CorrelationIDAnno],
+	)
+	if stepRunner, ok := r.Steps.(steps.Runner); ok && stepRunner.Logger == nil {
+		stepRunner.Logger = logger
+		r.Steps = stepRunner
 	}
 	repository := &cicdv1alpha1.Repository{}
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: buildRun.Spec.RepositoryRef, Namespace: cfg.BuildRunNamespace}, repository); err != nil {
@@ -153,6 +168,17 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 }
 
 func (r Runner) fail(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, reason, message string) error {
+	if r.Logger != nil {
+		r.Logger.Warn(
+			"runner failed",
+			"namespace", buildRun.Namespace,
+			"buildRun", buildRun.Name,
+			"project", buildRun.Spec.ProjectRef,
+			"reason", reason,
+			"message", redact.MaskString(message),
+			"correlationId", buildRun.Annotations[observability.CorrelationIDAnno],
+		)
+	}
 	now := metav1.Now()
 	if err := domain.MarkBuildRunFailed(buildRun, now, reason, message); err != nil {
 		return fmt.Errorf("%s: %s", reason, message)
@@ -171,12 +197,14 @@ func (r Runner) updateStatus(ctx context.Context, buildRun *cicdv1alpha1.BuildRu
 }
 
 func (r Runner) setCondition(buildRun *cicdv1alpha1.BuildRun, conditionType string, status metav1.ConditionStatus, reason, message string) {
+	now := metav1.Now()
 	domain.SetCondition(&buildRun.Status.Conditions, metav1.Condition{
 		Type:               conditionType,
 		Status:             status,
 		ObservedGeneration: buildRun.Generation,
 		Reason:             reason,
 		Message:            message,
+		LastTransitionTime: now,
 	})
 }
 

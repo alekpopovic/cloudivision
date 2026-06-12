@@ -12,6 +12,7 @@ interface RuntimeConfig {
 @Injectable({ providedIn: 'root' })
 export class ApiClient {
   private readonly http = inject(HttpClient);
+  // TODO(observability): add an Angular HttpInterceptor for trace context propagation when backend tracing is enabled.
   private readonly config$ = this.http.get<RuntimeConfig>('/assets/config.json').pipe(
     catchError(() => of({} as RuntimeConfig)),
     map((config) => ({
@@ -93,7 +94,11 @@ export class ApiClient {
   private toApiError(error: unknown): ApiError {
     if (error instanceof HttpErrorResponse && error.error && typeof error.error === 'object') {
       const body = error.error as Partial<ApiError>;
-      return { code: body.code ?? `http_${error.status}`, message: body.message ?? error.message };
+      return {
+        code: body.code ?? `http_${error.status}`,
+        message: body.message ?? error.message,
+        requestId: body.requestId ?? error.headers.get('X-Request-ID') ?? undefined
+      };
     }
     return { code: 'request_failed', message: error instanceof Error ? error.message : 'Request failed' };
   }
