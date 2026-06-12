@@ -7,11 +7,7 @@ rules:
       - cicd.cloudivision.io
     resources:
       - buildruns
-      - projects
-      - releases
     verbs:
-      - create
-      - delete
       - get
       - list
       - patch
@@ -20,9 +16,17 @@ rules:
   - apiGroups:
       - cicd.cloudivision.io
     resources:
+      - projects
+      - repositories
+      - pipelinetemplates
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - cicd.cloudivision.io
+    resources:
       - buildruns/status
-      - projects/status
-      - releases/status
     verbs:
       - get
       - patch
@@ -31,37 +35,14 @@ rules:
       - cicd.cloudivision.io
     resources:
       - buildruns/finalizers
-      - projects/finalizers
-      - releases/finalizers
     verbs:
       - update
-  - apiGroups:
-      - cicd.cloudivision.io
-    resources:
-      - buildruns
-      - environments
-    verbs:
-      - get
-      - list
-      - watch
   - apiGroups:
       - batch
     resources:
       - jobs
     verbs:
       - create
-      - delete
-      - get
-      - list
-      - patch
-      - update
-      - watch
-  - apiGroups:
-      - ""
-    resources:
-      - namespaces
-      - pods
-    verbs:
       - get
       - list
       - watch
