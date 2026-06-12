@@ -15,11 +15,13 @@ import (
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/audit"
+	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	"github.com/cloudivision/cloudivision/internal/redact"
 	"github.com/cloudivision/cloudivision/internal/webhook"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -57,6 +59,8 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/build-runs/{namespace}/{name}/logs", s.buildRunLogs)
 	mux.HandleFunc("GET /api/v1/environments", s.environments)
 	mux.HandleFunc("GET /api/v1/releases", s.releases)
+	mux.HandleFunc("POST /api/v1/releases/{namespace}/{name}/approve", s.approveRelease)
+	mux.HandleFunc("POST /api/v1/releases/{namespace}/{name}/reject", s.rejectRelease)
 	mux.HandleFunc("GET /api/v1/audit/events", s.auditEvents)
 	mux.HandleFunc("POST /api/v1/webhooks/github/{repositoryName}", s.webhook(webhook.ProviderGitHub))
 	mux.HandleFunc("POST /api/v1/webhooks/gitlab/{repositoryName}", s.webhook(webhook.ProviderGitLab))
@@ -285,6 +289,154 @@ func (s Server) releases(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
+func (s Server) approveRelease(w http.ResponseWriter, r *http.Request) {
+	release, req, ok := s.releaseApprovalActionInput(w, r)
+	if !ok {
+		return
+	}
+	if release.Status.Phase == cicdv1alpha1.ReleasePhaseDeployed || release.Status.Phase == cicdv1alpha1.ReleasePhaseDeploying {
+		s.writeError(w, conflict("release is already deploying or deployed"))
+		return
+	}
+	if release.Spec.Approval.RejectedBy != "" || release.Status.Phase == cicdv1alpha1.ReleasePhaseFailed {
+		s.writeError(w, conflict("rejected or failed release cannot be approved"))
+		return
+	}
+	required, err := s.releaseRequiresApproval(r.Context(), release)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	if !required {
+		s.writeError(w, badRequest("release does not require approval"))
+		return
+	}
+	now := metav1.Now()
+	release.Spec.Approval.Required = true
+	release.Spec.Approval.ApprovedBy = req.Actor
+	release.Spec.Approval.ApprovedAt = &now
+	release.Spec.Approval.RejectedBy = ""
+	release.Spec.Approval.RejectedAt = nil
+	release.Spec.Approval.Comment = req.Comment
+	release.SetAnnotations(mergeStringMap(release.GetAnnotations(), map[string]string{
+		"cloudivision.io/approval-action":  "approved",
+		"cloudivision.io/approval-actor":   req.Actor,
+		"cloudivision.io/approval-comment": req.Comment,
+	}))
+	if err := s.Client.Update(r.Context(), release); err != nil {
+		s.writeError(w, err)
+		return
+	}
+	s.recordAudit(r.Context(), audit.Event{
+		Type:     "ReleaseApproved",
+		Actor:    req.Actor,
+		Project:  release.Spec.ProjectRef,
+		BuildRun: release.Spec.BuildRunRef,
+		Release:  release.Name,
+		Message:  "Release approved.",
+		Metadata: auditMetadata(map[string]string{"comment": req.Comment, "namespace": release.Namespace}),
+	})
+	writeJSON(w, http.StatusOK, releaseDTO(*release))
+}
+
+func (s Server) rejectRelease(w http.ResponseWriter, r *http.Request) {
+	release, req, ok := s.releaseApprovalActionInput(w, r)
+	if !ok {
+		return
+	}
+	if release.Status.Phase == cicdv1alpha1.ReleasePhaseDeployed || release.Status.Phase == cicdv1alpha1.ReleasePhaseDeploying {
+		s.writeError(w, conflict("release is already deploying or deployed"))
+		return
+	}
+	if release.Spec.Approval.RejectedBy != "" || release.Status.Phase == cicdv1alpha1.ReleasePhaseFailed {
+		s.writeError(w, conflict("release is already rejected or failed"))
+		return
+	}
+	required, err := s.releaseRequiresApproval(r.Context(), release)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	if !required {
+		s.writeError(w, badRequest("release does not require approval"))
+		return
+	}
+	now := metav1.Now()
+	release.Spec.Approval.Required = true
+	release.Spec.Approval.RejectedBy = req.Actor
+	release.Spec.Approval.RejectedAt = &now
+	release.Spec.Approval.Comment = req.Comment
+	release.SetAnnotations(mergeStringMap(release.GetAnnotations(), map[string]string{
+		"cloudivision.io/approval-action":  "rejected",
+		"cloudivision.io/approval-actor":   req.Actor,
+		"cloudivision.io/approval-comment": req.Comment,
+	}))
+	if err := s.Client.Update(r.Context(), release); err != nil {
+		s.writeError(w, err)
+		return
+	}
+	release.Status.Phase = cicdv1alpha1.ReleasePhaseFailed
+	release.Status.ObservedGeneration = release.Generation
+	release.Status.CompletedAt = &now
+	domain.SetCondition(&release.Status.Conditions, metav1.Condition{
+		Type:               domain.ConditionFailed,
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: release.Generation,
+		Reason:             "ReleaseRejected",
+		Message:            "Release was rejected by " + req.Actor + ".",
+		LastTransitionTime: now,
+	})
+	if err := s.Client.Status().Update(r.Context(), release); err != nil {
+		s.writeError(w, err)
+		return
+	}
+	s.recordAudit(r.Context(), audit.Event{
+		Type:     "ReleaseRejected",
+		Actor:    req.Actor,
+		Project:  release.Spec.ProjectRef,
+		BuildRun: release.Spec.BuildRunRef,
+		Release:  release.Name,
+		Message:  "Release rejected.",
+		Metadata: auditMetadata(map[string]string{"comment": req.Comment, "namespace": release.Namespace}),
+	})
+	writeJSON(w, http.StatusOK, releaseDTO(*release))
+}
+
+func (s Server) releaseApprovalActionInput(w http.ResponseWriter, r *http.Request) (*cicdv1alpha1.Release, ReleaseApprovalRequest, bool) {
+	var req ReleaseApprovalRequest
+	if !s.decode(w, r, &req) {
+		return nil, ReleaseApprovalRequest{}, false
+	}
+	req.Actor = strings.TrimSpace(req.Actor)
+	if req.Actor == "" {
+		s.writeError(w, badRequest("actor is required"))
+		return nil, ReleaseApprovalRequest{}, false
+	}
+	release := &cicdv1alpha1.Release{}
+	if err := s.Client.Get(r.Context(), client.ObjectKey{Name: r.PathValue("name"), Namespace: r.PathValue("namespace")}, release); err != nil {
+		s.writeError(w, err)
+		return nil, ReleaseApprovalRequest{}, false
+	}
+	return release, req, true
+}
+
+func (s Server) releaseRequiresApproval(ctx context.Context, release *cicdv1alpha1.Release) (bool, error) {
+	if release.Spec.Approval.Required {
+		return true, nil
+	}
+	if release.Spec.EnvironmentRef == "" {
+		return false, nil
+	}
+	environment := &cicdv1alpha1.Environment{}
+	if err := s.Client.Get(ctx, client.ObjectKey{Name: release.Spec.EnvironmentRef, Namespace: release.Namespace}, environment); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return environment.Spec.RequiresApproval, nil
+}
+
 func (s Server) auditEvents(w http.ResponseWriter, r *http.Request) {
 	lister := s.AuditEvents
 	if lister == nil {
@@ -488,6 +640,25 @@ func (s Server) recordAudit(ctx context.Context, event audit.Event) {
 	}
 }
 
+func auditMetadata(values map[string]string) json.RawMessage {
+	data, err := json.Marshal(values)
+	if err != nil {
+		return json.RawMessage(`{}`)
+	}
+	return json.RawMessage(data)
+}
+
+func mergeStringMap(base map[string]string, extra map[string]string) map[string]string {
+	merged := map[string]string{}
+	for key, value := range base {
+		merged[key] = value
+	}
+	for key, value := range extra {
+		merged[key] = value
+	}
+	return merged
+}
+
 func (s Server) list(ctx context.Context, r *http.Request, list client.ObjectList) error {
 	if r.URL.Query().Get("allNamespaces") == "true" {
 		return s.Client.List(ctx, list)
@@ -667,6 +838,10 @@ func unauthorized(message string) error {
 
 func forbidden(message string) error {
 	return apiError{status: http.StatusForbidden, code: "forbidden", message: message}
+}
+
+func conflict(message string) error {
+	return apiError{status: http.StatusConflict, code: "conflict", message: message}
 }
 
 func internalError(message string) error {

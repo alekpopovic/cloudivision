@@ -55,8 +55,8 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 		"correlationId", release.Annotations[observability.CorrelationIDAnno],
 	)
 
-	if release.Spec.Approval.Required && release.Spec.Approval.ApprovedBy == "" {
-		return ctrl.Result{}, r.markAwaitingApproval(ctx, release)
+	if release.Spec.Approval.RejectedBy != "" {
+		return ctrl.Result{}, r.markFailed(ctx, release, "ReleaseRejected", fmt.Sprintf("Release was rejected by %s.", release.Spec.Approval.RejectedBy))
 	}
 
 	buildRun, err := r.loadBuildRun(ctx, release)
@@ -70,6 +70,13 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 		if err != nil {
 			return ctrl.Result{}, r.markFailed(ctx, release, "EnvironmentUnavailable", err.Error())
 		}
+	}
+
+	if releaseRequiresApproval(release, environment) && release.Spec.Approval.ApprovedBy == "" {
+		return ctrl.Result{}, r.markAwaitingApproval(ctx, release)
+	}
+
+	if environment != nil {
 		blocked, err := r.enforceEnvironmentPolicy(ctx, release, buildRun, environment)
 		if blocked || err != nil {
 			return ctrl.Result{}, err
@@ -103,6 +110,10 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, r.syncArgoCDStatus(ctx, release, environment)
 	}
 	return ctrl.Result{}, nil
+}
+
+func releaseRequiresApproval(release *cicdv1alpha1.Release, environment *cicdv1alpha1.Environment) bool {
+	return release.Spec.Approval.Required || (environment != nil && environment.Spec.RequiresApproval)
 }
 
 func (r *ReleaseReconciler) SetupWithManager(mgr ctrl.Manager) error {

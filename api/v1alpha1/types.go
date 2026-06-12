@@ -565,6 +565,12 @@ type ReleaseApprovalSpec struct {
 	ApprovedBy string `json:"approvedBy,omitempty"`
 	// +optional
 	ApprovedAt *metav1.Time `json:"approvedAt,omitempty"`
+	// +optional
+	RejectedBy string `json:"rejectedBy,omitempty"`
+	// +optional
+	RejectedAt *metav1.Time `json:"rejectedAt,omitempty"`
+	// +optional
+	Comment string `json:"comment,omitempty"`
 }
 
 type ReleaseSpec struct {

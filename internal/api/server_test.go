@@ -261,6 +261,89 @@ func TestAuditEventsEndpointUsesConfiguredLister(t *testing.T) {
 	}
 }
 
+func TestApproveReleasePatchesSpecAndRecordsAudit(t *testing.T) {
+	environment := &cicdv1alpha1.Environment{
+		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "ci"},
+		Spec: cicdv1alpha1.EnvironmentSpec{
+			ProjectRef:       "project",
+			DisplayName:      "Production",
+			Namespace:        "prod",
+			Type:             cicdv1alpha1.EnvironmentTypeProduction,
+			RequiresApproval: true,
+			GitOps:           cicdv1alpha1.EnvironmentGitOpsSpec{Provider: cicdv1alpha1.GitOpsProviderGeneric},
+		},
+	}
+	release := testRelease("release-1")
+	recorder := &fakeAuditRecorder{}
+	server, k8sClient := newTestServer(t, environment, release)
+	server.Audit = recorder
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/releases/ci/release-1/approve", bytes.NewBufferString(`{"actor":"alice","comment":"ship it"}`))
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	updated := &cicdv1alpha1.Release{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: "release-1", Namespace: "ci"}, updated); err != nil {
+		t.Fatalf("get Release: %v", err)
+	}
+	if !updated.Spec.Approval.Required || updated.Spec.Approval.ApprovedBy != "alice" || updated.Spec.Approval.ApprovedAt == nil {
+		t.Fatalf("approval = %#v, want approved by alice", updated.Spec.Approval)
+	}
+	if updated.Annotations["cloudivision.io/approval-action"] != "approved" {
+		t.Fatalf("annotations = %#v, want approved action", updated.Annotations)
+	}
+	if len(recorder.events) != 1 || recorder.events[0].Type != "ReleaseApproved" || recorder.events[0].Actor != "alice" {
+		t.Fatalf("audit events = %#v", recorder.events)
+	}
+}
+
+func TestRejectReleaseMarksFailedAndRecordsAudit(t *testing.T) {
+	release := testRelease("release-1")
+	release.Spec.Approval.Required = true
+	recorder := &fakeAuditRecorder{}
+	server, k8sClient := newTestServer(t, release)
+	server.Audit = recorder
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/releases/ci/release-1/reject", bytes.NewBufferString(`{"actor":"bob","comment":"hold"}`))
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	updated := &cicdv1alpha1.Release{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: "release-1", Namespace: "ci"}, updated); err != nil {
+		t.Fatalf("get Release: %v", err)
+	}
+	if updated.Spec.Approval.RejectedBy != "bob" || updated.Spec.Approval.RejectedAt == nil {
+		t.Fatalf("approval = %#v, want rejected by bob", updated.Spec.Approval)
+	}
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailed {
+		t.Fatalf("phase = %q, want Failed", updated.Status.Phase)
+	}
+	if len(recorder.events) != 1 || recorder.events[0].Type != "ReleaseRejected" || recorder.events[0].Actor != "bob" {
+		t.Fatalf("audit events = %#v", recorder.events)
+	}
+}
+
+func TestApproveReleaseRejectsDeployedRelease(t *testing.T) {
+	release := testRelease("release-1")
+	release.Spec.Approval.Required = true
+	release.Status.Phase = cicdv1alpha1.ReleasePhaseDeployed
+	server, _ := newTestServer(t, release)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/releases/ci/release-1/approve", bytes.NewBufferString(`{"actor":"alice"}`))
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestAuthNotDisabledReturnsNotImplemented(t *testing.T) {
 	server, _ := newTestServer(t)
 	server.AuthMode = "oidc"
@@ -384,6 +467,7 @@ func newTestServer(t *testing.T, objects ...client.Object) (Server, client.Clien
 	}
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
+		WithStatusSubresource(&cicdv1alpha1.Release{}).
 		WithObjects(objects...).
 		Build()
 	return Server{
@@ -449,6 +533,19 @@ func newWebhookTestServer(t *testing.T, provider cicdv1alpha1.RepositoryProvider
 	return newTestServer(t, project, repository, template, secret)
 }
 
+func testRelease(name string) *cicdv1alpha1.Release {
+	return &cicdv1alpha1.Release{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ci"},
+		Spec: cicdv1alpha1.ReleaseSpec{
+			ProjectRef:     "project",
+			EnvironmentRef: "prod",
+			BuildRunRef:    "build-1",
+			Image:          cicdv1alpha1.ImageRef{Repository: "ghcr.io/cloudivision/app", Tag: "main"},
+			Strategy:       cicdv1alpha1.ReleaseStrategyGitOps,
+		},
+	}
+}
+
 func readFixture(t *testing.T, name string) []byte {
 	t.Helper()
 	data, err := os.ReadFile("testdata/" + name)
@@ -482,4 +579,13 @@ func (l fakeAuditLister) ListEvents(_ context.Context, filter audit.EventFilter)
 	}
 	l.filter = filter
 	return l.events, nil
+}
+
+type fakeAuditRecorder struct {
+	events []audit.Event
+}
+
+func (r *fakeAuditRecorder) Record(_ context.Context, event audit.Event) error {
+	r.events = append(r.events, event)
+	return nil
 }

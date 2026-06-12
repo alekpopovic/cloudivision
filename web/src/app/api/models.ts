@@ -4,6 +4,11 @@ export interface ApiError {
   requestId?: string;
 }
 
+export interface ApprovalActionRequest {
+  actor: string;
+  comment?: string;
+}
+
 export interface Condition {
   type: string;
   status: string;
@@ -145,7 +150,14 @@ export interface Release {
     environmentRef?: string;
     buildRunRef: string;
     image: { repository: string; tag?: string; digest?: string };
-    approval?: { required: boolean; approvedBy?: string; approvedAt?: string };
+    approval?: {
+      required: boolean;
+      approvedBy?: string;
+      approvedAt?: string;
+      rejectedBy?: string;
+      rejectedAt?: string;
+      comment?: string;
+    };
     strategy: 'gitops';
   };
   status?: {

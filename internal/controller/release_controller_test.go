@@ -64,6 +64,99 @@ func TestReleaseReconcileUpdatesGitOpsOnce(t *testing.T) {
 	}
 }
 
+func TestReleaseReconcileAwaitsEnvironmentApproval(t *testing.T) {
+	ctx := context.Background()
+	reconciler, release, provider := newReleaseReconciler(t)
+	environment := &cicdv1alpha1.Environment{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: release.Spec.EnvironmentRef, Namespace: release.Namespace}, environment); err != nil {
+		t.Fatalf("get Environment error = %v", err)
+	}
+	environment.Spec.RequiresApproval = true
+	if err := reconciler.Update(ctx, environment); err != nil {
+		t.Fatalf("update Environment error = %v", err)
+	}
+
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	updated := &cicdv1alpha1.Release{}
+	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
+		t.Fatalf("get Release error = %v", err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseAwaitingApproval {
+		t.Fatalf("phase = %q, want AwaitingApproval", updated.Status.Phase)
+	}
+	if provider.updateCalls != 0 {
+		t.Fatalf("updateCalls = %d, want 0", provider.updateCalls)
+	}
+}
+
+func TestReleaseReconcileDeploysAfterApproval(t *testing.T) {
+	ctx := context.Background()
+	reconciler, release, provider := newReleaseReconciler(t)
+	environment := &cicdv1alpha1.Environment{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: release.Spec.EnvironmentRef, Namespace: release.Namespace}, environment); err != nil {
+		t.Fatalf("get Environment error = %v", err)
+	}
+	environment.Spec.RequiresApproval = true
+	if err := reconciler.Update(ctx, environment); err != nil {
+		t.Fatalf("update Environment error = %v", err)
+	}
+	release.Spec.Approval.Required = true
+	release.Spec.Approval.ApprovedBy = "alice"
+	now := metav1.Now()
+	release.Spec.Approval.ApprovedAt = &now
+	if err := reconciler.Update(ctx, release); err != nil {
+		t.Fatalf("update Release error = %v", err)
+	}
+
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	updated := &cicdv1alpha1.Release{}
+	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
+		t.Fatalf("get Release error = %v", err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseDeploying {
+		t.Fatalf("phase = %q, want Deploying", updated.Status.Phase)
+	}
+	if provider.updateCalls != 1 {
+		t.Fatalf("updateCalls = %d, want 1", provider.updateCalls)
+	}
+}
+
+func TestReleaseReconcileRejectedReleaseDoesNotDeploy(t *testing.T) {
+	ctx := context.Background()
+	reconciler, release, provider := newReleaseReconciler(t)
+	release.Spec.Approval.Required = true
+	release.Spec.Approval.RejectedBy = "alice"
+	now := metav1.Now()
+	release.Spec.Approval.RejectedAt = &now
+	if err := reconciler.Update(ctx, release); err != nil {
+		t.Fatalf("update Release error = %v", err)
+	}
+
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	updated := &cicdv1alpha1.Release{}
+	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
+		t.Fatalf("get Release error = %v", err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailed {
+		t.Fatalf("phase = %q, want Failed", updated.Status.Phase)
+	}
+	if !hasConditionReason(updated.Status.Conditions, "Failed", "ReleaseRejected") {
+		t.Fatalf("conditions = %#v, want ReleaseRejected failure", updated.Status.Conditions)
+	}
+	if provider.updateCalls != 0 {
+		t.Fatalf("updateCalls = %d, want 0", provider.updateCalls)
+	}
+}
+
 func TestReleaseReconcileBlocksWhenSupplyChainPolicyIsNotSatisfied(t *testing.T) {
 	ctx := context.Background()
 	reconciler, release, provider := newReleaseReconciler(t)

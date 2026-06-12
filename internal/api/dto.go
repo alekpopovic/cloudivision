@@ -80,6 +80,11 @@ type ReleaseResponse struct {
 	Status    cicdv1alpha1.ReleaseStatus `json:"status"`
 }
 
+type ReleaseApprovalRequest struct {
+	Actor   string `json:"actor"`
+	Comment string `json:"comment,omitempty"`
+}
+
 type LogsResponse struct {
 	Namespace string   `json:"namespace"`
 	BuildRun  string   `json:"buildRun"`

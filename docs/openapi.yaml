@@ -119,6 +119,54 @@ paths:
       responses:
         "200":
           description: List Release resources.
+  /api/v1/releases/{namespace}/{name}/approve:
+    post:
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseApprovalRequest"
+      responses:
+        "200":
+          description: Approve a Release that requires approval.
+        "409":
+          description: Release is already rejected, failed, deploying or deployed.
+  /api/v1/releases/{namespace}/{name}/reject:
+    post:
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReleaseApprovalRequest"
+      responses:
+        "200":
+          description: Reject a Release that requires approval.
+        "409":
+          description: Release is already rejected, failed, deploying or deployed.
   /api/v1/audit/events:
     get:
       parameters:
@@ -204,3 +252,12 @@ components:
         requestId:
           type: string
           description: Request ID for correlating API errors with server logs.
+    ReleaseApprovalRequest:
+      type: object
+      required:
+        - actor
+      properties:
+        actor:
+          type: string
+        comment:
+          type: string

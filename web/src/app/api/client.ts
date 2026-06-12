@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, map, of, shareReplay, switchMap, throwError } from 'rxjs';
 
 import { environment } from '../../environments/environment';
-import { ApiError, BuildRun, Environment, LogsResponse, PipelineTemplate, Project, Release, Repository } from './models';
+import { ApiError, ApprovalActionRequest, BuildRun, Environment, LogsResponse, PipelineTemplate, Project, Release, Repository } from './models';
 
 interface RuntimeConfig {
   apiBaseUrl?: string;
@@ -71,6 +71,14 @@ export class ApiClient {
 
   releases(): Observable<Release[]> {
     return this.get<Release[]>('/api/v1/releases');
+  }
+
+  approveRelease(namespace: string, name: string, body: ApprovalActionRequest): Observable<Release> {
+    return this.post<Release>(`/api/v1/releases/${namespace}/${name}/approve`, body);
+  }
+
+  rejectRelease(namespace: string, name: string, body: ApprovalActionRequest): Observable<Release> {
+    return this.post<Release>(`/api/v1/releases/${namespace}/${name}/reject`, body);
   }
 
   webhookUrl(provider: Repository['spec']['provider'], repositoryName: string): Observable<string> {
