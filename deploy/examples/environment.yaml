@@ -12,3 +12,7 @@ spec:
     provider: argocd
     applicationName: sample-app
     namespace: argocd
+  policy:
+    requireSignedImages: false
+    requireSBOM: false
+    blockCriticalVulnerabilities: false

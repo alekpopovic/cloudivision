@@ -70,6 +70,10 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 		if err != nil {
 			return ctrl.Result{}, r.markFailed(ctx, release, "EnvironmentUnavailable", err.Error())
 		}
+		blocked, err := r.enforceEnvironmentPolicy(ctx, release, buildRun, environment)
+		if blocked || err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	if release.Status.GitCommit == "" {
@@ -133,6 +137,20 @@ func (r *ReleaseReconciler) loadEnvironment(ctx context.Context, release *cicdv1
 		return nil, fmt.Errorf("load Environment %q: %w", release.Spec.EnvironmentRef, err)
 	}
 	return environment, nil
+}
+
+func (r *ReleaseReconciler) enforceEnvironmentPolicy(ctx context.Context, release *cicdv1alpha1.Release, buildRun *cicdv1alpha1.BuildRun, environment *cicdv1alpha1.Environment) (bool, error) {
+	policy := environment.Spec.Policy
+	if policy.RequireSignedImages && buildRun.Status.SupplyChain.SignatureRef == "" {
+		return true, r.markFailed(ctx, release, "PolicyNotSatisfied", fmt.Sprintf("Environment %q requires signed images, but BuildRun %q has no signature reference.", environment.Name, buildRun.Name))
+	}
+	if policy.RequireSBOM && buildRun.Status.SupplyChain.SBOMPath == "" && buildRun.Status.SupplyChain.SBOMDigest == "" {
+		return true, r.markFailed(ctx, release, "PolicyNotSatisfied", fmt.Sprintf("Environment %q requires an SBOM, but BuildRun %q has no SBOM metadata.", environment.Name, buildRun.Name))
+	}
+	if policy.BlockCriticalVulnerabilities && buildRun.Status.SupplyChain.ScannerResultsRef == "" {
+		return true, r.markFailed(ctx, release, "PolicyNotSatisfied", fmt.Sprintf("Environment %q blocks critical vulnerabilities, but BuildRun %q has no scanner results reference.", environment.Name, buildRun.Name))
+	}
+	return false, nil
 }
 
 func (r *ReleaseReconciler) markAwaitingApproval(ctx context.Context, release *cicdv1alpha1.Release) error {

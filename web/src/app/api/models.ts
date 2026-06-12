@@ -64,6 +64,12 @@ export interface PipelineTemplate {
     };
     resources?: Record<string, string | number>;
     security?: Record<string, boolean>;
+    supplyChain?: {
+      generateSBOM?: boolean;
+      scanImage?: boolean;
+      signImage?: boolean;
+      requireSignedBaseImages?: boolean;
+    };
   };
   status?: { phase?: string; conditions?: Condition[] };
 }
@@ -101,6 +107,13 @@ export interface BuildRun {
     startedAt?: string;
     completedAt?: string;
     image?: { repository?: string; tag?: string; digest?: string };
+    supplyChain?: {
+      sbomPath?: string;
+      sbomDigest?: string;
+      signatureRef?: string;
+      provenanceRef?: string;
+      scannerResultsRef?: string;
+    };
     failure?: { reason?: string; message?: string };
   };
 }
@@ -115,6 +128,11 @@ export interface Environment {
     type: 'dev' | 'staging' | 'production' | 'custom';
     requiresApproval: boolean;
     gitOps?: { provider?: 'argocd' | 'flux' | 'generic'; applicationName?: string; namespace?: string };
+    policy?: {
+      requireSignedImages?: boolean;
+      requireSBOM?: boolean;
+      blockCriticalVulnerabilities?: boolean;
+    };
   };
   status?: { phase?: string; syncStatus?: string; healthStatus?: string; conditions?: Condition[] };
 }

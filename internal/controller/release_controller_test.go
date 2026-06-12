@@ -64,6 +64,84 @@ func TestReleaseReconcileUpdatesGitOpsOnce(t *testing.T) {
 	}
 }
 
+func TestReleaseReconcileBlocksWhenSupplyChainPolicyIsNotSatisfied(t *testing.T) {
+	ctx := context.Background()
+	reconciler, release, provider := newReleaseReconciler(t)
+	environment := &cicdv1alpha1.Environment{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: release.Spec.EnvironmentRef, Namespace: release.Namespace}, environment); err != nil {
+		t.Fatalf("get Environment error = %v", err)
+	}
+	environment.Spec.Type = cicdv1alpha1.EnvironmentTypeProduction
+	environment.Spec.Policy = cicdv1alpha1.EnvironmentPolicySpec{
+		RequireSignedImages: true,
+		RequireSBOM:         true,
+	}
+	if err := reconciler.Update(ctx, environment); err != nil {
+		t.Fatalf("update Environment error = %v", err)
+	}
+
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	updated := &cicdv1alpha1.Release{}
+	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
+		t.Fatalf("get Release error = %v", err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailed {
+		t.Fatalf("phase = %q, want Failed", updated.Status.Phase)
+	}
+	if !hasConditionReason(updated.Status.Conditions, "Failed", "PolicyNotSatisfied") {
+		t.Fatalf("conditions = %#v, want PolicyNotSatisfied failure", updated.Status.Conditions)
+	}
+	if provider.updateCalls != 0 {
+		t.Fatalf("updateCalls = %d, want 0", provider.updateCalls)
+	}
+}
+
+func TestReleaseReconcileAllowsSatisfiedSupplyChainPolicy(t *testing.T) {
+	ctx := context.Background()
+	reconciler, release, provider := newReleaseReconciler(t)
+	environment := &cicdv1alpha1.Environment{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: release.Spec.EnvironmentRef, Namespace: release.Namespace}, environment); err != nil {
+		t.Fatalf("get Environment error = %v", err)
+	}
+	environment.Spec.Type = cicdv1alpha1.EnvironmentTypeProduction
+	environment.Spec.Policy = cicdv1alpha1.EnvironmentPolicySpec{
+		RequireSignedImages: true,
+		RequireSBOM:         true,
+	}
+	if err := reconciler.Update(ctx, environment); err != nil {
+		t.Fatalf("update Environment error = %v", err)
+	}
+	buildRun := &cicdv1alpha1.BuildRun{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: release.Spec.BuildRunRef, Namespace: release.Namespace}, buildRun); err != nil {
+		t.Fatalf("get BuildRun error = %v", err)
+	}
+	buildRun.Status.SupplyChain = cicdv1alpha1.BuildRunSupplyChainStatus{
+		SBOMDigest:   "sha256:sbom",
+		SignatureRef: "cosign://signature",
+	}
+	if err := reconciler.Status().Update(ctx, buildRun); err != nil {
+		t.Fatalf("update BuildRun status error = %v", err)
+	}
+
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+
+	updated := &cicdv1alpha1.Release{}
+	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
+		t.Fatalf("get Release error = %v", err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseDeploying {
+		t.Fatalf("phase = %q, want Deploying", updated.Status.Phase)
+	}
+	if provider.updateCalls != 1 {
+		t.Fatalf("updateCalls = %d, want 1", provider.updateCalls)
+	}
+}
+
 func TestReleaseReconcileMarksDeployedFromArgoCDStatus(t *testing.T) {
 	ctx := context.Background()
 	reconciler, release, _ := newReleaseReconciler(t)
@@ -153,6 +231,7 @@ func newReleaseReconciler(t *testing.T) (*ReleaseReconciler, *cicdv1alpha1.Relea
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithStatusSubresource(&cicdv1alpha1.Release{}).
+		WithStatusSubresource(&cicdv1alpha1.BuildRun{}).
 		WithObjects(buildRun, release, environment).
 		Build()
 	return &ReleaseReconciler{
@@ -196,6 +275,15 @@ func releaseObjectKey(release *cicdv1alpha1.Release) types.NamespacedName {
 func hasCondition(conditions []metav1.Condition, conditionType string) bool {
 	for _, condition := range conditions {
 		if condition.Type == conditionType && condition.Status == metav1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
+func hasConditionReason(conditions []metav1.Condition, conditionType, reason string) bool {
+	for _, condition := range conditions {
+		if condition.Type == conditionType && condition.Reason == reason && condition.Status == metav1.ConditionTrue {
 			return true
 		}
 	}

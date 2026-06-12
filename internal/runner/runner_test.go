@@ -13,6 +13,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/build"
 	"github.com/cloudivision/cloudivision/internal/executor/steps"
 	cloudivisiongit "github.com/cloudivision/cloudivision/internal/git"
+	"github.com/cloudivision/cloudivision/internal/supplychain"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -135,10 +136,101 @@ func TestRunnerRedactsRepositoryURLCredentialsOnCloneFailure(t *testing.T) {
 	}
 }
 
+func TestRunnerRecordsSupplyChainHookResults(t *testing.T) {
+	ctx := context.Background()
+	repo := createGitRepository(t)
+	buildRun := testBuildRun(repo)
+	template := testPipelineTemplate(nil)
+	template.Spec.Build.Enabled = true
+	template.Spec.Build.ContextDir = "."
+	template.Spec.Build.Dockerfile = "Dockerfile"
+	template.Spec.Build.Push = true
+	template.Spec.SupplyChain = cicdv1alpha1.PipelineSupplyChainSpec{
+		GenerateSBOM: true,
+		ScanImage:    true,
+		SignImage:    true,
+	}
+	k8sClient := newFakeRunnerClient(t, buildRun, testRepository(repo), template)
+	cfg := testConfig(repo)
+	runner := Runner{
+		Client:     k8sClient,
+		Git:        cloudivisiongit.ExecClient{},
+		Steps:      steps.Runner{},
+		Builder:    successBuilder{},
+		SBOM:       fakeSBOMGenerator{},
+		Scanner:    fakeScanner{},
+		Signer:     fakeSigner{},
+		Provenance: fakeProvenanceWriter{},
+		Workspace:  filepath.Join(t.TempDir(), "workspace"),
+	}
+
+	if err := runner.Run(ctx, cfg); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatalf("get BuildRun error = %v", err)
+	}
+	if updated.Status.Image.Digest != "sha256:abc123" {
+		t.Fatalf("image digest = %q, want sha256:abc123", updated.Status.Image.Digest)
+	}
+	if updated.Status.SupplyChain.SBOMPath != "sbom.spdx.json" {
+		t.Fatalf("sbomPath = %q, want sbom.spdx.json", updated.Status.SupplyChain.SBOMPath)
+	}
+	if updated.Status.SupplyChain.SBOMDigest != "sha256:sbom" {
+		t.Fatalf("sbomDigest = %q, want sha256:sbom", updated.Status.SupplyChain.SBOMDigest)
+	}
+	if updated.Status.SupplyChain.SignatureRef != "cosign://signature" {
+		t.Fatalf("signatureRef = %q, want cosign://signature", updated.Status.SupplyChain.SignatureRef)
+	}
+	if updated.Status.SupplyChain.ScannerResultsRef != "scanner://result" {
+		t.Fatalf("scannerResultsRef = %q, want scanner://result", updated.Status.SupplyChain.ScannerResultsRef)
+	}
+	if updated.Status.SupplyChain.ProvenanceRef != "oci://provenance" {
+		t.Fatalf("provenanceRef = %q, want oci://provenance", updated.Status.SupplyChain.ProvenanceRef)
+	}
+	assertCondition(t, updated.Status.Conditions, ConditionSupplyChainReady)
+}
+
 type failBuilder struct{}
 
 func (failBuilder) Build(context.Context, build.BuildRequest) (*build.BuildResult, error) {
 	return nil, os.ErrInvalid
+}
+
+type successBuilder struct{}
+
+func (successBuilder) Build(context.Context, build.BuildRequest) (*build.BuildResult, error) {
+	return &build.BuildResult{
+		ImageRepository: "ghcr.io/cloudivision/example",
+		Tag:             "main",
+		Digest:          "sha256:abc123",
+	}, nil
+}
+
+type fakeSBOMGenerator struct{}
+
+func (fakeSBOMGenerator) GenerateSBOM(context.Context, supplychain.SBOMRequest) (*supplychain.SBOMResult, error) {
+	return &supplychain.SBOMResult{Path: "sbom.spdx.json", Digest: "sha256:sbom"}, nil
+}
+
+type fakeScanner struct{}
+
+func (fakeScanner) ScanImage(context.Context, supplychain.ScanRequest) (*supplychain.ScanResult, error) {
+	return &supplychain.ScanResult{ResultsRef: "scanner://result"}, nil
+}
+
+type fakeSigner struct{}
+
+func (fakeSigner) SignImage(context.Context, supplychain.SignRequest) (*supplychain.SignResult, error) {
+	return &supplychain.SignResult{SignatureRef: "cosign://signature"}, nil
+}
+
+type fakeProvenanceWriter struct{}
+
+func (fakeProvenanceWriter) WriteProvenance(context.Context, supplychain.ProvenanceRequest) (*supplychain.ProvenanceResult, error) {
+	return &supplychain.ProvenanceResult{Ref: "oci://provenance"}, nil
 }
 
 type failingGit struct {

@@ -15,6 +15,7 @@ import (
 	cloudivisiongit "github.com/cloudivision/cloudivision/internal/git"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	"github.com/cloudivision/cloudivision/internal/redact"
+	"github.com/cloudivision/cloudivision/internal/supplychain"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,6 +26,7 @@ const (
 	ConditionStepsCompleted   = "StepsCompleted"
 	ConditionImageBuilt       = "ImageBuilt"
 	ConditionImagePushed      = "ImagePushed"
+	ConditionSupplyChainReady = "SupplyChainReady"
 )
 
 type StepRunner interface {
@@ -32,22 +34,30 @@ type StepRunner interface {
 }
 
 type Runner struct {
-	Client    client.Client
-	Git       cloudivisiongit.Client
-	Steps     StepRunner
-	Builder   build.ImageBuilder
-	Workspace string
-	Logger    *slog.Logger
+	Client     client.Client
+	Git        cloudivisiongit.Client
+	Steps      StepRunner
+	Builder    build.ImageBuilder
+	SBOM       supplychain.SBOMGenerator
+	Scanner    supplychain.VulnerabilityScanner
+	Signer     supplychain.ImageSigner
+	Provenance supplychain.ProvenanceWriter
+	Workspace  string
+	Logger     *slog.Logger
 }
 
 func New(k8sClient client.Client, logger *slog.Logger) Runner {
 	return Runner{
-		Client:    k8sClient,
-		Git:       cloudivisiongit.ExecClient{},
-		Steps:     steps.Runner{Output: os.Stdout, Logger: logger},
-		Builder:   build.BuildKitBuilder{},
-		Workspace: "/workspace",
-		Logger:    logger,
+		Client:     k8sClient,
+		Git:        cloudivisiongit.ExecClient{},
+		Steps:      steps.Runner{Output: os.Stdout, Logger: logger},
+		Builder:    build.BuildKitBuilder{},
+		SBOM:       supplychain.NoopSBOMGenerator{},
+		Scanner:    supplychain.NoopScanner{},
+		Signer:     supplychain.NoopSigner{},
+		Provenance: supplychain.NoopProvenanceWriter{},
+		Workspace:  "/workspace",
+		Logger:     logger,
 	}
 }
 
@@ -60,6 +70,18 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 	}
 	if r.Builder == nil {
 		r.Builder = build.BuildKitBuilder{}
+	}
+	if r.SBOM == nil {
+		r.SBOM = supplychain.NoopSBOMGenerator{}
+	}
+	if r.Scanner == nil {
+		r.Scanner = supplychain.NoopScanner{}
+	}
+	if r.Signer == nil {
+		r.Signer = supplychain.NoopSigner{}
+	}
+	if r.Provenance == nil {
+		r.Provenance = supplychain.NoopProvenanceWriter{}
 	}
 	if r.Workspace == "" {
 		r.Workspace = "/workspace"
@@ -154,6 +176,12 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 		if err := r.updateStatus(ctx, buildRun); err != nil {
 			return err
 		}
+		if err := r.runSupplyChainHooks(ctx, buildRun, template, sourceDir, result); err != nil {
+			return r.fail(ctx, buildRun, "SupplyChainFailed", redactor.Mask(err.Error()))
+		}
+		if err := r.updateStatus(ctx, buildRun); err != nil {
+			return err
+		}
 	}
 
 	completed := metav1.Now()
@@ -165,6 +193,80 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("mark BuildRun succeeded: %w", err)
 	}
 	return r.updateStatus(ctx, buildRun)
+}
+
+func (r Runner) runSupplyChainHooks(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, template *cicdv1alpha1.PipelineTemplate, sourceDir string, result *build.BuildResult) error {
+	if result == nil {
+		result = &build.BuildResult{}
+	}
+	image := cicdv1alpha1.ImageRef{
+		Repository: result.ImageRepository,
+		Tag:        result.Tag,
+		Digest:     result.Digest,
+	}
+	base := supplychain.ImageContext{
+		BuildRunName: buildRun.Name,
+		Namespace:    buildRun.Namespace,
+		ProjectName:  buildRun.Spec.ProjectRef,
+		SourceDir:    sourceDir,
+		Image:        image,
+	}
+	status := buildRun.Status.SupplyChain
+	if result.SBOMPath != "" {
+		status.SBOMPath = result.SBOMPath
+	}
+	if template.Spec.SupplyChain.GenerateSBOM {
+		sbom, err := r.SBOM.GenerateSBOM(ctx, supplychain.SBOMRequest{ImageContext: base})
+		if err != nil {
+			return fmt.Errorf("generate SBOM: %w", err)
+		}
+		if sbom != nil {
+			if sbom.Path != "" {
+				status.SBOMPath = sbom.Path
+			}
+			if sbom.Digest != "" {
+				status.SBOMDigest = sbom.Digest
+			}
+		}
+	}
+	if template.Spec.SupplyChain.ScanImage {
+		scan, err := r.Scanner.ScanImage(ctx, supplychain.ScanRequest{ImageContext: base, SBOMPath: status.SBOMPath})
+		if err != nil {
+			return fmt.Errorf("scan image: %w", err)
+		}
+		if scan != nil && scan.ResultsRef != "" {
+			status.ScannerResultsRef = scan.ResultsRef
+		}
+	}
+	if template.Spec.SupplyChain.SignImage {
+		signature, err := r.Signer.SignImage(ctx, supplychain.SignRequest{ImageContext: base})
+		if err != nil {
+			return fmt.Errorf("sign image: %w", err)
+		}
+		if signature != nil && signature.SignatureRef != "" {
+			status.SignatureRef = signature.SignatureRef
+		}
+	}
+	if template.Spec.SupplyChain.GenerateSBOM || template.Spec.SupplyChain.ScanImage || template.Spec.SupplyChain.SignImage || result.Digest != "" {
+		provenance, err := r.Provenance.WriteProvenance(ctx, supplychain.ProvenanceRequest{
+			ImageContext:      base,
+			SBOMPath:          status.SBOMPath,
+			SBOMDigest:        status.SBOMDigest,
+			SignatureRef:      status.SignatureRef,
+			ScannerResultsRef: status.ScannerResultsRef,
+		})
+		if err != nil {
+			return fmt.Errorf("write provenance: %w", err)
+		}
+		if provenance != nil && provenance.Ref != "" {
+			status.ProvenanceRef = provenance.Ref
+		}
+	}
+	buildRun.Status.SupplyChain = status
+	if status.SBOMPath != "" || status.SBOMDigest != "" || status.SignatureRef != "" || status.ScannerResultsRef != "" || status.ProvenanceRef != "" {
+		r.setCondition(buildRun, ConditionSupplyChainReady, metav1.ConditionTrue, "SupplyChainMetadataRecorded", "Supply-chain metadata has been recorded.")
+	}
+	return nil
 }
 
 func (r Runner) fail(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, reason, message string) error {

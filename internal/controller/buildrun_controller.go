@@ -215,7 +215,7 @@ func (r *BuildRunReconciler) syncStatusFromRun(ctx context.Context, buildRun *ci
 
 	switch status.Phase {
 	case executor.RunPhaseSucceeded:
-		if err := domain.MarkBuildRunSucceeded(buildRun, now, buildRun.Spec.Image); err != nil {
+		if err := domain.MarkBuildRunSucceeded(buildRun, now, releaseImage(buildRun)); err != nil {
 			return err
 		}
 		r.record(buildRun, corev1.EventTypeNormal, "BuildSucceeded", "Pipeline run completed successfully")

@@ -11,3 +11,7 @@ spec:
   requiresApproval: false
   gitOps:
     provider: generic
+  policy:
+    requireSignedImages: false
+    requireSBOM: false
+    blockCriticalVulnerabilities: false

@@ -34,3 +34,8 @@ spec:
     allowPrivileged: false
     runAsNonRoot: true
     readOnlyRootFilesystem: false
+  supplyChain:
+    generateSBOM: false
+    scanImage: false
+    signImage: false
+    requireSignedBaseImages: false

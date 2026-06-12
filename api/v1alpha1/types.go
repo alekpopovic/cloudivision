@@ -322,16 +322,24 @@ type PipelineSecuritySpec struct {
 	ReadOnlyRootFilesystem bool `json:"readOnlyRootFilesystem,omitempty"`
 }
 
+type PipelineSupplyChainSpec struct {
+	GenerateSBOM            bool `json:"generateSBOM,omitempty"`
+	ScanImage               bool `json:"scanImage,omitempty"`
+	SignImage               bool `json:"signImage,omitempty"`
+	RequireSignedBaseImages bool `json:"requireSignedBaseImages,omitempty"`
+}
+
 type PipelineTemplateSpec struct {
 	// +optional
 	ProjectRef string `json:"projectRef,omitempty"`
 	// +optional
-	Description string               `json:"description,omitempty"`
-	Params      []ParamSpec          `json:"params,omitempty"`
-	Steps       []PipelineStep       `json:"steps,omitempty"`
-	Build       PipelineBuildSpec    `json:"build,omitempty"`
-	Resources   PipelineResourceSpec `json:"resources,omitempty"`
-	Security    PipelineSecuritySpec `json:"security,omitempty"`
+	Description string                  `json:"description,omitempty"`
+	Params      []ParamSpec             `json:"params,omitempty"`
+	Steps       []PipelineStep          `json:"steps,omitempty"`
+	Build       PipelineBuildSpec       `json:"build,omitempty"`
+	Resources   PipelineResourceSpec    `json:"resources,omitempty"`
+	Security    PipelineSecuritySpec    `json:"security,omitempty"`
+	SupplyChain PipelineSupplyChainSpec `json:"supplyChain,omitempty"`
 }
 
 type PipelineTemplateStatus struct {
@@ -437,6 +445,14 @@ type BuildRunLogStatus struct {
 	LastLines []string `json:"lastLines,omitempty"`
 }
 
+type BuildRunSupplyChainStatus struct {
+	SBOMPath          string `json:"sbomPath,omitempty"`
+	SBOMDigest        string `json:"sbomDigest,omitempty"`
+	SignatureRef      string `json:"signatureRef,omitempty"`
+	ProvenanceRef     string `json:"provenanceRef,omitempty"`
+	ScannerResultsRef string `json:"scannerResultsRef,omitempty"`
+}
+
 type BuildRunStatus struct {
 	// +kubebuilder:validation:Enum=Pending;Queued;Running;Succeeded;Failed;Cancelled
 	Phase              BuildRunPhase      `json:"phase,omitempty"`
@@ -445,12 +461,13 @@ type BuildRunStatus struct {
 	// +optional
 	StartedAt *metav1.Time `json:"startedAt,omitempty"`
 	// +optional
-	CompletedAt    *metav1.Time      `json:"completedAt,omitempty"`
-	JobRef         ObjectRef         `json:"jobRef,omitempty"`
-	PipelineRunRef ObjectRef         `json:"pipelineRunRef,omitempty"`
-	Image          ImageRef          `json:"image,omitempty"`
-	Failure        FailureStatus     `json:"failure,omitempty"`
-	Log            BuildRunLogStatus `json:"log,omitempty"`
+	CompletedAt    *metav1.Time              `json:"completedAt,omitempty"`
+	JobRef         ObjectRef                 `json:"jobRef,omitempty"`
+	PipelineRunRef ObjectRef                 `json:"pipelineRunRef,omitempty"`
+	Image          ImageRef                  `json:"image,omitempty"`
+	SupplyChain    BuildRunSupplyChainStatus `json:"supplyChain,omitempty"`
+	Failure        FailureStatus             `json:"failure,omitempty"`
+	Log            BuildRunLogStatus         `json:"log,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -488,6 +505,12 @@ type EnvironmentGitOpsSpec struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
+type EnvironmentPolicySpec struct {
+	RequireSignedImages          bool `json:"requireSignedImages,omitempty"`
+	RequireSBOM                  bool `json:"requireSBOM,omitempty"`
+	BlockCriticalVulnerabilities bool `json:"blockCriticalVulnerabilities,omitempty"`
+}
+
 type EnvironmentSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	ProjectRef string `json:"projectRef"`
@@ -499,6 +522,7 @@ type EnvironmentSpec struct {
 	Type             EnvironmentType       `json:"type"`
 	RequiresApproval bool                  `json:"requiresApproval"`
 	GitOps           EnvironmentGitOpsSpec `json:"gitOps"`
+	Policy           EnvironmentPolicySpec `json:"policy,omitempty"`
 }
 
 type EnvironmentStatus struct {
