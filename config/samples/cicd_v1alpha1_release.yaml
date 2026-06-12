@@ -1,0 +1,9 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Release
+metadata:
+  name: sample-release
+spec:
+  projectRef: sample-project
+  environmentRef: sample-environment
+  buildRunRef: sample-buildrun
+  artifactRef: ghcr.io/cloudivision/example:dev

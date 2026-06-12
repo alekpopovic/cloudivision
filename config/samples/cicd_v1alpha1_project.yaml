@@ -1,0 +1,7 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Project
+metadata:
+  name: sample-project
+spec:
+  displayName: Sample Project
+  namespace: sample-project

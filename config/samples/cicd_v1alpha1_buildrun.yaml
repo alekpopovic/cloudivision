@@ -1,0 +1,10 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: BuildRun
+metadata:
+  name: sample-buildrun
+spec:
+  projectRef: sample-project
+  repositoryRef: sample-repository
+  pipelineTemplateRef: sample-template
+  commitSHA: example
+  image: ghcr.io/cloudivision/example:dev

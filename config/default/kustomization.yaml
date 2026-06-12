@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cloudivision-system
+
+namePrefix: cloudivision-
+
+resources:
+  - ../crd
+  - ../rbac
+  - ../manager
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: cloudivision
+      app.kubernetes.io/part-of: cloudivision
