@@ -83,6 +83,13 @@ type LogsResponse struct {
 	Lines     []string `json:"lines"`
 }
 
+type WebhookResponse struct {
+	Repository string           `json:"repository"`
+	EventID    string           `json:"eventID"`
+	BuildRun   BuildRunResponse `json:"buildRun"`
+	Created    bool             `json:"created"`
+}
+
 type HealthResponse struct {
 	Status string `json:"status"`
 }

@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	"github.com/cloudivision/cloudivision/internal/webhook"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -46,6 +49,104 @@ func TestPostBuildRunCreatesCR(t *testing.T) {
 	}
 	if created.Spec.RepositoryRef != "repo" {
 		t.Fatalf("repositoryRef = %q", created.Spec.RepositoryRef)
+	}
+}
+
+func TestGitHubWebhookCreatesBuildRun(t *testing.T) {
+	body := readFixture(t, "github_push.json")
+	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitHub)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github/sample-repository?namespace=ci", bytes.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "push")
+	req.Header.Set("X-GitHub-Delivery", "github-event-1")
+	req.Header.Set("X-Hub-Signature-256", webhook.SignGitHub(body, "webhook-secret"))
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var buildRuns cicdv1alpha1.BuildRunList
+	if err := k8sClient.List(context.Background(), &buildRuns, client.InNamespace("ci")); err != nil {
+		t.Fatalf("list BuildRuns: %v", err)
+	}
+	if len(buildRuns.Items) != 1 {
+		t.Fatalf("len(buildRuns.Items) = %d, want 1", len(buildRuns.Items))
+	}
+	buildRun := buildRuns.Items[0]
+	if buildRun.Spec.TriggeredBy.Type != cicdv1alpha1.TriggerTypeWebhook {
+		t.Fatalf("trigger type = %q", buildRun.Spec.TriggeredBy.Type)
+	}
+	if buildRun.Spec.CommitSHA != "1234567890abcdef1234567890abcdef12345678" {
+		t.Fatalf("commitSHA = %q", buildRun.Spec.CommitSHA)
+	}
+}
+
+func TestGitLabWebhookIsIdempotent(t *testing.T) {
+	body := readFixture(t, "gitlab_push.json")
+	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitLab)
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/gitlab/sample-repository?namespace=ci", bytes.NewReader(body))
+		req.Header.Set("X-Gitlab-Token", "webhook-secret")
+		req.Header.Set("X-Gitlab-Event-UUID", "gitlab-event-1")
+		rec := httptest.NewRecorder()
+		server.Handler().ServeHTTP(rec, req)
+		if i == 0 && rec.Code != http.StatusCreated {
+			t.Fatalf("first status = %d, body = %s", rec.Code, rec.Body.String())
+		}
+		if i == 1 && rec.Code != http.StatusOK {
+			t.Fatalf("second status = %d, body = %s", rec.Code, rec.Body.String())
+		}
+	}
+	var buildRuns cicdv1alpha1.BuildRunList
+	if err := k8sClient.List(context.Background(), &buildRuns, client.InNamespace("ci")); err != nil {
+		t.Fatalf("list BuildRuns: %v", err)
+	}
+	if len(buildRuns.Items) != 1 {
+		t.Fatalf("len(buildRuns.Items) = %d, want 1", len(buildRuns.Items))
+	}
+}
+
+func TestGitHubWebhookRejectsInvalidSignature(t *testing.T) {
+	body := readFixture(t, "github_push.json")
+	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitHub)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github/sample-repository?namespace=ci", bytes.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "push")
+	req.Header.Set("X-GitHub-Delivery", "github-event-1")
+	req.Header.Set("X-Hub-Signature-256", webhook.SignGitHub(body, "wrong-secret"))
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var buildRuns cicdv1alpha1.BuildRunList
+	if err := k8sClient.List(context.Background(), &buildRuns, client.InNamespace("ci")); err != nil {
+		t.Fatalf("list BuildRuns: %v", err)
+	}
+	if len(buildRuns.Items) != 0 {
+		t.Fatalf("len(buildRuns.Items) = %d, want 0", len(buildRuns.Items))
+	}
+}
+
+func TestWebhookRejectsOversizedBody(t *testing.T) {
+	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitHub)
+	body := strings.Repeat("a", 1<<20+1)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github/sample-repository?namespace=ci", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var buildRuns cicdv1alpha1.BuildRunList
+	if err := k8sClient.List(context.Background(), &buildRuns, client.InNamespace("ci")); err != nil {
+		t.Fatalf("list BuildRuns: %v", err)
+	}
+	if len(buildRuns.Items) != 0 {
+		t.Fatalf("len(buildRuns.Items) = %d, want 0", len(buildRuns.Items))
 	}
 }
 
@@ -140,6 +241,69 @@ func newTestServer(t *testing.T, objects ...client.Object) (Server, client.Clien
 		AuthMode:         "disabled",
 		CORSOrigins:      []string{"http://localhost:4200"},
 	}, k8sClient
+}
+
+func newWebhookTestServer(t *testing.T, provider cicdv1alpha1.RepositoryProvider) (Server, client.Client) {
+	t.Helper()
+	project := &cicdv1alpha1.Project{
+		ObjectMeta: metav1.ObjectMeta{Name: "sample-project", Namespace: "ci"},
+		Spec: cicdv1alpha1.ProjectSpec{
+			DisplayName:     "Sample",
+			OwnerTeam:       "platform",
+			Namespace:       "ci",
+			DefaultRegistry: "ghcr.io/cloudivision",
+			DefaultBranch:   "main",
+			Isolation: cicdv1alpha1.ProjectIsolation{
+				CreateNamespace:   false,
+				PodSecurityLevel:  cicdv1alpha1.PodSecurityLevelRestricted,
+				NetworkPolicyMode: cicdv1alpha1.NetworkPolicyModeDisabled,
+			},
+		},
+	}
+	repository := &cicdv1alpha1.Repository{
+		ObjectMeta: metav1.ObjectMeta{Name: "sample-repository", Namespace: "ci"},
+		Spec: cicdv1alpha1.RepositorySpec{
+			ProjectRef:          "sample-project",
+			Provider:            provider,
+			URL:                 "https://github.com/cloudivision/example.git",
+			DefaultBranch:       "main",
+			PipelineTemplateRef: "sample-template",
+			Webhook: cicdv1alpha1.RepositoryWebhook{
+				Enabled: true,
+				SecretRef: cicdv1alpha1.RequiredSecretKeyRef{
+					Name: "webhook-secret",
+					Key:  "secret",
+				},
+			},
+		},
+	}
+	template := &cicdv1alpha1.PipelineTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: "sample-template", Namespace: "ci"},
+		Spec: cicdv1alpha1.PipelineTemplateSpec{
+			Build: cicdv1alpha1.PipelineBuildSpec{
+				Enabled: true,
+				Builder: cicdv1alpha1.BuildBuilderBuildKit,
+				Image:   "ghcr.io/cloudivision/example",
+				Push:    true,
+			},
+		},
+	}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "webhook-secret", Namespace: "ci"},
+		Data: map[string][]byte{
+			"secret": []byte("webhook-secret"),
+		},
+	}
+	return newTestServer(t, project, repository, template, secret)
+}
+
+func readFixture(t *testing.T, name string) []byte {
+	t.Helper()
+	data, err := os.ReadFile("testdata/" + name)
+	if err != nil {
+		t.Fatalf("read fixture %s: %v", name, err)
+	}
+	return data
 }
 
 type fakeLogReader struct {

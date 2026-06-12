@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"strings"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	"github.com/cloudivision/cloudivision/internal/audit"
+	"github.com/cloudivision/cloudivision/internal/webhook"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
@@ -22,6 +25,7 @@ type Server struct {
 	Client           client.Client
 	LogReader        PodLogReader
 	Logger           *slog.Logger
+	Audit            audit.Recorder
 	DefaultNamespace string
 	AuthMode         string
 	CORSOrigins      []string
@@ -44,6 +48,10 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/build-runs/{namespace}/{name}/logs", s.buildRunLogs)
 	mux.HandleFunc("GET /api/v1/environments", s.environments)
 	mux.HandleFunc("GET /api/v1/releases", s.releases)
+	mux.HandleFunc("POST /api/v1/webhooks/github/{repositoryName}", s.webhook(webhook.ProviderGitHub))
+	mux.HandleFunc("POST /api/v1/webhooks/gitlab/{repositoryName}", s.webhook(webhook.ProviderGitLab))
+	mux.HandleFunc("POST /api/v1/webhooks/gitea/{repositoryName}", s.webhook(webhook.ProviderGitea))
+	mux.HandleFunc("POST /api/v1/webhooks/generic/{repositoryName}", s.webhook(webhook.ProviderGeneric))
 	return s.logging(s.cors(s.auth(mux)))
 }
 
@@ -267,6 +275,149 @@ func (s Server) releases(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, items)
 }
 
+func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		repositoryName := r.PathValue("repositoryName")
+		if err := validateName(repositoryName); err != nil {
+			s.writeError(w, badRequest(err.Error()))
+			return
+		}
+		namespace := s.namespace(r.URL.Query().Get("namespace"))
+		repository := &cicdv1alpha1.Repository{}
+		if err := s.Client.Get(r.Context(), client.ObjectKey{Name: repositoryName, Namespace: namespace}, repository); err != nil {
+			s.writeError(w, err)
+			return
+		}
+		if !repository.Spec.Webhook.Enabled {
+			s.writeError(w, forbidden("webhook is not enabled for repository"))
+			return
+		}
+		if repository.Spec.Provider != cicdv1alpha1.RepositoryProvider(provider) && provider != webhook.ProviderGeneric {
+			s.writeError(w, badRequest("webhook provider does not match repository provider"))
+			return
+		}
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+		if err != nil {
+			s.writeError(w, badRequest("request body exceeds limit or cannot be read"))
+			return
+		}
+		defer r.Body.Close()
+
+		secret, err := s.webhookSecret(r.Context(), repository)
+		if err != nil {
+			s.writeError(w, forbidden(err.Error()))
+			return
+		}
+		if err := webhook.Verify(provider, r.Header, body, secret); err != nil {
+			s.writeError(w, unauthorized(err.Error()))
+			return
+		}
+		event, err := webhook.Parse(provider, r.Header, body)
+		if err != nil {
+			s.writeError(w, badRequest(err.Error()))
+			return
+		}
+		if !event.IsPush {
+			s.writeError(w, badRequest("only push events are supported"))
+			return
+		}
+		if event.EventID == "" {
+			s.writeError(w, badRequest("webhook event ID is required"))
+			return
+		}
+		if event.CommitSHA == "" {
+			s.writeError(w, badRequest("webhook commit SHA is required"))
+			return
+		}
+		if event.Branch != repository.Spec.DefaultBranch {
+			s.writeError(w, badRequest("webhook branch does not match repository defaultBranch"))
+			return
+		}
+
+		if existing, ok, err := s.existingBuildRunForEvent(r.Context(), namespace, repository.Name, event.EventID); err != nil {
+			s.writeError(w, err)
+			return
+		} else if ok {
+			writeJSON(w, http.StatusOK, WebhookResponse{
+				Repository: repository.Name,
+				EventID:    event.EventID,
+				BuildRun:   buildRunDTO(existing),
+				Created:    false,
+			})
+			return
+		}
+
+		project := &cicdv1alpha1.Project{}
+		if err := s.Client.Get(r.Context(), client.ObjectKey{Name: repository.Spec.ProjectRef, Namespace: namespace}, project); err != nil {
+			s.writeError(w, err)
+			return
+		}
+		template := &cicdv1alpha1.PipelineTemplate{}
+		if err := s.Client.Get(r.Context(), client.ObjectKey{Name: repository.Spec.PipelineTemplateRef, Namespace: namespace}, template); err != nil {
+			s.writeError(w, err)
+			return
+		}
+
+		buildRun := buildRunFromWebhook(namespace, repository, project, template, event)
+		if err := s.Client.Create(r.Context(), &buildRun); err != nil {
+			s.writeError(w, err)
+			return
+		}
+		s.recordAudit(r.Context(), audit.Event{
+			Type:    "WebhookBuildRunCreated",
+			Actor:   event.Actor,
+			Subject: repository.Name,
+			EventID: event.EventID,
+			Message: "Created BuildRun from webhook push event.",
+		})
+		writeJSON(w, http.StatusCreated, WebhookResponse{
+			Repository: repository.Name,
+			EventID:    event.EventID,
+			BuildRun:   buildRunDTO(buildRun),
+			Created:    true,
+		})
+	}
+}
+
+func (s Server) webhookSecret(ctx context.Context, repository *cicdv1alpha1.Repository) (string, error) {
+	ref := repository.Spec.Webhook.SecretRef
+	if ref.Name == "" || ref.Key == "" {
+		return "", fmt.Errorf("webhook secretRef.name and secretRef.key are required")
+	}
+	secret := &corev1.Secret{}
+	if err := s.Client.Get(ctx, client.ObjectKey{Name: ref.Name, Namespace: repository.Namespace}, secret); err != nil {
+		return "", fmt.Errorf("load webhook secret: %w", err)
+	}
+	value := secret.Data[ref.Key]
+	if len(value) == 0 {
+		return "", fmt.Errorf("webhook secret key %q is empty or missing", ref.Key)
+	}
+	return string(value), nil
+}
+
+func (s Server) existingBuildRunForEvent(ctx context.Context, namespace, repositoryName, eventID string) (cicdv1alpha1.BuildRun, bool, error) {
+	var list cicdv1alpha1.BuildRunList
+	if err := s.Client.List(ctx, &list, client.InNamespace(namespace)); err != nil {
+		return cicdv1alpha1.BuildRun{}, false, err
+	}
+	for _, item := range list.Items {
+		if item.Spec.RepositoryRef == repositoryName && item.Spec.TriggeredBy.EventID == eventID {
+			return item, true, nil
+		}
+	}
+	return cicdv1alpha1.BuildRun{}, false, nil
+}
+
+func (s Server) recordAudit(ctx context.Context, event audit.Event) {
+	recorder := s.Audit
+	if recorder == nil {
+		recorder = audit.LoggerRecorder{Logger: s.Logger}
+	}
+	if err := recorder.Record(ctx, event); err != nil && s.Logger != nil {
+		s.Logger.Warn("record audit event failed", "error", err)
+	}
+}
+
 func (s Server) list(ctx context.Context, r *http.Request, list client.ObjectList) error {
 	if r.URL.Query().Get("allNamespaces") == "true" {
 		return s.Client.List(ctx, list)
@@ -397,6 +548,14 @@ func notFound(message string) error {
 	return apiError{status: http.StatusNotFound, code: "not_found", message: message}
 }
 
+func unauthorized(message string) error {
+	return apiError{status: http.StatusUnauthorized, code: "unauthorized", message: message}
+}
+
+func forbidden(message string) error {
+	return apiError{status: http.StatusForbidden, code: "forbidden", message: message}
+}
+
 func internalError(message string) error {
 	return apiError{status: http.StatusInternalServerError, code: "internal_error", message: message}
 }
@@ -444,4 +603,75 @@ func splitLogLines(logs string) []string {
 		return []string{}
 	}
 	return strings.Split(trimmed, "\n")
+}
+
+func buildRunFromWebhook(namespace string, repository *cicdv1alpha1.Repository, project *cicdv1alpha1.Project, template *cicdv1alpha1.PipelineTemplate, event webhook.Event) cicdv1alpha1.BuildRun {
+	imageRepository := template.Spec.Build.Image
+	if imageRepository == "" {
+		imageRepository = strings.TrimRight(project.Spec.DefaultRegistry, "/") + "/" + repository.Name
+	}
+	tag := shortSHA(event.CommitSHA)
+	if tag == "" {
+		tag = event.Branch
+	}
+	return cicdv1alpha1.BuildRun{
+		ObjectMeta: objectMeta(buildRunNameForWebhook(repository.Name, event.EventID), namespace),
+		Spec: cicdv1alpha1.BuildRunSpec{
+			ProjectRef:          repository.Spec.ProjectRef,
+			RepositoryRef:       repository.Name,
+			PipelineTemplateRef: repository.Spec.PipelineTemplateRef,
+			Revision:            event.CommitSHA,
+			Branch:              event.Branch,
+			CommitSHA:           event.CommitSHA,
+			TriggeredBy: cicdv1alpha1.TriggeredBy{
+				Type:    cicdv1alpha1.TriggerTypeWebhook,
+				Actor:   event.Actor,
+				EventID: event.EventID,
+			},
+			Image: cicdv1alpha1.ImageRef{
+				Repository: imageRepository,
+				Tag:        tag,
+			},
+			Executor: cicdv1alpha1.ExecutorTypeJob,
+		},
+	}
+}
+
+func buildRunNameForWebhook(repositoryName, eventID string) string {
+	hash := sha256.Sum256([]byte(eventID))
+	base := dnsLabel(repositoryName)
+	if base == "" {
+		base = "repository"
+	}
+	name := fmt.Sprintf("%s-%x", base, hash[:6])
+	if len(name) > 63 {
+		return name[:63]
+	}
+	return name
+}
+
+func dnsLabel(value string) string {
+	value = strings.ToLower(value)
+	var builder strings.Builder
+	lastDash := false
+	for _, r := range value {
+		valid := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+		if valid {
+			builder.WriteRune(r)
+			lastDash = false
+			continue
+		}
+		if !lastDash && builder.Len() > 0 {
+			builder.WriteByte('-')
+			lastDash = true
+		}
+	}
+	return strings.Trim(builder.String(), "-")
+}
+
+func shortSHA(value string) string {
+	if len(value) <= 12 {
+		return value
+	}
+	return value[:12]
 }

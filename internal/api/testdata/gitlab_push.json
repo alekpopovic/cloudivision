@@ -1,0 +1,11 @@
+{
+  "object_kind": "push",
+  "ref": "refs/heads/main",
+  "checkout_sha": "abcdef1234567890abcdef1234567890abcdef12",
+  "after": "abcdef1234567890abcdef1234567890abcdef12",
+  "user_username": "gitlab-user",
+  "project": {
+    "git_http_url": "https://gitlab.com/cloudivision/example.git",
+    "web_url": "https://gitlab.com/cloudivision/example"
+  }
+}

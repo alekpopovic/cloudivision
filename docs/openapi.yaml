@@ -114,6 +114,50 @@ paths:
       responses:
         "200":
           description: List Release resources.
+  /api/v1/webhooks/github/{repositoryName}:
+    post:
+      parameters:
+        - name: repositoryName
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Create a BuildRun from a verified GitHub push event.
+  /api/v1/webhooks/gitlab/{repositoryName}:
+    post:
+      parameters:
+        - name: repositoryName
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Create a BuildRun from a verified GitLab push event.
+  /api/v1/webhooks/gitea/{repositoryName}:
+    post:
+      parameters:
+        - name: repositoryName
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Create a BuildRun from a verified Gitea push event. Supports X-Gitea-Signature HMAC SHA256 and X-Gitea-Token token mode.
+  /api/v1/webhooks/generic/{repositoryName}:
+    post:
+      parameters:
+        - name: repositoryName
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Create a BuildRun from a verified generic push event.
 components:
   schemas:
     ErrorResponse:
