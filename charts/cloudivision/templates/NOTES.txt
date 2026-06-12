@@ -1,0 +1,15 @@
+cloudivision has been installed into namespace {{ .Release.Namespace }}.
+
+API service:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "cloudivision.fullname" . }}-api 8080:{{ .Values.api.service.port }}
+
+Web UI:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "cloudivision.fullname" . }}-web 8088:{{ .Values.web.service.port }}
+
+Runner image configured for controller-created Jobs:
+  {{ include "cloudivision.image" (list . .Values.runner.image) }}
+
+Audit backend:
+  {{ .Values.audit.backend }}
+
+If using PostgreSQL, apply migrations from internal/audit/migrations before enabling audit.backend=postgres.

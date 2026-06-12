@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cloudivision.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cloudivision.labels" . | nindent 4 }}
+data:
+  CLOUDIVISION_METRICS_BIND_ADDRESS: {{ .Values.controller.metricsBindAddress | quote }}
+  CLOUDIVISION_HEALTH_PROBE_BIND_ADDRESS: {{ .Values.controller.healthProbeBindAddress | quote }}
+  CLOUDIVISION_LEADER_ELECTION: {{ .Values.controller.leaderElection | quote }}
+  CLOU_DIVISION_DEFAULT_NAMESPACE: {{ .Values.api.defaultNamespace | quote }}
+  CLOU_DIVISION_AUTH_MODE: {{ .Values.api.auth.mode | quote }}
+  CLOU_DIVISION_CORS_ALLOWED_ORIGINS: {{ join "," .Values.api.cors.allowedOrigins | quote }}
+  CLOU_DIVISION_AUDIT_BACKEND: {{ .Values.audit.backend | quote }}
+  CLOU_DIVISION_ENABLE_TEKTON: {{ .Values.tekton.enabled | quote }}
+  CLOU_DIVISION_RUNNER_IMAGE: {{ include "cloudivision.image" (list . .Values.runner.image) | quote }}
+  web-config.json: |
+    {"apiBaseUrl":{{ .Values.web.config.apiBaseUrl | quote }}}

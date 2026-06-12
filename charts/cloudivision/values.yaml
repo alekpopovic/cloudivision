@@ -1,13 +1,123 @@
-image:
-  registry: ghcr.io/cloudivision
-  tag: dev
+global:
+  imageRegistry: ghcr.io/cloudivision
 
-api:
-  replicaCount: 1
+namespace:
+  create: false
+  podSecurity:
+    enabled: true
+    level: restricted
 
 controller:
   replicaCount: 1
+  image:
+    repository: controller
+    tag: dev
+    pullPolicy: IfNotPresent
+  metricsBindAddress: ":8080"
+  healthProbeBindAddress: ":8081"
+  leaderElection: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+api:
+  replicaCount: 1
+  image:
+    repository: api
+    tag: dev
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  auth:
+    mode: disabled
+  defaultNamespace: default
+  cors:
+    allowedOrigins:
+      - http://localhost:4200
+      - http://localhost:4201
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+runner:
+  image:
+    repository: runner
+    tag: dev
+    pullPolicy: IfNotPresent
 
 web:
   replicaCount: 1
+  image:
+    repository: web
+    tag: dev
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  config:
+    apiBaseUrl: ""
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
 
+database:
+  enabled: false
+  externalUrlSecret:
+    name: ""
+    key: database-url
+
+audit:
+  backend: log
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: cloudivision.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: web
+        - path: /api
+          pathType: Prefix
+          service: api
+  tls: []
+
+networkPolicy:
+  enabled: false
+
+tekton:
+  enabled: false
+
+argocd:
+  enabled: false
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  privileged: false
+  capabilities:
+    drop:
+      - ALL
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""

@@ -85,4 +85,8 @@ uninstall:
 	kubectl delete -k config/default --ignore-not-found
 
 helm-template:
-	helm template cloudivision charts/cloudivision
+	helm template cloudivision charts/cloudivision --include-crds
+	@if helm template cloudivision charts/cloudivision --include-crds | grep -q "privileged: true"; then \
+		echo "Rendered chart contains privileged: true"; \
+		exit 1; \
+	fi
