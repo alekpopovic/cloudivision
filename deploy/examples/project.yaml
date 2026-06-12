@@ -4,7 +4,7 @@ metadata:
   name: sample-project
 spec:
   displayName: Sample Project
-  description: Example cloudivision project
+  description: Example project managed by cloudivision
   ownerTeam: platform
   namespace: sample-project
   defaultRegistry: ghcr.io/cloudivision

@@ -3,7 +3,8 @@
 package v1alpha1
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"encoding/json"
+
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -12,9 +13,7 @@ func (in *Project) DeepCopyObject() runtime.Object {
 		return nil
 	}
 	out := new(Project)
-	*out = *in
-	out.ObjectMeta = *in.ObjectMeta.DeepCopy()
-	out.Status.Conditions = append([]metav1.Condition(nil), in.Status.Conditions...)
+	deepCopyJSON(in, out)
 	return out
 }
 
@@ -23,14 +22,7 @@ func (in *ProjectList) DeepCopyObject() runtime.Object {
 		return nil
 	}
 	out := new(ProjectList)
-	*out = *in
-	out.ListMeta = in.ListMeta
-	if in.Items != nil {
-		out.Items = make([]Project, len(in.Items))
-		for i := range in.Items {
-			out.Items[i] = *in.Items[i].DeepCopyObject().(*Project)
-		}
-	}
+	deepCopyJSON(in, out)
 	return out
 }
 
@@ -39,9 +31,7 @@ func (in *Repository) DeepCopyObject() runtime.Object {
 		return nil
 	}
 	out := new(Repository)
-	*out = *in
-	out.ObjectMeta = *in.ObjectMeta.DeepCopy()
-	out.Status.Conditions = append([]metav1.Condition(nil), in.Status.Conditions...)
+	deepCopyJSON(in, out)
 	return out
 }
 
@@ -50,14 +40,7 @@ func (in *RepositoryList) DeepCopyObject() runtime.Object {
 		return nil
 	}
 	out := new(RepositoryList)
-	*out = *in
-	out.ListMeta = in.ListMeta
-	if in.Items != nil {
-		out.Items = make([]Repository, len(in.Items))
-		for i := range in.Items {
-			out.Items[i] = *in.Items[i].DeepCopyObject().(*Repository)
-		}
-	}
+	deepCopyJSON(in, out)
 	return out
 }
 
@@ -66,10 +49,7 @@ func (in *PipelineTemplate) DeepCopyObject() runtime.Object {
 		return nil
 	}
 	out := new(PipelineTemplate)
-	*out = *in
-	out.ObjectMeta = *in.ObjectMeta.DeepCopy()
-	out.Spec.Steps = append([]string(nil), in.Spec.Steps...)
-	out.Status.Conditions = append([]metav1.Condition(nil), in.Status.Conditions...)
+	deepCopyJSON(in, out)
 	return out
 }
 
@@ -78,14 +58,7 @@ func (in *PipelineTemplateList) DeepCopyObject() runtime.Object {
 		return nil
 	}
 	out := new(PipelineTemplateList)
-	*out = *in
-	out.ListMeta = in.ListMeta
-	if in.Items != nil {
-		out.Items = make([]PipelineTemplate, len(in.Items))
-		for i := range in.Items {
-			out.Items[i] = *in.Items[i].DeepCopyObject().(*PipelineTemplate)
-		}
-	}
+	deepCopyJSON(in, out)
 	return out
 }
 
@@ -94,9 +67,7 @@ func (in *BuildRun) DeepCopyObject() runtime.Object {
 		return nil
 	}
 	out := new(BuildRun)
-	*out = *in
-	out.ObjectMeta = *in.ObjectMeta.DeepCopy()
-	out.Status.Conditions = append([]metav1.Condition(nil), in.Status.Conditions...)
+	deepCopyJSON(in, out)
 	return out
 }
 
@@ -105,14 +76,7 @@ func (in *BuildRunList) DeepCopyObject() runtime.Object {
 		return nil
 	}
 	out := new(BuildRunList)
-	*out = *in
-	out.ListMeta = in.ListMeta
-	if in.Items != nil {
-		out.Items = make([]BuildRun, len(in.Items))
-		for i := range in.Items {
-			out.Items[i] = *in.Items[i].DeepCopyObject().(*BuildRun)
-		}
-	}
+	deepCopyJSON(in, out)
 	return out
 }
 
@@ -121,9 +85,7 @@ func (in *Environment) DeepCopyObject() runtime.Object {
 		return nil
 	}
 	out := new(Environment)
-	*out = *in
-	out.ObjectMeta = *in.ObjectMeta.DeepCopy()
-	out.Status.Conditions = append([]metav1.Condition(nil), in.Status.Conditions...)
+	deepCopyJSON(in, out)
 	return out
 }
 
@@ -132,14 +94,7 @@ func (in *EnvironmentList) DeepCopyObject() runtime.Object {
 		return nil
 	}
 	out := new(EnvironmentList)
-	*out = *in
-	out.ListMeta = in.ListMeta
-	if in.Items != nil {
-		out.Items = make([]Environment, len(in.Items))
-		for i := range in.Items {
-			out.Items[i] = *in.Items[i].DeepCopyObject().(*Environment)
-		}
-	}
+	deepCopyJSON(in, out)
 	return out
 }
 
@@ -148,9 +103,7 @@ func (in *Release) DeepCopyObject() runtime.Object {
 		return nil
 	}
 	out := new(Release)
-	*out = *in
-	out.ObjectMeta = *in.ObjectMeta.DeepCopy()
-	out.Status.Conditions = append([]metav1.Condition(nil), in.Status.Conditions...)
+	deepCopyJSON(in, out)
 	return out
 }
 
@@ -159,13 +112,16 @@ func (in *ReleaseList) DeepCopyObject() runtime.Object {
 		return nil
 	}
 	out := new(ReleaseList)
-	*out = *in
-	out.ListMeta = in.ListMeta
-	if in.Items != nil {
-		out.Items = make([]Release, len(in.Items))
-		for i := range in.Items {
-			out.Items[i] = *in.Items[i].DeepCopyObject().(*Release)
-		}
-	}
+	deepCopyJSON(in, out)
 	return out
+}
+
+func deepCopyJSON(in, out any) {
+	data, err := json.Marshal(in)
+	if err != nil {
+		panic(err)
+	}
+	if err := json.Unmarshal(data, out); err != nil {
+		panic(err)
+	}
 }

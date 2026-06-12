@@ -1,0 +1,43 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata:
+  name: sample-template
+spec:
+  projectRef: sample-project
+  description: Build and publish a container image with rootless BuildKit
+  params:
+    - name: environment
+      description: Target environment name
+      default: dev
+      required: false
+  steps:
+    - name: test
+      image: golang:1.26
+      command:
+        - go
+      args:
+        - test
+        - ./...
+      workingDir: /workspace
+      env:
+        - name: CGO_ENABLED
+          value: "0"
+      timeoutSeconds: 600
+      continueOnError: false
+  build:
+    enabled: true
+    contextDir: .
+    dockerfile: Dockerfile
+    builder: buildkit
+    image: ghcr.io/cloudivision/example
+    push: true
+  resources:
+    cpuRequest: 250m
+    cpuLimit: "1"
+    memoryRequest: 256Mi
+    memoryLimit: 1Gi
+    timeoutSeconds: 1800
+  security:
+    allowPrivileged: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: false

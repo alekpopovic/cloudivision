@@ -1,0 +1,14 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Environment
+metadata:
+  name: sample-environment
+spec:
+  projectRef: sample-project
+  displayName: Development
+  namespace: sample-dev
+  type: dev
+  requiresApproval: false
+  gitOps:
+    provider: argocd
+    applicationName: sample-app
+    namespace: argocd
