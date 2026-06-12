@@ -4,7 +4,8 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Subject, catchError, of, startWith, switchMap } from 'rxjs';
 
 import { ApiClient } from '../../api/client';
-import { ApiError, Release } from '../../api/models';
+import { ApiError, Principal, Release } from '../../api/models';
+import { AuthService } from '../../core/auth.service';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { ErrorMessageComponent } from '../../shared/error-message.component';
 import { PageHeaderComponent } from '../../shared/page-header.component';
@@ -33,16 +34,18 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
             <span>Sync: {{ release.status?.deployment?.syncStatus || '-' }}</span>
             <span>Health: {{ release.status?.deployment?.healthStatus || '-' }}</span>
           </div>
-          <div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" *ngIf="canActOnApproval(release)">
-            <p class="font-medium">Approval required</p>
-            <p>Development mode uses the actor entered below until production auth is configured.</p>
-          </div>
-          <form [formGroup]="approvalForm" class="mt-3 grid gap-2 md:grid-cols-[180px_1fr_auto_auto]" *ngIf="canActOnApproval(release)">
-            <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" formControlName="actor" placeholder="dev-mode actor" />
-            <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" formControlName="comment" placeholder="comment" />
-            <button type="button" class="rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50" [disabled]="approvalForm.invalid || actionInFlight === release.name" (click)="approve(release)">Approve</button>
-            <button type="button" class="rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-50" [disabled]="approvalForm.invalid || actionInFlight === release.name" (click)="reject(release)">Reject</button>
-          </form>
+          <ng-container *ngIf="currentUser$ | async as currentUser">
+            <div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" *ngIf="canActOnApproval(release, currentUser)">
+              <p class="font-medium">Approval required</p>
+              <p>Development mode uses the authenticated development user until production auth is configured.</p>
+            </div>
+            <form [formGroup]="approvalForm" class="mt-3 grid gap-2 md:grid-cols-[180px_1fr_auto_auto]" *ngIf="canActOnApproval(release, currentUser)">
+              <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" formControlName="actor" placeholder="actor" />
+              <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" formControlName="comment" placeholder="comment" />
+              <button type="button" class="rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50" [disabled]="approvalForm.invalid || actionInFlight === release.name" (click)="approve(release)">Approve</button>
+              <button type="button" class="rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-50" [disabled]="approvalForm.invalid || actionInFlight === release.name" (click)="reject(release)">Reject</button>
+            </form>
+          </ng-container>
           <p class="mt-2 text-xs text-slate-500" *ngIf="release.spec.approval?.approvedBy">Approved by {{ release.spec.approval?.approvedBy }}</p>
           <p class="mt-2 text-xs text-red-700" *ngIf="release.spec.approval?.rejectedBy">Rejected by {{ release.spec.approval?.rejectedBy }}</p>
         </div>
@@ -53,6 +56,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
 })
 export class ReleasesPageComponent {
   private readonly api = inject(ApiClient);
+  private readonly auth = inject(AuthService);
   private readonly fb = inject(FormBuilder);
   private readonly refresh$ = new Subject<void>();
   error: ApiError | null = null;
@@ -65,9 +69,10 @@ export class ReleasesPageComponent {
     startWith(undefined),
     switchMap(() => this.api.releases().pipe(catchError((error: ApiError) => { this.error = error; return of([]); })))
   );
+  readonly currentUser$ = this.api.currentUser().pipe(catchError(() => of(null)));
 
-  canActOnApproval(release: Release): boolean {
-    return release.status?.phase === 'AwaitingApproval' && !release.spec.approval?.approvedBy && !release.spec.approval?.rejectedBy;
+  canActOnApproval(release: Release, currentUser: Principal | null): boolean {
+    return this.auth.can(currentUser, 'approve-release') && release.status?.phase === 'AwaitingApproval' && !release.spec.approval?.approvedBy && !release.spec.approval?.rejectedBy;
   }
 
   approve(release: Release): void {

@@ -19,6 +19,11 @@ paths:
       responses:
         "200":
           description: Prometheus metrics when API metrics are enabled.
+  /api/v1/auth/me:
+    get:
+      responses:
+        "200":
+          description: Return the authenticated principal and resolved roles.
   /api/v1/projects:
     get:
       responses:

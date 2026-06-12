@@ -1,13 +1,21 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { of } from 'rxjs';
 
+import { ApiClient } from './api/client';
 import { AppComponent } from './app.component';
+
+class FakeApiClient {
+  currentUser() {
+    return of({ subject: 'dev-user', displayName: 'Development User', roles: ['admin'], devMode: true });
+  }
+}
 
 describe('AppComponent', () => {
   it('creates the app', async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
-      providers: [provideRouter([])]
+      providers: [provideRouter([]), { provide: ApiClient, useClass: FakeApiClient }]
     }).compileComponents();
 
     const fixture = TestBed.createComponent(AppComponent);
@@ -17,7 +25,7 @@ describe('AppComponent', () => {
   it('renders the product name', async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
-      providers: [provideRouter([])]
+      providers: [provideRouter([]), { provide: ApiClient, useClass: FakeApiClient }]
     }).compileComponents();
 
     const fixture = TestBed.createComponent(AppComponent);

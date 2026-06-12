@@ -18,6 +18,7 @@ import (
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	cloudivisionapi "github.com/cloudivision/cloudivision/internal/api"
 	"github.com/cloudivision/cloudivision/internal/audit"
+	"github.com/cloudivision/cloudivision/internal/auth"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -61,6 +62,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer closeAudit()
+	authMode := envOrDefault("CLOU_DIVISION_AUTH_MODE", "disabled")
+	authenticator, err := configureAuthenticator(authMode)
+	if err != nil {
+		logger.Error("configure auth", "error", err)
+		os.Exit(1)
+	}
 
 	apiServer := cloudivisionapi.Server{
 		Client:           k8sClient,
@@ -69,8 +76,9 @@ func main() {
 		Audit:            auditRecorder,
 		AuditEvents:      auditEvents,
 		WebhookIndex:     webhookIndex,
+		Authenticator:    authenticator,
 		DefaultNamespace: envOrDefault("CLOU_DIVISION_DEFAULT_NAMESPACE", "default"),
-		AuthMode:         envOrDefault("CLOU_DIVISION_AUTH_MODE", "disabled"),
+		AuthMode:         authMode,
 		CORSOrigins:      csvEnv("CLOU_DIVISION_CORS_ALLOWED_ORIGINS", "http://localhost:4200,http://localhost:4201"),
 		MetricsEnabled:   envBool("CLOU_DIVISION_METRICS_ENABLED", true),
 	}
@@ -103,6 +111,27 @@ func main() {
 	}
 
 	logger.Info("api server stopped")
+}
+
+func configureAuthenticator(mode string) (auth.Authenticator, error) {
+	switch strings.ToLower(mode) {
+	case "disabled", "":
+		return auth.DisabledAuthenticator{}, nil
+	case "oidc":
+		groups, err := auth.LoadGroupMappingFile(os.Getenv("CLOU_DIVISION_AUTH_GROUPS_FILE"))
+		if err != nil {
+			return nil, err
+		}
+		return auth.NewOIDCAuthenticator(auth.OIDCConfig{
+			IssuerURL: os.Getenv("CLOU_DIVISION_OIDC_ISSUER_URL"),
+			ClientID:  os.Getenv("CLOU_DIVISION_OIDC_CLIENT_ID"),
+			Audience:  os.Getenv("CLOU_DIVISION_OIDC_AUDIENCE"),
+			JWKSURL:   os.Getenv("CLOU_DIVISION_OIDC_JWKS_URL"),
+			Groups:    groups,
+		})
+	default:
+		return nil, fmt.Errorf("unsupported CLOU_DIVISION_AUTH_MODE %q", mode)
+	}
 }
 
 func kubernetesConfig() (*rest.Config, error) {

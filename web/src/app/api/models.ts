@@ -9,6 +9,17 @@ export interface ApprovalActionRequest {
   comment?: string;
 }
 
+export type Role = 'admin' | 'project-admin' | 'developer' | 'viewer';
+
+export interface Principal {
+  subject: string;
+  email?: string;
+  groups?: string[];
+  displayName?: string;
+  roles?: Role[];
+  devMode?: boolean;
+}
+
 export interface Condition {
   type: string;
   status: string;

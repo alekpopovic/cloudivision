@@ -15,6 +15,7 @@ import (
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/audit"
+	"github.com/cloudivision/cloudivision/internal/auth"
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	"github.com/cloudivision/cloudivision/internal/redact"
@@ -33,6 +34,7 @@ type Server struct {
 	Audit            audit.Recorder
 	AuditEvents      audit.EventLister
 	WebhookIndex     audit.WebhookIndexer
+	Authenticator    auth.Authenticator
 	DefaultNamespace string
 	AuthMode         string
 	CORSOrigins      []string
@@ -46,6 +48,7 @@ func (s Server) Handler() http.Handler {
 	if s.MetricsEnabled {
 		mux.Handle("GET /metrics", observability.MetricsHandler())
 	}
+	mux.HandleFunc("GET /api/v1/auth/me", s.currentUser)
 	mux.HandleFunc("GET /api/v1/projects", s.projects)
 	mux.HandleFunc("POST /api/v1/projects", s.projects)
 	mux.HandleFunc("GET /api/v1/projects/{name}", s.project)
@@ -71,6 +74,11 @@ func (s Server) Handler() http.Handler {
 
 func (s Server) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, HealthResponse{Status: "ok"})
+}
+
+func (s Server) currentUser(w http.ResponseWriter, r *http.Request) {
+	principal, _ := auth.PrincipalFromContext(r.Context())
+	writeJSON(w, http.StatusOK, principalDTO(principal))
 }
 
 func (s Server) projects(w http.ResponseWriter, r *http.Request) {
@@ -214,6 +222,13 @@ func (s Server) buildRuns(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, err)
 			return
 		}
+		s.recordAudit(r.Context(), audit.Event{
+			Type:     "BuildRunCreated",
+			Actor:    auth.ActorFromContext(r.Context(), obj.Spec.TriggeredBy.Actor),
+			Project:  obj.Spec.ProjectRef,
+			BuildRun: obj.Name,
+			Message:  "Created BuildRun through API.",
+		})
 		writeJSON(w, http.StatusCreated, buildRunDTO(*obj))
 	}
 }
@@ -312,15 +327,16 @@ func (s Server) approveRelease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := metav1.Now()
+	actor := auth.ActorFromContext(r.Context(), req.Actor)
 	release.Spec.Approval.Required = true
-	release.Spec.Approval.ApprovedBy = req.Actor
+	release.Spec.Approval.ApprovedBy = actor
 	release.Spec.Approval.ApprovedAt = &now
 	release.Spec.Approval.RejectedBy = ""
 	release.Spec.Approval.RejectedAt = nil
 	release.Spec.Approval.Comment = req.Comment
 	release.SetAnnotations(mergeStringMap(release.GetAnnotations(), map[string]string{
 		"cloudivision.io/approval-action":  "approved",
-		"cloudivision.io/approval-actor":   req.Actor,
+		"cloudivision.io/approval-actor":   actor,
 		"cloudivision.io/approval-comment": req.Comment,
 	}))
 	if err := s.Client.Update(r.Context(), release); err != nil {
@@ -329,7 +345,7 @@ func (s Server) approveRelease(w http.ResponseWriter, r *http.Request) {
 	}
 	s.recordAudit(r.Context(), audit.Event{
 		Type:     "ReleaseApproved",
-		Actor:    req.Actor,
+		Actor:    actor,
 		Project:  release.Spec.ProjectRef,
 		BuildRun: release.Spec.BuildRunRef,
 		Release:  release.Name,
@@ -362,13 +378,14 @@ func (s Server) rejectRelease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := metav1.Now()
+	actor := auth.ActorFromContext(r.Context(), req.Actor)
 	release.Spec.Approval.Required = true
-	release.Spec.Approval.RejectedBy = req.Actor
+	release.Spec.Approval.RejectedBy = actor
 	release.Spec.Approval.RejectedAt = &now
 	release.Spec.Approval.Comment = req.Comment
 	release.SetAnnotations(mergeStringMap(release.GetAnnotations(), map[string]string{
 		"cloudivision.io/approval-action":  "rejected",
-		"cloudivision.io/approval-actor":   req.Actor,
+		"cloudivision.io/approval-actor":   actor,
 		"cloudivision.io/approval-comment": req.Comment,
 	}))
 	if err := s.Client.Update(r.Context(), release); err != nil {
@@ -383,7 +400,7 @@ func (s Server) rejectRelease(w http.ResponseWriter, r *http.Request) {
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: release.Generation,
 		Reason:             "ReleaseRejected",
-		Message:            "Release was rejected by " + req.Actor + ".",
+		Message:            "Release was rejected by " + actor + ".",
 		LastTransitionTime: now,
 	})
 	if err := s.Client.Status().Update(r.Context(), release); err != nil {
@@ -392,7 +409,7 @@ func (s Server) rejectRelease(w http.ResponseWriter, r *http.Request) {
 	}
 	s.recordAudit(r.Context(), audit.Event{
 		Type:     "ReleaseRejected",
-		Actor:    req.Actor,
+		Actor:    actor,
 		Project:  release.Spec.ProjectRef,
 		BuildRun: release.Spec.BuildRunRef,
 		Release:  release.Name,
@@ -409,7 +426,10 @@ func (s Server) releaseApprovalActionInput(w http.ResponseWriter, r *http.Reques
 	}
 	req.Actor = strings.TrimSpace(req.Actor)
 	if req.Actor == "" {
-		s.writeError(w, badRequest("actor is required"))
+		req.Actor = auth.ActorFromContext(r.Context(), "")
+	}
+	if req.Actor == "" {
+		s.writeError(w, badRequest("actor is required when no authenticated principal is available"))
 		return nil, ReleaseApprovalRequest{}, false
 	}
 	release := &cicdv1alpha1.Release{}
@@ -693,11 +713,42 @@ func (s Server) auth(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if s.AuthMode == "disabled" {
+		permission, protected := auth.RequiredPermission(r.Method, r.URL.Path)
+		if !protected {
+			if strings.HasPrefix(r.URL.Path, "/api/v1/webhooks/") {
+				principal := &auth.Principal{Subject: "webhook", DisplayName: "Webhook", Roles: []auth.Role{auth.RoleDeveloper}}
+				next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), principal)))
+				return
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
-		writeError(w, http.StatusNotImplemented, "auth_not_implemented", "authentication is not implemented; set CLOU_DIVISION_AUTH_MODE=disabled for development only")
+		authenticator := s.Authenticator
+		mode := strings.ToLower(s.AuthMode)
+		if mode == "" {
+			mode = "disabled"
+		}
+		if authenticator == nil {
+			if mode == "disabled" {
+				authenticator = auth.DisabledAuthenticator{}
+			} else {
+				writeError(w, http.StatusNotImplemented, "auth_not_configured", "authentication provider is not configured")
+				return
+			}
+		}
+		principal, err := authenticator.Authenticate(r)
+		if err != nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized", err.Error())
+			return
+		}
+		if principal.DevMode {
+			w.Header().Set("X-Cloudivision-Auth-Mode", "development")
+		}
+		if !auth.Allowed(principal, permission) {
+			writeError(w, http.StatusForbidden, "forbidden", "principal does not have permission "+string(permission))
+			return
+		}
+		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), principal)))
 	})
 }
 

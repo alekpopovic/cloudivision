@@ -5,6 +5,7 @@ import (
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/audit"
+	"github.com/cloudivision/cloudivision/internal/auth"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -116,6 +117,15 @@ type HealthResponse struct {
 	Status string `json:"status"`
 }
 
+type PrincipalResponse struct {
+	Subject     string      `json:"subject"`
+	Email       string      `json:"email,omitempty"`
+	Groups      []string    `json:"groups,omitempty"`
+	DisplayName string      `json:"displayName,omitempty"`
+	Roles       []auth.Role `json:"roles,omitempty"`
+	DevMode     bool        `json:"devMode,omitempty"`
+}
+
 func projectDTO(project cicdv1alpha1.Project) ProjectResponse {
 	return ProjectResponse{Name: project.Name, Namespace: project.Namespace, Spec: project.Spec, Status: project.Status}
 }
@@ -153,6 +163,20 @@ func auditEventDTO(event audit.Event) AuditEventResponse {
 		Message:    event.Message,
 		Metadata:   event.Metadata,
 		CreatedAt:  createdAt,
+	}
+}
+
+func principalDTO(principal *auth.Principal) PrincipalResponse {
+	if principal == nil {
+		return PrincipalResponse{}
+	}
+	return PrincipalResponse{
+		Subject:     principal.Subject,
+		Email:       principal.Email,
+		Groups:      principal.Groups,
+		DisplayName: principal.DisplayName,
+		Roles:       principal.Roles,
+		DevMode:     principal.DevMode,
 	}
 }
 

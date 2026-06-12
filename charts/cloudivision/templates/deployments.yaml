@@ -95,6 +95,11 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          volumeMounts:
+            - name: auth-config
+              mountPath: /etc/cloudivision/auth/groups.yaml
+              subPath: groups.yaml
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /healthz
@@ -107,6 +112,13 @@ spec:
             {{- toYaml .Values.api.resources | nindent 12 }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
+      volumes:
+        - name: auth-config
+          configMap:
+            name: {{ include "cloudivision.fullname" . }}-config
+            items:
+              - key: groups.yaml
+                path: groups.yaml
 ---
 apiVersion: apps/v1
 kind: Deployment

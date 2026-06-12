@@ -27,7 +27,7 @@ Set `global.imageRegistry` or fully adjust each component image repository/tag.
 
 ## API and web
 
-The API defaults to development auth mode:
+The API defaults to development-only auth mode. In this mode requests are allowed as `dev-user` and responses include `X-Cloudivision-Auth-Mode: development`.
 
 ```yaml
 api:
@@ -40,6 +40,29 @@ api:
     allowedOrigins:
       - http://localhost:4200
 ```
+
+For OIDC, configure issuer/client settings and map identity provider groups to cloudivision roles. The mapping is rendered into a ConfigMap and mounted into the API pod.
+
+```yaml
+api:
+  auth:
+    mode: oidc
+    oidc:
+      issuerUrl: https://issuer.example.com
+      clientId: cloudivision
+      audience: cloudivision
+      jwksUrl: "" # optional; defaults to <issuerUrl>/.well-known/jwks.json
+    groupMappings:
+      - group: platform-admins
+        role: admin
+        scope: global
+      - group: demo-developers
+        role: developer
+        scope: project
+        project: demo-project
+```
+
+Supported roles are `admin`, `project-admin`, `developer` and `viewer`. The backend enforces permissions; the Angular UI only hides actions as a convenience.
 
 The Angular UI reads runtime config from `/assets/config.json`. Set:
 

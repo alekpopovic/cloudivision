@@ -13,6 +13,7 @@ import (
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/audit"
+	"github.com/cloudivision/cloudivision/internal/auth"
 	"github.com/cloudivision/cloudivision/internal/webhook"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -289,13 +290,13 @@ func TestApproveReleasePatchesSpecAndRecordsAudit(t *testing.T) {
 	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: "release-1", Namespace: "ci"}, updated); err != nil {
 		t.Fatalf("get Release: %v", err)
 	}
-	if !updated.Spec.Approval.Required || updated.Spec.Approval.ApprovedBy != "alice" || updated.Spec.Approval.ApprovedAt == nil {
-		t.Fatalf("approval = %#v, want approved by alice", updated.Spec.Approval)
+	if !updated.Spec.Approval.Required || updated.Spec.Approval.ApprovedBy != "dev-user@localhost" || updated.Spec.Approval.ApprovedAt == nil {
+		t.Fatalf("approval = %#v, want approved by dev-user@localhost", updated.Spec.Approval)
 	}
 	if updated.Annotations["cloudivision.io/approval-action"] != "approved" {
 		t.Fatalf("annotations = %#v, want approved action", updated.Annotations)
 	}
-	if len(recorder.events) != 1 || recorder.events[0].Type != "ReleaseApproved" || recorder.events[0].Actor != "alice" {
+	if len(recorder.events) != 1 || recorder.events[0].Type != "ReleaseApproved" || recorder.events[0].Actor != "dev-user@localhost" {
 		t.Fatalf("audit events = %#v", recorder.events)
 	}
 }
@@ -318,13 +319,13 @@ func TestRejectReleaseMarksFailedAndRecordsAudit(t *testing.T) {
 	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: "release-1", Namespace: "ci"}, updated); err != nil {
 		t.Fatalf("get Release: %v", err)
 	}
-	if updated.Spec.Approval.RejectedBy != "bob" || updated.Spec.Approval.RejectedAt == nil {
-		t.Fatalf("approval = %#v, want rejected by bob", updated.Spec.Approval)
+	if updated.Spec.Approval.RejectedBy != "dev-user@localhost" || updated.Spec.Approval.RejectedAt == nil {
+		t.Fatalf("approval = %#v, want rejected by dev-user@localhost", updated.Spec.Approval)
 	}
 	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailed {
 		t.Fatalf("phase = %q, want Failed", updated.Status.Phase)
 	}
-	if len(recorder.events) != 1 || recorder.events[0].Type != "ReleaseRejected" || recorder.events[0].Actor != "bob" {
+	if len(recorder.events) != 1 || recorder.events[0].Type != "ReleaseRejected" || recorder.events[0].Actor != "dev-user@localhost" {
 		t.Fatalf("audit events = %#v", recorder.events)
 	}
 }
@@ -344,36 +345,70 @@ func TestApproveReleaseRejectsDeployedRelease(t *testing.T) {
 	}
 }
 
-func TestAuthNotDisabledReturnsNotImplemented(t *testing.T) {
+func TestOIDCModeRejectsMissingBearerToken(t *testing.T) {
 	server, _ := newTestServer(t)
 	server.AuthMode = "oidc"
+	server.Authenticator = fakeAuthenticator{err: auth.ErrMissingBearerToken}
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/build-runs", nil)
 	rec := httptest.NewRecorder()
 
 	server.Handler().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNotImplemented {
-		t.Fatalf("status = %d, want 501", rec.Code)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
 	}
 	var errResp ErrorResponse
 	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
 		t.Fatalf("decode error response: %v", err)
 	}
-	if errResp.Code != "auth_not_implemented" {
+	if errResp.Code != "unauthorized" {
 		t.Fatalf("code = %q", errResp.Code)
 	}
 }
 
-func TestAuthDisabledAllowsRequests(t *testing.T) {
+func TestOIDCModeAllowsValidViewerToRead(t *testing.T) {
+	server, _ := newTestServer(t)
+	server.AuthMode = "oidc"
+	server.Authenticator = fakeAuthenticator{principal: &auth.Principal{Subject: "user-1", Roles: []auth.Role{auth.RoleViewer}}}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/build-runs", nil)
+	req.Header.Set("Authorization", "Bearer valid")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestViewerCannotCreateBuildRun(t *testing.T) {
+	server, _ := newTestServer(t)
+	server.AuthMode = "oidc"
+	server.Authenticator = fakeAuthenticator{principal: &auth.Principal{Subject: "viewer", Roles: []auth.Role{auth.RoleViewer}}}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/build-runs", bytes.NewBufferString(`{}`))
+	req.Header.Set("Authorization", "Bearer valid")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestAuthDisabledAllowsRequestsAndMarksDevelopmentMode(t *testing.T) {
 	server, _ := newTestServer(t)
 	server.AuthMode = "disabled"
-	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/build-runs", nil)
 	rec := httptest.NewRecorder()
 
 	server.Handler().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if got := rec.Header().Get("X-Cloudivision-Auth-Mode"); got != "development" {
+		t.Fatalf("X-Cloudivision-Auth-Mode = %q, want development", got)
 	}
 }
 
@@ -588,4 +623,16 @@ type fakeAuditRecorder struct {
 func (r *fakeAuditRecorder) Record(_ context.Context, event audit.Event) error {
 	r.events = append(r.events, event)
 	return nil
+}
+
+type fakeAuthenticator struct {
+	principal *auth.Principal
+	err       error
+}
+
+func (a fakeAuthenticator) Authenticate(*http.Request) (*auth.Principal, error) {
+	if a.err != nil {
+		return nil, a.err
+	}
+	return a.principal, nil
 }

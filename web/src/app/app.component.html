@@ -20,7 +20,13 @@
         <nav class="hidden gap-2 md:flex lg:hidden">
           <a *ngFor="let item of nav" [routerLink]="item.path" class="rounded-md px-2 py-1 text-xs text-slate-600">{{ item.label }}</a>
         </nav>
-        <span class="text-xs font-medium uppercase text-slate-500">Kubernetes-native CI/CD</span>
+        <div class="flex items-center gap-3 text-xs text-slate-600" *ngIf="currentUser$ | async as currentUser; else anonymous">
+          <span class="font-medium">{{ currentUser.displayName || currentUser.email || currentUser.subject }}</span>
+          <span class="rounded bg-amber-100 px-2 py-1 font-medium text-amber-800" *ngIf="currentUser.devMode">development auth</span>
+        </div>
+        <ng-template #anonymous>
+          <span class="text-xs font-medium uppercase text-slate-500">Kubernetes-native CI/CD</span>
+        </ng-template>
       </div>
     </header>
 

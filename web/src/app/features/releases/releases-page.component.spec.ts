@@ -28,6 +28,10 @@ class FakeApiClient {
     return of(this.releasesResponse);
   }
 
+  currentUser() {
+    return of({ subject: 'user-1', roles: ['developer'] });
+  }
+
   approveRelease() {
     this.approveCalls++;
     return of(this.releasesResponse[0]);
