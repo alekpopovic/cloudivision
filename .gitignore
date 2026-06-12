@@ -1,0 +1,31 @@
+# Go
+/.cache/
+/bin/
+/dist/
+*.test
+*.out
+coverage.out
+
+# Node / Angular
+node_modules/
+/web/node_modules/
+/web/dist/
+/web/.angular/
+/web/coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Kubernetes local files
+.kube/
+kubeconfig
+*.kubeconfig
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

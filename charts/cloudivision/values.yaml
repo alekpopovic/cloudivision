@@ -1,0 +1,13 @@
+image:
+  registry: ghcr.io/cloudivision
+  tag: dev
+
+api:
+  replicaCount: 1
+
+controller:
+  replicaCount: 1
+
+web:
+  replicaCount: 1
+
