@@ -1,0 +1,18 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Repository
+metadata:
+  name: conformance-webhook
+  namespace: __NAMESPACE__
+spec:
+  projectRef: conformance
+  provider: github
+  url: __REPOSITORY_URL__
+  defaultBranch: main
+  webhook:
+    enabled: true
+    secretRef:
+      name: conformance-webhook
+      key: secret
+    events:
+      - push
+  pipelineTemplateRef: conformance-success

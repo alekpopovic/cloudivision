@@ -1,0 +1,20 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: BuildRun
+metadata:
+  name: conformance-success
+  namespace: __NAMESPACE__
+spec:
+  projectRef: conformance
+  repositoryRef: conformance
+  pipelineTemplateRef: conformance-success
+  revision: __REVISION__
+  branch: main
+  triggeredBy:
+    type: manual
+    actor: conformance
+  image:
+    repository: example.invalid/conformance
+    tag: success
+  executor: job
+  gitOps:
+    enabled: false

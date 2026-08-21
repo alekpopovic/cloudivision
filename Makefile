@@ -1,4 +1,4 @@
-.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all vet lint build run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate install uninstall helm-template
+.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all conformance vet lint build run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate install uninstall helm-template
 
 IMAGE_REGISTRY ?= ghcr.io/cloudivision
 IMAGE_TAG ?= dev
@@ -27,6 +27,7 @@ help:
 	@echo "  make install       Install manifests into the current kubectl context"
 	@echo "  make uninstall     Remove manifests from the current kubectl context"
 	@echo "  make test-e2e      Run the kind smoke-test entrypoint"
+	@echo "  make conformance   Run clean-cluster platform conformance scenarios"
 
 fmt:
 	gofmt -w ./api ./cmd ./internal
@@ -55,6 +56,9 @@ test-web:
 
 test-e2e:
 	./test/e2e/kind_smoke.sh
+
+conformance:
+	./test/conformance/run.sh
 
 test-all: fmt test-unit test-controller test-api test-web vet build helm-template
 

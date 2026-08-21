@@ -1,0 +1,39 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Environment
+metadata:
+  name: conformance-dev
+  namespace: __NAMESPACE__
+spec:
+  projectRef: conformance
+  displayName: Conformance development
+  namespace: __NAMESPACE__
+  type: dev
+  requiresApproval: false
+  gitOps:
+    provider: generic
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: BuildRun
+metadata:
+  name: conformance-gitops
+  namespace: __NAMESPACE__
+spec:
+  projectRef: conformance
+  repositoryRef: conformance
+  pipelineTemplateRef: conformance-success
+  revision: __REVISION__
+  branch: main
+  triggeredBy:
+    type: manual
+    actor: conformance
+  image:
+    repository: example.invalid/conformance
+    tag: gitops
+  executor: job
+  gitOps:
+    enabled: true
+    repoURL: __GITOPS_REPOSITORY_URL__
+    branch: __GITOPS_BRANCH__
+    path: __GITOPS_PATH__
+    strategy: helm-values
+    environmentRef: conformance-dev

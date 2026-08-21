@@ -1,0 +1,85 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Project
+metadata:
+  name: conformance
+  namespace: __NAMESPACE__
+spec:
+  displayName: Conformance
+  ownerTeam: platform
+  namespace: __NAMESPACE__
+  defaultRegistry: example.invalid
+  defaultBranch: main
+  serviceAccountName: cloudivision-runner
+  isolation:
+    createNamespace: false
+    podSecurityLevel: restricted
+    networkPolicyMode: disabled
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Repository
+metadata:
+  name: conformance
+  namespace: __NAMESPACE__
+spec:
+  projectRef: conformance
+  provider: generic
+  url: __REPOSITORY_URL__
+  defaultBranch: main
+  webhook:
+    enabled: false
+    secretRef:
+      name: unused-webhook
+      key: secret
+  pipelineTemplateRef: conformance-success
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata:
+  name: conformance-success
+  namespace: __NAMESPACE__
+spec:
+  projectRef: conformance
+  steps:
+    - name: verify-checkout
+      image: alpine:3.22
+      command: [sh]
+      args: [-c, "test -f go.mod"]
+      timeoutSeconds: 60
+  build:
+    enabled: false
+    builder: none
+    push: false
+  resources:
+    cpuRequest: 50m
+    cpuLimit: 500m
+    memoryRequest: 64Mi
+    memoryLimit: 512Mi
+    timeoutSeconds: 180
+  security:
+    allowPrivileged: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: false
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata:
+  name: conformance-failure
+  namespace: __NAMESPACE__
+spec:
+  projectRef: conformance
+  steps:
+    - name: expected-failure
+      image: alpine:3.22
+      command: [sh]
+      args: [-c, "echo expected conformance failure >&2; exit 42"]
+      timeoutSeconds: 60
+  build:
+    enabled: false
+    builder: none
+    push: false
+  resources:
+    timeoutSeconds: 180
+  security:
+    allowPrivileged: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: false
