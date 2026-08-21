@@ -89,7 +89,51 @@ func TestProjectReconcileCreatesEgressAllowListSkeleton(t *testing.T) {
 	}
 }
 
-func newProjectReconciler(t *testing.T, project *cicdv1alpha1.Project) (*ProjectReconciler, *cicdv1alpha1.Project) {
+func TestProjectReconcileAdoptsExistingNamespaceIdempotently(t *testing.T) {
+	ctx := context.Background()
+	project := testIsolatedProject()
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   project.Spec.Namespace,
+			Labels: map[string]string{"user.example.com/keep": "true"},
+		},
+	}
+	reconciler, project := newProjectReconciler(t, project, namespace)
+
+	for i := 0; i < 2; i++ {
+		result, err := reconciler.Reconcile(ctx, projectRequestFor(project))
+		if err != nil {
+			t.Fatalf("Reconcile() iteration %d error = %v", i+1, err)
+		}
+		if result.RequeueAfter != projectDriftRequeue {
+			t.Fatalf("RequeueAfter = %s, want %s", result.RequeueAfter, projectDriftRequeue)
+		}
+	}
+
+	updatedNamespace := &corev1.Namespace{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: project.Spec.Namespace}, updatedNamespace); err != nil {
+		t.Fatalf("get Namespace error = %v", err)
+	}
+	if updatedNamespace.Labels["user.example.com/keep"] != "true" {
+		t.Fatalf("existing namespace labels were not preserved: %#v", updatedNamespace.Labels)
+	}
+	updatedProject := &cicdv1alpha1.Project{}
+	if err := reconciler.Get(ctx, client.ObjectKeyFromObject(project), updatedProject); err != nil {
+		t.Fatalf("get Project error = %v", err)
+	}
+	if !updatedProject.Status.NamespaceReady {
+		t.Fatal("namespaceReady = false, want true for an existing reconciled namespace")
+	}
+	serviceAccounts := &corev1.ServiceAccountList{}
+	if err := reconciler.List(ctx, serviceAccounts, client.InNamespace(project.Spec.Namespace)); err != nil {
+		t.Fatalf("list ServiceAccounts error = %v", err)
+	}
+	if len(serviceAccounts.Items) != 1 {
+		t.Fatalf("len(ServiceAccounts) = %d, want 1", len(serviceAccounts.Items))
+	}
+}
+
+func newProjectReconciler(t *testing.T, project *cicdv1alpha1.Project, existing ...client.Object) (*ProjectReconciler, *cicdv1alpha1.Project) {
 	t.Helper()
 	scheme := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
@@ -98,10 +142,11 @@ func newProjectReconciler(t *testing.T, project *cicdv1alpha1.Project) (*Project
 	if err := cicdv1alpha1.AddToScheme(scheme); err != nil {
 		t.Fatalf("add cloudivision scheme: %v", err)
 	}
+	objects := append([]client.Object{project}, existing...)
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithStatusSubresource(&cicdv1alpha1.Project{}).
-		WithObjects(project).
+		WithObjects(objects...).
 		Build()
 	return &ProjectReconciler{Client: fakeClient}, project
 }

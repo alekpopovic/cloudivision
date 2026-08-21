@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-21T23:49:48Z",
-  "last_executed_prompt": 25,
-  "next_prompt": 26,
+  "updated_at": "2026-08-21T23:57:35Z",
+  "last_executed_prompt": 26,
+  "next_prompt": 27,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -251,9 +251,9 @@
       "title": "Controller Reliability and Conflict Handling",
       "phase": "Reliability",
       "file": "prompts/26-controller-reliability-and-conflict-handling.md",
-      "status": "pending",
-      "executed_at": null,
-      "notes": ""
+      "status": "done",
+      "executed_at": "2026-08-21T23:57:35Z",
+      "notes": "Controllers hardened for idempotency, conflict-safe conditions, child recreation, retryable external state and GitOps commit checkpointing; finalizer decisions documented and tests expanded."
     },
     {
       "id": 27,

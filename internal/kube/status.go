@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -61,8 +62,41 @@ func copyStatus(dst, src client.Object) error {
 	if err != nil {
 		return err
 	}
-	dstStatus.Set(srcStatus)
+	desiredStatus := reflect.New(srcStatus.Type()).Elem()
+	desiredStatus.Set(srcStatus)
+	mergeConditions(dstStatus, desiredStatus)
+	dstStatus.Set(desiredStatus)
 	return nil
+}
+
+// mergeConditions keeps condition types written by another actor while the
+// status update was retried. Desired conditions win by type; unrelated latest
+// conditions survive the retry.
+func mergeConditions(latestStatus, desiredStatus reflect.Value) {
+	if latestStatus.Kind() != reflect.Struct || desiredStatus.Kind() != reflect.Struct {
+		return
+	}
+	latest := latestStatus.FieldByName("Conditions")
+	desired := desiredStatus.FieldByName("Conditions")
+	conditionSliceType := reflect.TypeOf([]metav1.Condition{})
+	if !latest.IsValid() || !desired.IsValid() || latest.Type() != conditionSliceType || desired.Type() != conditionSliceType || !desired.CanSet() {
+		return
+	}
+	merged := append([]metav1.Condition(nil), latest.Interface().([]metav1.Condition)...)
+	for _, condition := range desired.Interface().([]metav1.Condition) {
+		replaced := false
+		for i := range merged {
+			if merged[i].Type == condition.Type {
+				merged[i] = condition
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			merged = append(merged, condition)
+		}
+	}
+	desired.Set(reflect.ValueOf(merged))
 }
 
 func statusField(obj client.Object) (reflect.Value, error) {

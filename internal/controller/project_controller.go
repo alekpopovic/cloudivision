@@ -25,6 +25,7 @@ const (
 	runnerRoleName              = "cloudivision-runner"
 	defaultDenyNetworkPolicy    = "cloudivision-default-deny"
 	egressAllowListPolicy       = "cloudivision-egress-allow-list"
+	projectDriftRequeue         = 5 * time.Minute
 )
 
 // ProjectReconciler reconciles Project resources.
@@ -75,7 +76,10 @@ func (r *ProjectReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err := r.ensureNetworkPolicy(ctx, project); err != nil {
 		return ctrl.Result{}, r.markProjectError(ctx, project, err)
 	}
-	return ctrl.Result{}, r.markProjectReady(ctx, project)
+	if err := r.markProjectReady(ctx, project); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{RequeueAfter: projectDriftRequeue}, nil
 }
 
 func (r *ProjectReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -191,8 +195,14 @@ func (r *ProjectReconciler) ensureNetworkPolicy(ctx context.Context, project *ci
 }
 
 func (r *ProjectReconciler) markProjectReady(ctx context.Context, project *cicdv1alpha1.Project) error {
+	if project.Status.Phase == cicdv1alpha1.ProjectPhaseReady &&
+		project.Status.NamespaceReady &&
+		project.Status.ObservedGeneration == project.Generation &&
+		conditionCurrent(project.Status.Conditions, domain.ConditionReady, project.Generation) {
+		return nil
+	}
 	project.Status.Phase = cicdv1alpha1.ProjectPhaseReady
-	project.Status.NamespaceReady = project.Spec.Isolation.CreateNamespace
+	project.Status.NamespaceReady = true
 	project.Status.ObservedGeneration = project.Generation
 	domain.SetCondition(&project.Status.Conditions, metav1.Condition{
 		Type:               domain.ConditionReady,
@@ -205,6 +215,15 @@ func (r *ProjectReconciler) markProjectReady(ctx context.Context, project *cicdv
 		return fmt.Errorf("update Project status: %w", err)
 	}
 	return nil
+}
+
+func conditionCurrent(conditions []metav1.Condition, conditionType string, generation int64) bool {
+	for _, condition := range conditions {
+		if condition.Type == conditionType && condition.Status == metav1.ConditionTrue && condition.ObservedGeneration == generation {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *ProjectReconciler) markProjectError(ctx context.Context, project *cicdv1alpha1.Project, err error) error {

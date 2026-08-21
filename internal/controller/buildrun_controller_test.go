@@ -9,6 +9,7 @@ import (
 	jobexecutor "github.com/cloudivision/cloudivision/internal/executor/job"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -48,6 +49,70 @@ func TestBuildRunReconcileCreatesOneJob(t *testing.T) {
 		t.Fatalf("REPOSITORY_URL = %q", got)
 	}
 	assertSecureJobSpec(t, &job)
+}
+
+func TestBuildRunReconcileDoesNotAddUnneededFinalizer(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := reconciler.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatalf("get BuildRun error = %v", err)
+	}
+	for _, finalizer := range updated.Finalizers {
+		if finalizer == legacyBuildRunFinalizer {
+			t.Fatalf("unneeded legacy finalizer was added: %#v", updated.Finalizers)
+		}
+	}
+}
+
+func TestBuildRunDeletionRemovesLegacyFinalizer(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+	buildRun.Finalizers = []string{legacyBuildRunFinalizer}
+	if err := reconciler.Update(ctx, buildRun); err != nil {
+		t.Fatalf("add legacy finalizer error = %v", err)
+	}
+	if err := reconciler.Delete(ctx, buildRun); err != nil {
+		t.Fatalf("delete BuildRun error = %v", err)
+	}
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("Reconcile() deletion error = %v", err)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	err := reconciler.Get(ctx, client.ObjectKeyFromObject(buildRun), updated)
+	if err != nil && !apierrors.IsNotFound(err) {
+		t.Fatalf("get BuildRun after deletion error = %v", err)
+	}
+	if err == nil {
+		for _, finalizer := range updated.Finalizers {
+			if finalizer == legacyBuildRunFinalizer {
+				t.Fatalf("legacy finalizer remains after deletion: %#v", updated.Finalizers)
+			}
+		}
+	}
+}
+
+func TestBuildRunReconcileRecreatesDeletedJob(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+	job := getRunnerJob(t, ctx, reconciler, buildRun)
+	if err := reconciler.Delete(ctx, job); err != nil {
+		t.Fatalf("delete Job error = %v", err)
+	}
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("Reconcile() after Job deletion error = %v", err)
+	}
+	recreated := getRunnerJob(t, ctx, reconciler, buildRun)
+	if len(recreated.OwnerReferences) != 1 || recreated.OwnerReferences[0].UID != buildRun.UID {
+		t.Fatalf("recreated Job ownerReferences = %#v", recreated.OwnerReferences)
+	}
 }
 
 func TestBuildRunReconcileMarksSucceeded(t *testing.T) {
@@ -118,6 +183,59 @@ func TestBuildRunSuccessCreatesReleaseOnce(t *testing.T) {
 	}
 	if release.Spec.Strategy != cicdv1alpha1.ReleaseStrategyGitOps {
 		t.Fatalf("strategy = %q, want gitops", release.Spec.Strategy)
+	}
+	if len(release.OwnerReferences) != 1 || release.OwnerReferences[0].Name != buildRun.Name {
+		t.Fatalf("Release ownerReferences = %#v, want BuildRun owner", release.OwnerReferences)
+	}
+}
+
+func TestTerminalBuildRunRecreatesDeletedRelease(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+	buildRun.Status.Phase = cicdv1alpha1.BuildRunPhaseSucceeded
+	buildRun.Status.Image = buildRun.Spec.Image
+	if err := reconciler.Status().Update(ctx, buildRun); err != nil {
+		t.Fatalf("update BuildRun status error = %v", err)
+	}
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+	key := types.NamespacedName{Name: "sample-buildrun-sample-environment", Namespace: buildRun.Namespace}
+	release := &cicdv1alpha1.Release{}
+	if err := reconciler.Get(ctx, key, release); err != nil {
+		t.Fatalf("get Release error = %v", err)
+	}
+	if err := reconciler.Delete(ctx, release); err != nil {
+		t.Fatalf("delete Release error = %v", err)
+	}
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("Reconcile() after Release deletion error = %v", err)
+	}
+	if err := reconciler.Get(ctx, key, &cicdv1alpha1.Release{}); err != nil {
+		t.Fatalf("get recreated Release error = %v", err)
+	}
+}
+
+func TestBuildRunRunningEventIsNotRepeated(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+	recorder := &countingEventRecorder{reasons: map[string]int{}}
+	reconciler.Recorder = recorder
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("initial Reconcile() error = %v", err)
+	}
+	job := getRunnerJob(t, ctx, reconciler, buildRun)
+	job.Status.Active = 1
+	if err := reconciler.Status().Update(ctx, job); err != nil {
+		t.Fatalf("update Job status error = %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+			t.Fatalf("running Reconcile() iteration %d error = %v", i+1, err)
+		}
+	}
+	if recorder.reasons["BuildStarted"] != 1 {
+		t.Fatalf("BuildStarted events = %d, want 1", recorder.reasons["BuildStarted"])
 	}
 }
 
@@ -410,4 +528,12 @@ func assertSecureJobSpec(t *testing.T, job *batchv1.Job) {
 	if len(container.SecurityContext.Capabilities.Drop) != 1 || container.SecurityContext.Capabilities.Drop[0] != "ALL" {
 		t.Fatalf("capabilities drop = %#v, want ALL", container.SecurityContext.Capabilities.Drop)
 	}
+}
+
+type countingEventRecorder struct {
+	reasons map[string]int
+}
+
+func (r *countingEventRecorder) Event(_ runtime.Object, _, reason, _ string) {
+	r.reasons[reason]++
 }

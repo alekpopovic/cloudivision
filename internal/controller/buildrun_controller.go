@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -28,7 +29,7 @@ import (
 )
 
 const (
-	buildRunFinalizer = "cloudivision.io/buildrun-finalizer"
+	legacyBuildRunFinalizer = "cloudivision.io/buildrun-finalizer"
 )
 
 // BuildRunReconciler reconciles BuildRun resources.
@@ -76,16 +77,11 @@ func (r *BuildRunReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 	)
 
 	if !buildRun.ObjectMeta.DeletionTimestamp.IsZero() {
-		logger.Info("removing BuildRun finalizer")
-		return ctrl.Result{}, r.removeFinalizer(ctx, buildRun)
-	}
-
-	if !controllerutil.ContainsFinalizer(buildRun, buildRunFinalizer) {
-		controllerutil.AddFinalizer(buildRun, buildRunFinalizer)
-		if err := r.Update(ctx, buildRun); err != nil {
-			return ctrl.Result{}, fmt.Errorf("add BuildRun finalizer: %w", err)
+		if controllerutil.ContainsFinalizer(buildRun, legacyBuildRunFinalizer) {
+			logger.Info("removing legacy BuildRun finalizer")
+			return ctrl.Result{}, r.removeLegacyFinalizer(ctx, req.NamespacedName)
 		}
-		logger.Info("added BuildRun finalizer")
+		return ctrl.Result{}, nil
 	}
 
 	project, repository, template, err := r.loadReferences(ctx, buildRun)
@@ -132,18 +128,28 @@ func (r *BuildRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cicdv1alpha1.BuildRun{}).
 		Owns(&batchv1.Job{}).
+		Owns(&cicdv1alpha1.Release{}).
 		Complete(r)
 }
 
-func (r *BuildRunReconciler) removeFinalizer(ctx context.Context, buildRun *cicdv1alpha1.BuildRun) error {
-	if !controllerutil.ContainsFinalizer(buildRun, buildRunFinalizer) {
+func (r *BuildRunReconciler) removeLegacyFinalizer(ctx context.Context, key types.NamespacedName) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &cicdv1alpha1.BuildRun{}
+		if err := r.Get(ctx, key, latest); err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return err
+		}
+		if !controllerutil.ContainsFinalizer(latest, legacyBuildRunFinalizer) {
+			return nil
+		}
+		controllerutil.RemoveFinalizer(latest, legacyBuildRunFinalizer)
+		if err := r.Update(ctx, latest); err != nil {
+			return fmt.Errorf("remove legacy BuildRun finalizer: %w", err)
+		}
 		return nil
-	}
-	controllerutil.RemoveFinalizer(buildRun, buildRunFinalizer)
-	if err := r.Update(ctx, buildRun); err != nil {
-		return fmt.Errorf("remove BuildRun finalizer: %w", err)
-	}
-	return nil
+	})
 }
 
 func (r *BuildRunReconciler) loadReferences(ctx context.Context, buildRun *cicdv1alpha1.BuildRun) (*cicdv1alpha1.Project, *cicdv1alpha1.Repository, *cicdv1alpha1.PipelineTemplate, error) {
@@ -234,10 +240,13 @@ func (r *BuildRunReconciler) syncStatusFromRun(ctx context.Context, buildRun *ci
 		r.record(buildRun, corev1.EventTypeWarning, "BuildFailed", status.Failure.Message)
 		return r.updateBuildRunStatus(ctx, buildRun)
 	case executor.RunPhaseRunning:
+		wasRunning := buildRun.Status.Phase == cicdv1alpha1.BuildRunPhaseRunning
 		if err := domain.MarkBuildRunStarted(buildRun, now); err != nil {
 			return err
 		}
-		r.record(buildRun, corev1.EventTypeNormal, "BuildStarted", "Pipeline run is running")
+		if !wasRunning {
+			r.record(buildRun, corev1.EventTypeNormal, "BuildStarted", "Pipeline run is running")
+		}
 		return r.updateBuildRunStatus(ctx, buildRun)
 	}
 
