@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-21`
-Last executed prompt: `20`
-Next prompt: `21`
+Updated at: `2026-08-21T23:30:56Z`
+Last executed prompt: `21`
+Next prompt: `22`
 
 ## How to update
 
@@ -49,7 +49,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 18 | done | Release / GitOps | Production Release Approval Workflow | `prompts/18-production-release-approval-workflow.md` | Marked done because user stated prompts 0-20 were completed. |
 | 19 | done | Auth | Auth and API/UI RBAC | `prompts/19-auth-and-api-ui-rbac.md` | Marked done because user stated prompts 0-20 were completed. |
 | 20 | done | Review | Final Review Prompt: Full Project Audit | `prompts/20-final-review-prompt-full-project-audit.md` | Marked done because user stated prompts 0-20 were completed. |
-| 21 | pending | v0.1 Hardening | v0.1 Product Readiness Audit | `prompts/21-v0-1-product-readiness-audit.md` |  |
+| 21 | done | v0.1 Hardening | v0.1 Product Readiness Audit | `prompts/21-v0-1-product-readiness-audit.md` | Readiness audit completed; safe documentation and Make help fixes added. Clean-cluster runtime remains unverified and is documented as a blocker. |
 | 22 | pending | v0.1 Hardening | Conformance Test Suite | `prompts/22-conformance-test-suite.md` |  |
 | 23 | pending | Dogfood | Dogfood cloudivision With cloudivision | `prompts/23-dogfood-cloudivision-with-cloudivision.md` |  |
 | 24 | pending | API Evolution | CRD Compatibility and Versioning Plan | `prompts/24-crd-compatibility-and-versioning-plan.md` |  |

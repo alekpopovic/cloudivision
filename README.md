@@ -29,7 +29,7 @@ CI creates artifacts. CD happens through GitOps by updating deployment repositor
 
 ## Status
 
-cloudivision is in early development. The current repository contains the initial scaffold and placeholder entrypoints for the API server, controller, runner, Helm chart, docs, and Angular web application.
+cloudivision is an early v0.1 platform under active hardening. The repository contains working API, controller, runner, Helm chart and Angular UI implementations; clean-cluster conformance is still being expanded. See the [v0.1 readiness audit](docs/readiness/v0.1-readiness-audit.md) for the current evidence and remaining blockers.
 
 ## Local kind quickstart
 
@@ -92,6 +92,8 @@ kubectl apply -f deploy/examples/buildrun-manual.yaml
 
 The default sample repository points at this public repository and verifies the checked-in `deploy/demo-app` files. For a real app test, push or fork `deploy/demo-app` to a Git repository, then update `deploy/examples/repository.yaml` to use that URL.
 
+For an explanation of every resource and command, see [Create your first BuildRun](docs/guides/first-buildrun.md).
+
 ### Check the BuildRun
 
 ```sh
@@ -128,6 +130,8 @@ Then open:
 The Helm chart writes the web runtime config to `/assets/config.json`. For local port-forwarding, the default empty `apiBaseUrl` lets the UI call the same origin. If you serve the UI separately, set `web.config.apiBaseUrl` in Helm values.
 
 ## Troubleshooting
+
+The most common installation and runtime checks are also collected in the standalone [troubleshooting guide](docs/troubleshooting.md). Webhook setup is covered by [Configure your first webhook](docs/guides/first-webhook.md), and deployment promotion by [Create your first GitOps release](docs/guides/first-gitops-release.md).
 
 ### CRD not installed
 

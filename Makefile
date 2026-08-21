@@ -1,4 +1,4 @@
-.PHONY: fmt test test-unit test-controller test-api test-web test-e2e test-all vet lint build run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate install uninstall helm-template
+.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all vet lint build run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate install uninstall helm-template
 
 IMAGE_REGISTRY ?= ghcr.io/cloudivision
 IMAGE_TAG ?= dev
@@ -15,6 +15,18 @@ export GOCACHE
 export GOMODCACHE
 export GOTMPDIR
 export GOFLAGS
+
+help:
+	@echo "cloudivision development targets"
+	@echo "  make test          Run all Go tests"
+	@echo "  make test-all      Run Go, controller, API and web checks"
+	@echo "  make vet           Run go vet"
+	@echo "  make build         Build Go binaries and the Angular UI"
+	@echo "  make manifests     Regenerate CRDs and RBAC with controller-gen"
+	@echo "  make helm-template Render and security-check the Helm chart"
+	@echo "  make install       Install manifests into the current kubectl context"
+	@echo "  make uninstall     Remove manifests from the current kubectl context"
+	@echo "  make test-e2e      Run the kind smoke-test entrypoint"
 
 fmt:
 	gofmt -w ./api ./cmd ./internal
