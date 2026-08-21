@@ -121,6 +121,8 @@ After modifying Helm chart:
 
 ## How to work
 
+- Before starting, read `tracker/prompt-tracker.json` and continue from the `next_prompt` value.
+- After completing the prompt, update the tracker using `scripts/mark_prompt_done.py`.
 - Before coding, inspect relevant files.
 - After completing each prompt, run git add for the changed files, create a git commit with a concise message, and push the commit to the configured remote.
 - If git push is not possible because credentials, network access, or a remote are unavailable, clearly report the blocker and leave the commit created locally.
