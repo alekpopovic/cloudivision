@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-21T23:41:47Z`
-Last executed prompt: `23`
-Next prompt: `24`
+Updated at: `2026-08-21T23:44:29Z`
+Last executed prompt: `24`
+Next prompt: `25`
 
 ## How to update
 
@@ -52,7 +52,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 21 | done | v0.1 Hardening | v0.1 Product Readiness Audit | `prompts/21-v0-1-product-readiness-audit.md` | Readiness audit completed; safe documentation and Make help fixes added. Clean-cluster runtime remains unverified and is documented as a blocker. |
 | 22 | done | v0.1 Hardening | Conformance Test Suite | `prompts/22-conformance-test-suite.md` | Conformance suite, fixtures, diagnostics and documentation added. Static validation passed; live suite not run because the configured Kubernetes API endpoint refused connections. |
 | 23 | done | Dogfood | Dogfood cloudivision With cloudivision | `prompts/23-dogfood-cloudivision-with-cloudivision.md` | Dogfood manifests, runnable Go/web BuildRuns, non-root toolchain runner and documentation added. Docker image build and local gates passed; live Kubernetes run unavailable. |
-| 24 | pending | API Evolution | CRD Compatibility and Versioning Plan | `prompts/24-crd-compatibility-and-versioning-plan.md` |  |
+| 24 | done | API Evolution | CRD Compatibility and Versioning Plan | `prompts/24-crd-compatibility-and-versioning-plan.md` | Compatibility policy, v1alpha1 reference, v1beta1 plan, non-installing conversion topology and upgrade test skeleton added. |
 | 25 | pending | API Evolution | CRD Validation Hardening With Defaults and CEL | `prompts/25-crd-validation-hardening-with-defaults-and-cel.md` |  |
 | 26 | pending | Reliability | Controller Reliability and Conflict Handling | `prompts/26-controller-reliability-and-conflict-handling.md` |  |
 | 27 | pending | Security | Runner Threat Model and Security Conformance | `prompts/27-runner-threat-model-and-security-conformance.md` |  |
