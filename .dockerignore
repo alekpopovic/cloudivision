@@ -1,0 +1,13 @@
+.git
+.cache
+bin
+dist
+web/node_modules
+web/dist
+web/.angular
+web/coverage
+node_modules
+coverage.out
+*.test
+*.out
+*.log

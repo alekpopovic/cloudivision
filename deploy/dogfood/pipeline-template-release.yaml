@@ -1,0 +1,33 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata:
+  name: cloudivision-release
+  namespace: cloudivision-dogfood
+spec:
+  projectRef: cloudivision
+  description: Render and security-check the cloudivision Helm release
+  steps:
+    - name: helm-template
+      image: alpine/helm:4.0.4
+      command: [sh]
+      args: [-ec, 'helm template cloudivision charts/cloudivision --include-crds > /tmp/cloudivision/rendered.yaml; test -s /tmp/cloudivision/rendered.yaml']
+      timeoutSeconds: 180
+    - name: reject-unsafe-workloads
+      image: alpine:3.22
+      command: [sh]
+      args: [-ec, '! grep -E "privileged:[[:space:]]*true|docker\\.sock|hostPath:" /tmp/cloudivision/rendered.yaml']
+      timeoutSeconds: 60
+  build:
+    enabled: false
+    builder: none
+    push: false
+  resources:
+    cpuRequest: 100m
+    cpuLimit: "1"
+    memoryRequest: 128Mi
+    memoryLimit: 1Gi
+    timeoutSeconds: 600
+  security:
+    allowPrivileged: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: false

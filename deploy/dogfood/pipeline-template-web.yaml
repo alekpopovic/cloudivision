@@ -1,0 +1,44 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata:
+  name: cloudivision-web
+  namespace: cloudivision-dogfood
+spec:
+  projectRef: cloudivision
+  description: Install, build and test the Angular web application
+  steps:
+    - name: npm-ci
+      image: node:24-alpine
+      command: [npm]
+      args: [ci]
+      workingDir: web
+      timeoutSeconds: 900
+    - name: angular-build
+      image: node:24-alpine
+      command: [npm]
+      args: [run, build]
+      workingDir: web
+      timeoutSeconds: 900
+    - name: angular-test
+      image: node:24-alpine
+      command: [npm]
+      args: [test, --, --watch=false]
+      workingDir: web
+      env:
+        - name: CHROME_BIN
+          value: /usr/bin/chromium-browser
+      timeoutSeconds: 900
+  build:
+    enabled: false
+    builder: none
+    push: false
+  resources:
+    cpuRequest: 250m
+    cpuLimit: "2"
+    memoryRequest: 512Mi
+    memoryLimit: 2Gi
+    timeoutSeconds: 3000
+  security:
+    allowPrivileged: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: false

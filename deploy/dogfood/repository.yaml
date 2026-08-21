@@ -1,0 +1,18 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Repository
+metadata:
+  name: cloudivision
+  namespace: cloudivision-dogfood
+spec:
+  projectRef: cloudivision
+  provider: github
+  url: https://github.com/alekpopovic/cloudivision.git
+  defaultBranch: main
+  webhook:
+    enabled: false
+    secretRef:
+      name: cloudivision-webhook
+      key: secret
+    events:
+      - push
+  pipelineTemplateRef: cloudivision-go

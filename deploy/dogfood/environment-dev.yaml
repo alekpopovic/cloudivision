@@ -1,0 +1,17 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Environment
+metadata:
+  name: cloudivision-dev
+  namespace: cloudivision-dogfood
+spec:
+  projectRef: cloudivision
+  displayName: cloudivision development
+  namespace: cloudivision
+  type: dev
+  requiresApproval: false
+  gitOps:
+    provider: generic
+  policy:
+    requireSignedImages: false
+    requireSBOM: false
+    blockCriticalVulnerabilities: false

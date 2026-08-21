@@ -1,0 +1,20 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: BuildRun
+metadata:
+  generateName: cloudivision-web-
+  namespace: cloudivision-dogfood
+spec:
+  projectRef: cloudivision
+  repositoryRef: cloudivision
+  pipelineTemplateRef: cloudivision-web
+  revision: main
+  branch: main
+  triggeredBy:
+    type: manual
+    actor: dogfood
+  image:
+    repository: localhost:5001/cloudivision/web
+    tag: dogfood
+  executor: job
+  gitOps:
+    enabled: false

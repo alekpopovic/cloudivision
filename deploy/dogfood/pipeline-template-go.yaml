@@ -1,0 +1,53 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata:
+  name: cloudivision-go
+  namespace: cloudivision-dogfood
+spec:
+  projectRef: cloudivision
+  description: Format, test, vet and compile every cloudivision Go binary
+  steps:
+    - name: gofmt
+      image: golang:1.26-alpine
+      command: [sh]
+      args: [-ec, 'unformatted="$(gofmt -l ./api ./cmd ./internal)"; test -z "${unformatted}" || { printf "unformatted files:\n%s\n" "${unformatted}"; exit 1; }']
+      timeoutSeconds: 120
+    - name: go-test
+      image: golang:1.26-alpine
+      command: [go]
+      args: [test, ./...]
+      timeoutSeconds: 900
+    - name: go-vet
+      image: golang:1.26-alpine
+      command: [go]
+      args: [vet, ./...]
+      timeoutSeconds: 600
+    - name: build-controller
+      image: golang:1.26-alpine
+      command: [go]
+      args: [build, -o, /tmp/cloudivision/controller, ./cmd/controller]
+      timeoutSeconds: 300
+    - name: build-api
+      image: golang:1.26-alpine
+      command: [go]
+      args: [build, -o, /tmp/cloudivision/api, ./cmd/api]
+      timeoutSeconds: 300
+    - name: build-runner
+      image: golang:1.26-alpine
+      command: [go]
+      args: [build, -o, /tmp/cloudivision/runner, ./cmd/runner]
+      timeoutSeconds: 300
+  build:
+    enabled: false
+    builder: none
+    push: false
+  resources:
+    cpuRequest: 250m
+    cpuLimit: "2"
+    memoryRequest: 512Mi
+    memoryLimit: 2Gi
+    timeoutSeconds: 2400
+  security:
+    allowPrivileged: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: false

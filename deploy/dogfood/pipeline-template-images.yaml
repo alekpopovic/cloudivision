@@ -1,0 +1,53 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata:
+  name: cloudivision-images
+  namespace: cloudivision-dogfood
+spec:
+  projectRef: cloudivision
+  description: Build all cloudivision images with rootless BuildKit
+  steps:
+    - name: controller-image
+      image: moby/buildkit:rootless
+      command: [sh]
+      args: [-ec, 'buildctl-daemonless.sh build --frontend dockerfile.v0 --local context=. --local dockerfile=. --opt filename=build/controller.Dockerfile --output type=image,name=${IMAGE_REGISTRY}/controller:${IMAGE_TAG},push=${PUSH_IMAGES}']
+      env: &image-env
+        - name: IMAGE_REGISTRY
+          value: localhost:5001/cloudivision
+        - name: IMAGE_TAG
+          value: dogfood
+        - name: PUSH_IMAGES
+          value: "false"
+      timeoutSeconds: 1200
+    - name: api-image
+      image: moby/buildkit:rootless
+      command: [sh]
+      args: [-ec, 'buildctl-daemonless.sh build --frontend dockerfile.v0 --local context=. --local dockerfile=. --opt filename=build/api.Dockerfile --output type=image,name=${IMAGE_REGISTRY}/api:${IMAGE_TAG},push=${PUSH_IMAGES}']
+      env: *image-env
+      timeoutSeconds: 1200
+    - name: runner-image
+      image: moby/buildkit:rootless
+      command: [sh]
+      args: [-ec, 'buildctl-daemonless.sh build --frontend dockerfile.v0 --local context=. --local dockerfile=. --opt filename=build/runner.Dockerfile --output type=image,name=${IMAGE_REGISTRY}/runner:${IMAGE_TAG},push=${PUSH_IMAGES}']
+      env: *image-env
+      timeoutSeconds: 1200
+    - name: web-image
+      image: moby/buildkit:rootless
+      command: [sh]
+      args: [-ec, 'buildctl-daemonless.sh build --frontend dockerfile.v0 --local context=. --local dockerfile=. --opt filename=build/web.Dockerfile --output type=image,name=${IMAGE_REGISTRY}/web:${IMAGE_TAG},push=${PUSH_IMAGES}']
+      env: *image-env
+      timeoutSeconds: 1200
+  build:
+    enabled: false
+    builder: none
+    push: false
+  resources:
+    cpuRequest: 500m
+    cpuLimit: "2"
+    memoryRequest: 1Gi
+    memoryLimit: 4Gi
+    timeoutSeconds: 5400
+  security:
+    allowPrivileged: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: false

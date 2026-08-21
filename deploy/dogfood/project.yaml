@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cloudivision-dogfood
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Project
+metadata:
+  name: cloudivision
+  namespace: cloudivision-dogfood
+spec:
+  displayName: cloudivision dogfood
+  description: cloudivision builds and validates its own repository
+  ownerTeam: platform
+  namespace: cloudivision-dogfood
+  defaultRegistry: localhost:5001
+  defaultBranch: main
+  serviceAccountName: cloudivision-runner
+  isolation:
+    createNamespace: false
+    podSecurityLevel: restricted
+    networkPolicyMode: disabled
