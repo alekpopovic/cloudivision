@@ -1,0 +1,11 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata:
+  name: invalid-duplicate-steps
+  namespace: default
+spec:
+  steps:
+    - {name: test, image: alpine:3.22, command: [true]}
+    - {name: test, image: alpine:3.22, command: [true]}
+  build: {enabled: false, builder: none, push: false}
+  security: {runAsNonRoot: true}

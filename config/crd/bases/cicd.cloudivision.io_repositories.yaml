@@ -102,7 +102,6 @@ spec:
                     type: object
                 required:
                 - enabled
-                - secretRef
                 type: object
             required:
             - defaultBranch
@@ -111,6 +110,9 @@ spec:
             - provider
             - url
             type: object
+            x-kubernetes-validations:
+            - message: webhook.secretRef is required when webhook.enabled is true
+              rule: '!has(self.webhook) || !self.webhook.enabled || has(self.webhook.secretRef)'
           status:
             properties:
               conditions:

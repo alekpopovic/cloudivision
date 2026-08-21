@@ -71,10 +71,12 @@ spec:
                   enabled:
                     type: boolean
                   environmentRef:
+                    minLength: 1
                     type: string
                   path:
                     type: string
                   repoURL:
+                    minLength: 1
                     type: string
                   strategy:
                     enum:
@@ -85,6 +87,14 @@ spec:
                 required:
                 - enabled
                 type: object
+                x-kubernetes-validations:
+                - message: gitOps.strategy is required when gitOps.enabled is true
+                  rule: '!self.enabled || has(self.strategy)'
+                - message: gitOps.environmentRef is required when gitOps.enabled is
+                    true
+                  rule: '!self.enabled || has(self.environmentRef)'
+                - message: gitOps.repoURL is required when gitOps.enabled is true
+                  rule: '!self.enabled || has(self.repoURL)'
               image:
                 properties:
                   digest:

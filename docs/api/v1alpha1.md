@@ -139,7 +139,7 @@ spec:
 
 ## Release
 
-Release connects a successful BuildRun artifact to an Environment using strategy `gitops`. `projectRef`, `buildRunRef` and image are required; `environmentRef` is optional in the current schema but required for environment-aware promotion. Approval records required/approved/rejected state and actor timestamps.
+Release connects a successful BuildRun artifact to an Environment using strategy `gitops`. `projectRef`, `environmentRef`, `buildRunRef` and image are required. The image must contain a non-empty tag or digest. Approval records required/approved/rejected state and actor timestamps.
 
 Lifecycle: Pending → AwaitingApproval (when required) → Deploying → Deployed, or Failed/RolledBack. Status records timestamps, Git commit and provider deployment sync/health. Approval changes are made through the API so actor and audit metadata are preserved.
 
@@ -158,4 +158,12 @@ spec:
 
 ## Validation notes
 
-Current enum/min-length/default markers are reflected in checked-in CRDs. Cross-field admission rules (enabled webhook secret, enabled GitOps strategy, production approval), unique step names and stricter image identity are part of the validation hardening work. Controllers still validate external references and runtime capabilities because admission cannot prove those conditions.
+Current enum/min-length/default markers are reflected in checked-in CRDs. Admission also enforces these cross-field rules:
+
+- enabled Repository webhooks require `secretRef`;
+- PipelineTemplates require at least one step or an enabled image build, and step names are unique;
+- enabled BuildRun GitOps requires a strategy, Environment reference and repository URL;
+- production Environments require approval;
+- Releases require an Environment and an image tag or digest.
+
+Controllers still validate external references, Secret existence, artifact policy evidence and runtime capabilities because admission cannot prove cross-resource or external conditions. Environment supply-chain policy is therefore enforced by the Release controller against BuildRun status rather than by CEL.

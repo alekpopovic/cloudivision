@@ -212,10 +212,11 @@ type ProjectList struct {
 
 type RepositoryWebhook struct {
 	Enabled   bool                 `json:"enabled"`
-	SecretRef RequiredSecretKeyRef `json:"secretRef"`
+	SecretRef RequiredSecretKeyRef `json:"secretRef,omitempty"`
 	Events    []string             `json:"events,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!has(self.webhook) || !self.webhook.enabled || has(self.webhook.secretRef)",message="webhook.secretRef is required when webhook.enabled is true"
 type RepositorySpec struct {
 	// +kubebuilder:validation:MinLength=1
 	ProjectRef string `json:"projectRef"`
@@ -329,12 +330,16 @@ type PipelineSupplyChainSpec struct {
 	RequireSignedBaseImages bool `json:"requireSignedBaseImages,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="(has(self.steps) && size(self.steps) > 0) || (has(self.build) && self.build.enabled)",message="at least one step or an enabled image build is required"
+// +kubebuilder:validation:XValidation:rule="!has(self.steps) || self.steps.all(step, self.steps.exists_one(candidate, candidate.name == step.name))",message="pipeline step names must be unique"
 type PipelineTemplateSpec struct {
 	// +optional
 	ProjectRef string `json:"projectRef,omitempty"`
 	// +optional
-	Description string                  `json:"description,omitempty"`
-	Params      []ParamSpec             `json:"params,omitempty"`
+	Description string      `json:"description,omitempty"`
+	Params      []ParamSpec `json:"params,omitempty"`
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
 	Steps       []PipelineStep          `json:"steps,omitempty"`
 	Build       PipelineBuildSpec       `json:"build,omitempty"`
 	Resources   PipelineResourceSpec    `json:"resources,omitempty"`
@@ -392,9 +397,12 @@ type ImageRef struct {
 	Digest string `json:"digest,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!self.enabled || has(self.strategy)",message="gitOps.strategy is required when gitOps.enabled is true"
+// +kubebuilder:validation:XValidation:rule="!self.enabled || has(self.environmentRef)",message="gitOps.environmentRef is required when gitOps.enabled is true"
+// +kubebuilder:validation:XValidation:rule="!self.enabled || has(self.repoURL)",message="gitOps.repoURL is required when gitOps.enabled is true"
 type BuildRunGitOpsSpec struct {
 	Enabled bool `json:"enabled"`
-	// +optional
+	// +kubebuilder:validation:MinLength=1
 	RepoURL string `json:"repoURL,omitempty"`
 	// +optional
 	Branch string `json:"branch,omitempty"`
@@ -402,7 +410,7 @@ type BuildRunGitOpsSpec struct {
 	Path string `json:"path,omitempty"`
 	// +kubebuilder:validation:Enum=helm-values;kustomize-image;raw-yaml
 	Strategy GitOpsStrategy `json:"strategy,omitempty"`
-	// +optional
+	// +kubebuilder:validation:MinLength=1
 	EnvironmentRef string `json:"environmentRef,omitempty"`
 }
 
@@ -511,6 +519,7 @@ type EnvironmentPolicySpec struct {
 	BlockCriticalVulnerabilities bool `json:"blockCriticalVulnerabilities,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="self.type != 'production' || self.requiresApproval",message="production environments must require approval"
 type EnvironmentSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	ProjectRef string `json:"projectRef"`
@@ -573,11 +582,12 @@ type ReleaseApprovalSpec struct {
 	Comment string `json:"comment,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="(has(self.image.tag) && self.image.tag != ”) || (has(self.image.digest) && self.image.digest != ”)",message="release image must include a tag or digest"
 type ReleaseSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	ProjectRef string `json:"projectRef"`
-	// +optional
-	EnvironmentRef string `json:"environmentRef,omitempty"`
+	// +kubebuilder:validation:MinLength=1
+	EnvironmentRef string `json:"environmentRef"`
 	// +kubebuilder:validation:MinLength=1
 	BuildRunRef string              `json:"buildRunRef"`
 	Image       ImageRef            `json:"image"`

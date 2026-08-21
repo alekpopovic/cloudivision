@@ -1,0 +1,12 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Environment
+metadata:
+  name: invalid-production
+  namespace: default
+spec:
+  projectRef: demo
+  displayName: Production
+  namespace: demo-production
+  type: production
+  requiresApproval: false
+  gitOps: {provider: generic}

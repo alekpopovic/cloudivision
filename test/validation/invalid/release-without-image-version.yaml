@@ -1,0 +1,11 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Release
+metadata:
+  name: invalid-image
+  namespace: default
+spec:
+  projectRef: demo
+  environmentRef: dev
+  buildRunRef: demo
+  image: {repository: example.invalid/demo}
+  strategy: gitops

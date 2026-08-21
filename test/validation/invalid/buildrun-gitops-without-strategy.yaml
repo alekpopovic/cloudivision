@@ -1,0 +1,14 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: BuildRun
+metadata:
+  name: invalid-gitops
+  namespace: default
+spec:
+  projectRef: demo
+  repositoryRef: demo
+  pipelineTemplateRef: demo
+  revision: main
+  triggeredBy: {type: manual}
+  image: {repository: example.invalid/demo, tag: main}
+  gitOps:
+    enabled: true

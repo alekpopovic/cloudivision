@@ -101,6 +101,9 @@ spec:
             - requiresApproval
             - type
             type: object
+            x-kubernetes-validations:
+            - message: production environments must require approval
+              rule: self.type != 'production' || self.requiresApproval
           status:
             properties:
               conditions:

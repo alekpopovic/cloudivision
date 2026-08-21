@@ -310,6 +310,8 @@ spec:
                   - image
                   - name
                   type: object
+                maxItems: 64
+                minItems: 1
                 type: array
               supplyChain:
                 properties:
@@ -323,6 +325,13 @@ spec:
                     type: boolean
                 type: object
             type: object
+            x-kubernetes-validations:
+            - message: at least one step or an enabled image build is required
+              rule: (has(self.steps) && size(self.steps) > 0) || (has(self.build)
+                && self.build.enabled)
+            - message: pipeline step names must be unique
+              rule: '!has(self.steps) || self.steps.all(step, self.steps.exists_one(candidate,
+                candidate.name == step.name))'
           status:
             properties:
               conditions:

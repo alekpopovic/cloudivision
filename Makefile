@@ -1,4 +1,4 @@
-.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all conformance vet lint build run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate install uninstall helm-template
+.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all conformance vet lint build run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate sync-chart-crds install uninstall helm-template
 
 IMAGE_REGISTRY ?= ghcr.io/cloudivision
 IMAGE_TAG ?= dev
@@ -23,6 +23,7 @@ help:
 	@echo "  make vet           Run go vet"
 	@echo "  make build         Build Go binaries and the Angular UI"
 	@echo "  make manifests     Regenerate CRDs and RBAC with controller-gen"
+	@echo "  make sync-chart-crds Refresh the Helm CRD bundle from generated bases"
 	@echo "  make helm-template Render and security-check the Helm chart"
 	@echo "  make install       Install manifests into the current kubectl context"
 	@echo "  make uninstall     Remove manifests from the current kubectl context"
@@ -107,10 +108,14 @@ docker-build-web:
 manifests:
 	@if command -v $(CONTROLLER_GEN) >/dev/null 2>&1; then \
 		GOMODCACHE=$(CODEGEN_GOMODCACHE) $(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="$(CONTROLLER_GEN_MANIFEST_PATHS)" output:crd:artifacts:config=config/crd/bases; \
+		./hack/sync-chart-crds.sh; \
 	else \
 		echo "controller-gen is not installed; CRD/RBAC generation skipped."; \
 		echo "Run: controller-gen rbac:roleName=manager-role crd webhook paths=\"$(CONTROLLER_GEN_MANIFEST_PATHS)\" output:crd:artifacts:config=config/crd/bases"; \
 	fi
+
+sync-chart-crds:
+	./hack/sync-chart-crds.sh
 
 generate:
 	@if command -v $(CONTROLLER_GEN) >/dev/null 2>&1; then \

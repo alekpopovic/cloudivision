@@ -71,10 +71,12 @@ spec:
                   enabled:
                     type: boolean
                   environmentRef:
+                    minLength: 1
                     type: string
                   path:
                     type: string
                   repoURL:
+                    minLength: 1
                     type: string
                   strategy:
                     enum:
@@ -85,6 +87,14 @@ spec:
                 required:
                 - enabled
                 type: object
+                x-kubernetes-validations:
+                - message: gitOps.strategy is required when gitOps.enabled is true
+                  rule: '!self.enabled || has(self.strategy)'
+                - message: gitOps.environmentRef is required when gitOps.enabled is
+                    true
+                  rule: '!self.enabled || has(self.environmentRef)'
+                - message: gitOps.repoURL is required when gitOps.enabled is true
+                  rule: '!self.enabled || has(self.repoURL)'
               image:
                 properties:
                   digest:
@@ -278,7 +288,6 @@ spec:
     subresources:
       status: {}
 ---
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -381,6 +390,9 @@ spec:
             - requiresApproval
             - type
             type: object
+            x-kubernetes-validations:
+            - message: production environments must require approval
+              rule: self.type != 'production' || self.requiresApproval
           status:
             properties:
               conditions:
@@ -458,7 +470,6 @@ spec:
     storage: true
     subresources:
       status: {}
----
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -771,6 +782,8 @@ spec:
                   - image
                   - name
                   type: object
+                maxItems: 64
+                minItems: 1
                 type: array
               supplyChain:
                 properties:
@@ -784,6 +797,13 @@ spec:
                     type: boolean
                 type: object
             type: object
+            x-kubernetes-validations:
+            - message: at least one step or an enabled image build is required
+              rule: (has(self.steps) && size(self.steps) > 0) || (has(self.build)
+                && self.build.enabled)
+            - message: pipeline step names must be unique
+              rule: '!has(self.steps) || self.steps.all(step, self.steps.exists_one(candidate,
+                candidate.name == step.name))'
           status:
             properties:
               conditions:
@@ -856,7 +876,6 @@ spec:
     storage: true
     subresources:
       status: {}
----
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -1032,7 +1051,6 @@ spec:
     subresources:
       status: {}
 ---
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1108,6 +1126,7 @@ spec:
                 minLength: 1
                 type: string
               environmentRef:
+                minLength: 1
                 type: string
               image:
                 properties:
@@ -1130,10 +1149,15 @@ spec:
                 type: string
             required:
             - buildRunRef
+            - environmentRef
             - image
             - projectRef
             - strategy
             type: object
+            x-kubernetes-validations:
+            - message: release image must include a tag or digest
+              rule: (has(self.image.tag) && self.image.tag != ”) || (has(self.image.digest)
+                && self.image.digest != ”)
           status:
             properties:
               completedAt:
@@ -1229,7 +1253,6 @@ spec:
     storage: true
     subresources:
       status: {}
----
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -1334,7 +1357,6 @@ spec:
                     type: object
                 required:
                 - enabled
-                - secretRef
                 type: object
             required:
             - defaultBranch
@@ -1343,6 +1365,9 @@ spec:
             - provider
             - url
             type: object
+            x-kubernetes-validations:
+            - message: webhook.secretRef is required when webhook.enabled is true
+              rule: '!has(self.webhook) || !self.webhook.enabled || has(self.webhook.secretRef)'
           status:
             properties:
               conditions:
