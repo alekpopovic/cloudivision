@@ -45,6 +45,18 @@ const (
 	RepositoryProviderGeneric RepositoryProvider = "generic"
 )
 
+type RegistryProviderType string
+
+const (
+	RegistryProviderGeneric RegistryProviderType = "generic"
+	RegistryProviderGHCR    RegistryProviderType = "ghcr"
+	RegistryProviderGitLab  RegistryProviderType = "gitlab"
+	RegistryProviderHarbor  RegistryProviderType = "harbor"
+	RegistryProviderECR     RegistryProviderType = "ecr"
+	RegistryProviderGCR     RegistryProviderType = "gcr"
+	RegistryProviderACR     RegistryProviderType = "acr"
+)
+
 type PipelineTemplatePhase string
 
 const (
@@ -58,6 +70,14 @@ const (
 	BuildBuilderBuildKit BuildBuilder = "buildkit"
 	BuildBuilderBuildah  BuildBuilder = "buildah"
 	BuildBuilderNone     BuildBuilder = "none"
+)
+
+type BuildCacheMode string
+
+const (
+	BuildCacheModeInline   BuildCacheMode = "inline"
+	BuildCacheModeRegistry BuildCacheMode = "registry"
+	BuildCacheModeLocal    BuildCacheMode = "local"
 )
 
 type BuildRunPhase string
@@ -174,6 +194,20 @@ type ProjectIsolation struct {
 	NetworkPolicyMode NetworkPolicyMode `json:"networkPolicyMode"`
 }
 
+type ProjectRegistrySpec struct {
+	// +kubebuilder:validation:Enum=generic;ghcr;gitlab;harbor;ecr;gcr;acr
+	Provider RegistryProviderType `json:"provider,omitempty"`
+	// +optional
+	ImagePrefix string `json:"imagePrefix,omitempty"`
+	// +optional
+	CredentialSecretRef *SecretKeyRef `json:"credentialSecretRef,omitempty"`
+}
+
+type ProjectImageTagPolicySpec struct {
+	// +optional
+	DefaultTagTemplate string `json:"defaultTagTemplate,omitempty"`
+}
+
 type ProjectSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	DisplayName string `json:"displayName"`
@@ -190,6 +224,10 @@ type ProjectSpec struct {
 	// +optional
 	ServiceAccountName string           `json:"serviceAccountName,omitempty"`
 	Isolation          ProjectIsolation `json:"isolation"`
+	// +optional
+	Registry *ProjectRegistrySpec `json:"registry,omitempty"`
+	// +optional
+	ImageTagPolicy *ProjectImageTagPolicySpec `json:"imageTagPolicy,omitempty"`
 }
 
 type ProjectStatus struct {
@@ -306,6 +344,16 @@ type PipelineStep struct {
 	ContinueOnError bool `json:"continueOnError,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!self.enabled || self.mode == 'inline' || (has(self.ref) && self.ref != ”)",message="cache.ref is required for registry and local cache modes"
+type PipelineBuildCacheSpec struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// +kubebuilder:validation:Enum=inline;registry;local
+	// +kubebuilder:default:=inline
+	Mode BuildCacheMode `json:"mode,omitempty"`
+	// +optional
+	Ref string `json:"ref,omitempty"`
+}
+
 type PipelineBuildSpec struct {
 	Enabled bool `json:"enabled"`
 	// +kubebuilder:default:=.
@@ -318,6 +366,17 @@ type PipelineBuildSpec struct {
 	Image string `json:"image,omitempty"`
 	// +kubebuilder:default:=true
 	Push bool `json:"push"`
+	// +optional
+	BuildArgs map[string]string `json:"buildArgs,omitempty"`
+	// +optional
+	Target string `json:"target,omitempty"`
+	// +kubebuilder:validation:MaxItems=16
+	// +listType=set
+	Platforms []string `json:"platforms,omitempty"`
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+	// +optional
+	Cache PipelineBuildCacheSpec `json:"cache,omitempty"`
 }
 
 type PipelineResourceSpec struct {
@@ -569,6 +628,7 @@ type EnvironmentGitOpsSpec struct {
 
 type EnvironmentPolicySpec struct {
 	RequireImageDigest           bool `json:"requireImageDigest,omitempty"`
+	AllowLatest                  bool `json:"allowLatest,omitempty"`
 	RequireSignedImages          bool `json:"requireSignedImages,omitempty"`
 	RequireSBOM                  bool `json:"requireSBOM,omitempty"`
 	BlockCriticalVulnerabilities bool `json:"blockCriticalVulnerabilities,omitempty"`

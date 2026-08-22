@@ -64,6 +64,7 @@ func TestPostgresRecorderRecordsAndListsEvents(t *testing.T) {
 		Project:    "project",
 		Repository: "repo",
 		BuildRun:   "build",
+		EventID:    "delivery-1",
 		Message:    "created",
 		Metadata:   json.RawMessage(`{"source":"test"}`),
 	})
@@ -76,6 +77,9 @@ func TestPostgresRecorderRecordsAndListsEvents(t *testing.T) {
 	}
 	if len(events) == 0 {
 		t.Fatal("ListEvents() returned no events")
+	}
+	if events[0].EventID != "delivery-1" {
+		t.Fatalf("EventID = %q, want delivery-1", events[0].EventID)
 	}
 }
 
@@ -110,6 +114,14 @@ func TestPostgresWebhookIndex(t *testing.T) {
 	if found == nil || found.BuildRun != "build" {
 		t.Fatalf("found = %#v, want build", found)
 	}
+	pingID := eventID + "-ping"
+	if err := recorder.RecordWebhookEvent(ctx, WebhookEvent{Provider: "github", Repository: "repo", EventID: pingID, Project: "project"}); err != nil {
+		t.Fatalf("RecordWebhookEvent(ping) error = %v", err)
+	}
+	found, err = recorder.FindWebhookEvent(ctx, "github", "repo", pingID)
+	if err != nil || found == nil || found.BuildRun != "" {
+		t.Fatalf("ping event = %#v, error = %v", found, err)
+	}
 }
 
 func applyTestSchema(t *testing.T, ctx context.Context, db *sql.DB) {
@@ -117,6 +129,8 @@ func applyTestSchema(t *testing.T, ctx context.Context, db *sql.DB) {
 	for _, path := range []string{
 		"migrations/0001_audit_events.sql",
 		"migrations/0002_webhook_events.sql",
+		"migrations/0003_webhook_events_optional_build_run.sql",
+		"migrations/0004_audit_event_delivery_id.sql",
 	} {
 		data, err := os.ReadFile(path)
 		if err != nil {

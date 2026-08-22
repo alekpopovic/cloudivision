@@ -9,6 +9,7 @@ import (
 	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	buildlogic "github.com/cloudivision/cloudivision/internal/build"
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/executor"
 	jobexecutor "github.com/cloudivision/cloudivision/internal/executor/job"
@@ -55,6 +56,7 @@ type EventRecorder interface {
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=projects;repositories;pipelinetemplates,verbs=get;list;watch
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=releases,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get
 // +kubebuilder:rbac:groups=tekton.dev,resources=pipelineruns,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
@@ -91,6 +93,13 @@ func (r *BuildRunReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 	project, repository, template, err := r.loadReferences(ctx, buildRun)
 	if err != nil {
 		return ctrl.Result{}, r.markReferenceError(ctx, buildRun, err)
+	}
+	if err := r.ensureImageTag(ctx, buildRun, project); err != nil {
+		var tagErr *imageTagError
+		if errors.As(err, &tagErr) {
+			return ctrl.Result{}, r.markImageTagError(ctx, buildRun, tagErr)
+		}
+		return ctrl.Result{}, err
 	}
 
 	if isTerminalBuildRunPhase(buildRun.Status.Phase) {
@@ -135,6 +144,59 @@ func (r *BuildRunReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, r.markExecutorError(ctx, buildRun, err)
 	}
 	return ctrl.Result{}, r.syncStatusFromRun(ctx, buildRun, *runRef, runStatus)
+}
+
+type imageTagError struct{ err error }
+
+func (e *imageTagError) Error() string { return e.err.Error() }
+func (e *imageTagError) Unwrap() error { return e.err }
+
+func (r *BuildRunReconciler) ensureImageTag(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project) error {
+	tagTemplate := ""
+	if project.Spec.ImageTagPolicy != nil {
+		tagTemplate = project.Spec.ImageTagPolicy.DefaultTagTemplate
+	}
+	tag, _, err := buildlogic.ResolveImageTag(buildRun.Spec.Image.Tag, tagTemplate, buildlogic.TagInput{
+		Branch:       buildRun.Spec.Branch,
+		CommitSHA:    buildRun.Spec.CommitSHA,
+		Revision:     buildRun.Spec.Revision,
+		BuildRunName: buildRun.Name,
+		Timestamp:    buildRun.CreationTimestamp.Time,
+	})
+	if err != nil {
+		return &imageTagError{err: err}
+	}
+	specChanged := tag != buildRun.Spec.Image.Tag
+	if specChanged {
+		buildRun.Spec.Image.Tag = tag
+		if err := r.Update(ctx, buildRun); err != nil {
+			return fmt.Errorf("persist resolved BuildRun image tag: %w", err)
+		}
+	}
+	statusChanged := buildRun.Status.Image == nil || buildRun.Status.Image.Repository != buildRun.Spec.Image.Repository || buildRun.Status.Image.Tag != tag
+	if statusChanged {
+		if buildRun.Status.Image == nil {
+			buildRun.Status.Image = &cicdv1alpha1.ImageRef{}
+		}
+		buildRun.Status.Image.Repository = buildRun.Spec.Image.Repository
+		buildRun.Status.Image.Tag = tag
+		if err := r.Status().Update(ctx, buildRun); err != nil {
+			return fmt.Errorf("persist resolved BuildRun image status: %w", err)
+		}
+	}
+	if specChanged || statusChanged {
+		r.record(buildRun, corev1.EventTypeNormal, "ImageTagResolved", fmt.Sprintf("Resolved image tag %q.", tag))
+	}
+	return nil
+}
+
+func (r *BuildRunReconciler) markImageTagError(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, err error) error {
+	now := metav1.Now()
+	if markErr := domain.MarkBuildRunFailed(buildRun, now, "ImageTagInvalid", err.Error()); markErr != nil {
+		return markErr
+	}
+	r.record(buildRun, corev1.EventTypeWarning, "BuildFailed", err.Error())
+	return r.updateBuildRunStatus(ctx, buildRun)
 }
 
 func (r *BuildRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -233,6 +295,10 @@ func (r *BuildRunReconciler) markExecutorError(ctx context.Context, buildRun *ci
 	reason := "ExecutorFailed"
 	if errors.Is(err, tektonexecutor.ErrTektonUnavailable) {
 		reason = "TektonUnavailable"
+	} else if errors.Is(err, jobexecutor.ErrRegistryCredentialsMissing) {
+		reason = "RegistryCredentialsMissing"
+	} else if errors.Is(err, jobexecutor.ErrRegistryCredentialsInvalid) {
+		reason = "RegistryCredentialsInvalid"
 	}
 	now := metav1.Now()
 	if markErr := domain.MarkBuildRunFailed(buildRun, now, reason, err.Error()); markErr != nil {

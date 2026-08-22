@@ -18,6 +18,16 @@ func TestPendingBuildRunStatusOmitsArtifactImage(t *testing.T) {
 	}
 }
 
+func TestProjectWithoutRegistryOmitsOptionalRegistryConfig(t *testing.T) {
+	data, err := json.Marshal(ProjectSpec{})
+	if err != nil {
+		t.Fatalf("marshal Project spec: %v", err)
+	}
+	if strings.Contains(string(data), `"registry"`) {
+		t.Fatalf("empty Project spec contains registry config: %s", data)
+	}
+}
+
 func TestGeneratedCRDValidationContract(t *testing.T) {
 	t.Parallel()
 

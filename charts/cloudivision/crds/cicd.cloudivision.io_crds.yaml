@@ -402,6 +402,8 @@ spec:
                 type: string
               policy:
                 properties:
+                  allowLatest:
+                    type: boolean
                   blockCriticalVulnerabilities:
                     type: boolean
                   requireImageDigest:
@@ -566,12 +568,33 @@ spec:
             properties:
               build:
                 properties:
+                  buildArgs:
+                    additionalProperties:
+                      type: string
+                    type: object
                   builder:
                     enum:
                     - buildkit
                     - buildah
                     - none
                     type: string
+                  cache:
+                    properties:
+                      enabled:
+                        type: boolean
+                      mode:
+                        default: inline
+                        enum:
+                        - inline
+                        - registry
+                        - local
+                        type: string
+                      ref:
+                        type: string
+                    type: object
+                    x-kubernetes-validations:
+                    - message: cache.ref is required for registry and local cache modes
+                      rule: '!self.enabled || self.mode == ''inline'' || (has(self.ref) && self.ref != '''')'
                   contextDir:
                     default: .
                     type: string
@@ -582,9 +605,21 @@ spec:
                     type: boolean
                   image:
                     type: string
+                  labels:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  platforms:
+                    items:
+                      type: string
+                    maxItems: 16
+                    type: array
+                    uniqueItems: true
                   push:
                     default: true
                     type: boolean
+                  target:
+                    type: string
                 required:
                 - builder
                 - enabled
@@ -1044,12 +1079,42 @@ spec:
                 - networkPolicyMode
                 - podSecurityLevel
                 type: object
+              imageTagPolicy:
+                properties:
+                  defaultTagTemplate:
+                    type: string
+                type: object
               namespace:
                 minLength: 1
                 type: string
               ownerTeam:
                 minLength: 1
                 type: string
+              registry:
+                properties:
+                  credentialSecretRef:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  imagePrefix:
+                    type: string
+                  provider:
+                    enum:
+                    - generic
+                    - ghcr
+                    - gitlab
+                    - harbor
+                    - ecr
+                    - gcr
+                    - acr
+                    type: string
+                type: object
               serviceAccountName:
                 type: string
             required:

@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -104,6 +105,77 @@ func TestBuildJobMountsCosignKeySecretReadOnly(t *testing.T) {
 	}
 }
 
+func TestEnsureRunProjectsOnlyConfiguredRegistrySecret(t *testing.T) {
+	ctx := context.Background()
+	scheme := newScheme(t)
+	buildRun := testBuildRun()
+	project := testProject()
+	project.Spec.Registry = &cicdv1alpha1.ProjectRegistrySpec{
+		Provider:    cicdv1alpha1.RegistryProviderGHCR,
+		ImagePrefix: "ghcr.io/cloudivision",
+		CredentialSecretRef: &cicdv1alpha1.SecretKeyRef{
+			Name: "registry-auth",
+			Key:  "config",
+		},
+	}
+	template := testPipelineTemplate()
+	template.Spec.Build.Enabled = true
+	template.Spec.Build.Push = true
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "registry-auth", Namespace: "ci"},
+		Data: map[string][]byte{
+			"config": []byte(`{"auths":{"ghcr.io":{"auth":"cm9ib3Q6dG9rZW4="}}}`),
+		},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(buildRun, secret).Build()
+	jobExecutor := Executor{Client: fakeClient, Scheme: scheme}
+
+	ref, err := jobExecutor.EnsureRun(ctx, executor.EnsureRunRequest{
+		BuildRun: buildRun, Project: project, Repository: testRepository(), Template: template,
+	})
+	if err != nil {
+		t.Fatalf("EnsureRun() error = %v", err)
+	}
+	job := &batchv1.Job{}
+	if err := fakeClient.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: ref.Namespace}, job); err != nil {
+		t.Fatal(err)
+	}
+	volumes := job.Spec.Template.Spec.Volumes
+	if len(volumes) != 1 || volumes[0].Secret == nil || volumes[0].Secret.SecretName != "registry-auth" {
+		t.Fatalf("volumes = %#v", volumes)
+	}
+	if len(volumes[0].Secret.Items) != 1 || volumes[0].Secret.Items[0].Key != "config" || volumes[0].Secret.Items[0].Path != ".dockerconfigjson" {
+		t.Fatalf("registry Secret items = %#v", volumes[0].Secret.Items)
+	}
+	mounts := job.Spec.Template.Spec.Containers[0].VolumeMounts
+	if len(mounts) != 1 || !mounts[0].ReadOnly || mounts[0].MountPath != RegistryCredentialsDir {
+		t.Fatalf("mounts = %#v", mounts)
+	}
+	if got := envValue(job.Spec.Template.Spec.Containers[0].Env, "REGISTRY_PROVIDER"); got != "ghcr" {
+		t.Fatalf("REGISTRY_PROVIDER = %q", got)
+	}
+}
+
+func TestEnsureRunReportsMissingRegistrySecret(t *testing.T) {
+	project := testProject()
+	project.Spec.Registry = &cicdv1alpha1.ProjectRegistrySpec{
+		Provider:            cicdv1alpha1.RegistryProviderGeneric,
+		CredentialSecretRef: &cicdv1alpha1.SecretKeyRef{Name: "missing-auth"},
+	}
+	template := testPipelineTemplate()
+	template.Spec.Build.Enabled = true
+	template.Spec.Build.Push = true
+	scheme := newScheme(t)
+	jobExecutor := Executor{Client: fake.NewClientBuilder().WithScheme(scheme).Build(), Scheme: scheme}
+
+	_, err := jobExecutor.EnsureRun(context.Background(), executor.EnsureRunRequest{
+		BuildRun: testBuildRun(), Project: project, Repository: testRepository(), Template: template,
+	})
+	if !errors.Is(err, ErrRegistryCredentialsMissing) || !strings.Contains(err.Error(), "missing-auth") {
+		t.Fatalf("EnsureRun() error = %v", err)
+	}
+}
+
 func newScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	scheme := runtime.NewScheme()
@@ -173,6 +245,15 @@ func assertQuantity(t *testing.T, got resource.Quantity, want string) {
 	if got.Cmp(wantQuantity) != 0 {
 		t.Fatalf("quantity = %s, want %s", got.String(), wantQuantity.String())
 	}
+}
+
+func envValue(env []corev1.EnvVar, name string) string {
+	for _, item := range env {
+		if item.Name == name {
+			return item.Value
+		}
+	}
+	return ""
 }
 
 var _ client.Client

@@ -194,10 +194,136 @@ func TestRunnerRecordsSupplyChainHookResults(t *testing.T) {
 		t.Fatalf("provenanceRef = %q, want oci://provenance", updated.Status.SupplyChain.ProvenanceRef)
 	}
 	assertCondition(t, updated.Status.Conditions, ConditionSupplyChainReady)
+	assertCondition(t, updated.Status.Conditions, ConditionImageBuildStarted)
+	assertCondition(t, updated.Status.Conditions, ConditionImageBuilt)
+	assertCondition(t, updated.Status.Conditions, ConditionImagePushed)
+	assertCondition(t, updated.Status.Conditions, ConditionImageDigest)
 	assertCondition(t, updated.Status.Conditions, ConditionSBOMGenerated)
 	assertCondition(t, updated.Status.Conditions, ConditionImageScanned)
 	assertCondition(t, updated.Status.Conditions, ConditionImageSigned)
 	assertCondition(t, updated.Status.Conditions, ConditionProvenanceWritten)
+}
+
+func TestRunnerForwardsBuildKitOptionsAndMapsBuilderFailure(t *testing.T) {
+	ctx := context.Background()
+	repo := createGitRepository(t)
+	buildRun := testBuildRun(repo)
+	template := testPipelineTemplate(nil)
+	template.Spec.Build = cicdv1alpha1.PipelineBuildSpec{
+		Enabled:    true,
+		ContextDir: ".",
+		Dockerfile: "docker/release.Dockerfile",
+		Builder:    cicdv1alpha1.BuildBuilderBuildKit,
+		Push:       true,
+		BuildArgs:  map[string]string{"VERSION": "1.2.3"},
+		Target:     "release",
+		Platforms:  []string{"linux/amd64", "linux/arm64"},
+		Labels:     map[string]string{"app": "example"},
+		Cache: cicdv1alpha1.PipelineBuildCacheSpec{
+			Enabled: true,
+			Mode:    cicdv1alpha1.BuildCacheModeRegistry,
+			Ref:     "ghcr.io/cloudivision/example:cache",
+		},
+	}
+	builder := &recordingBuilder{err: &build.Error{Reason: build.ReasonBuildKitUnavailable, Message: "BuildKit unavailable"}}
+	k8sClient := newFakeRunnerClient(t, buildRun, testRepository(repo), template)
+	runner := Runner{
+		Client: k8sClient, Git: cloudivisiongit.ExecClient{}, Steps: steps.Runner{}, Builder: builder,
+		Workspace: filepath.Join(t.TempDir(), "workspace"),
+	}
+
+	err := runner.Run(ctx, testConfig(repo))
+	if err == nil {
+		t.Fatal("Run() error = nil, want BuildKit failure")
+	}
+	if builder.request.Target != "release" || builder.request.Cache.Mode != build.CacheModeRegistry {
+		t.Fatalf("builder request = %#v", builder.request)
+	}
+	if got := builder.request.BuildArgs["VERSION"]; got != "1.2.3" {
+		t.Fatalf("build arg VERSION = %q", got)
+	}
+	if got := strings.Join(builder.request.Platforms, ","); got != "linux/amd64,linux/arm64" {
+		t.Fatalf("platforms = %q", got)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if getErr := k8sClient.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); getErr != nil {
+		t.Fatal(getErr)
+	}
+	if updated.Status.Failure.Reason != build.ReasonBuildKitUnavailable {
+		t.Fatalf("failure = %#v", updated.Status.Failure)
+	}
+	assertCondition(t, updated.Status.Conditions, ConditionImageBuildStarted)
+}
+
+func TestRunnerSuppliesScopedDockerConfigToBuilder(t *testing.T) {
+	ctx := context.Background()
+	repo := createGitRepository(t)
+	buildRun := testBuildRun(repo)
+	template := testPipelineTemplate(nil)
+	template.Spec.Build.Enabled = true
+	template.Spec.Build.Push = true
+	credentialsDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(credentialsDir, "username"), []byte("robot"), 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(credentialsDir, "password"), []byte("registry-secret"), 0o400); err != nil {
+		t.Fatal(err)
+	}
+	builder := &recordingBuilder{result: &build.BuildResult{
+		ImageRepository: "ghcr.io/cloudivision/example", Tag: "main", Digest: "sha256:abc123",
+	}}
+	k8sClient := newFakeRunnerClient(t, buildRun, testRepository(repo), template)
+	runner := Runner{
+		Client: k8sClient, Git: cloudivisiongit.ExecClient{}, Steps: steps.Runner{}, Builder: builder,
+		Workspace: filepath.Join(t.TempDir(), "workspace"),
+	}
+	cfg := testConfig(repo)
+	cfg.RegistryProvider = "ghcr"
+	cfg.RegistryImagePrefix = "ghcr.io/cloudivision"
+	cfg.RegistryCredentialsDir = credentialsDir
+
+	if err := runner.Run(ctx, cfg); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(builder.dockerConfig) == 0 || !strings.Contains(string(builder.dockerConfig), "auths") {
+		t.Fatalf("Docker config was not supplied to builder: %q", builder.dockerConfig)
+	}
+	for key, value := range builder.request.Env {
+		if strings.Contains(value, "registry-secret") {
+			t.Fatalf("builder env %s leaked registry password", key)
+		}
+	}
+	if builder.request.Env["DOCKER_CONFIG"] == "" {
+		t.Fatalf("builder env = %#v, want DOCKER_CONFIG path", builder.request.Env)
+	}
+}
+
+func TestRunnerReportsMissingRegistryCredentials(t *testing.T) {
+	ctx := context.Background()
+	repo := createGitRepository(t)
+	buildRun := testBuildRun(repo)
+	template := testPipelineTemplate(nil)
+	template.Spec.Build.Enabled = true
+	template.Spec.Build.Push = true
+	k8sClient := newFakeRunnerClient(t, buildRun, testRepository(repo), template)
+	runner := Runner{
+		Client: k8sClient, Git: cloudivisiongit.ExecClient{}, Steps: steps.Runner{}, Builder: successBuilder{},
+		Workspace: filepath.Join(t.TempDir(), "workspace"),
+	}
+	cfg := testConfig(repo)
+	cfg.RegistryProvider = "generic"
+	cfg.RegistryCredentialsDir = filepath.Join(t.TempDir(), "missing")
+
+	if err := runner.Run(ctx, cfg); err == nil {
+		t.Fatal("Run() error = nil, want missing registry credentials")
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status.Failure.Reason != "RegistryCredentialsMissing" {
+		t.Fatalf("failure = %#v", updated.Status.Failure)
+	}
 }
 
 func TestRunnerReportsMissingRequiredSBOMAdapter(t *testing.T) {
@@ -242,6 +368,21 @@ func (successBuilder) Build(context.Context, build.BuildRequest) (*build.BuildRe
 		Tag:             "main",
 		Digest:          "sha256:abc123",
 	}, nil
+}
+
+type recordingBuilder struct {
+	request      build.BuildRequest
+	result       *build.BuildResult
+	err          error
+	dockerConfig []byte
+}
+
+func (b *recordingBuilder) Build(_ context.Context, req build.BuildRequest) (*build.BuildResult, error) {
+	b.request = req
+	if dir := req.Env["DOCKER_CONFIG"]; dir != "" {
+		b.dockerConfig, _ = os.ReadFile(filepath.Join(dir, "config.json"))
+	}
+	return b.result, b.err
 }
 
 type fakeSBOMGenerator struct{}

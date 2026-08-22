@@ -30,8 +30,10 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
             </div>
             <app-status-badge [status]="release.status?.phase || 'Pending'" />
           </div>
-          <div class="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-4">
-            <span>Image: {{ release.spec.image.repository }}:{{ release.spec.image.tag || '-' }}</span>
+		  <div class="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-3 xl:grid-cols-6">
+			<span>Repository: {{ release.spec.image.repository }}</span>
+			<span>Tag: {{ release.spec.image.tag || '-' }}</span>
+			<span>Digest: {{ release.spec.image.digest || 'Not recorded' }}</span>
 						<span>Promotion: {{ release.spec.promotionMode || 'direct-commit' }}</span>
             <span>Sync: {{ release.status?.deployment?.syncStatus || '-' }}</span>
             <span>Health: {{ release.status?.deployment?.healthStatus || '-' }}</span>

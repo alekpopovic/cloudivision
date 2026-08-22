@@ -17,6 +17,7 @@ import (
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
+	buildlogic "github.com/cloudivision/cloudivision/internal/build"
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/observability"
@@ -580,64 +581,128 @@ func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
 			return
 		}
 		if !repository.Spec.Webhook.Enabled {
+			s.recordWebhookAudit(r.Context(), "WebhookRejected", provider, repository, webhook.DeliveryID(provider, r.Header), "", "webhook_disabled", "", "")
 			s.writeError(w, forbidden("webhook is not enabled for repository"))
 			return
 		}
 		if repository.Spec.Provider != cicdv1alpha1.RepositoryProvider(provider) && provider != webhook.ProviderGeneric {
+			s.recordWebhookAudit(r.Context(), "WebhookRejected", provider, repository, webhook.DeliveryID(provider, r.Header), "", "provider_mismatch", "", "")
 			s.writeError(w, badRequest("webhook provider does not match repository provider"))
 			return
 		}
+		deliveryID := webhook.DeliveryID(provider, r.Header)
+		defer r.Body.Close()
 		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 		if err != nil {
-			s.writeError(w, badRequest("request body exceeds limit or cannot be read"))
+			s.recordWebhookAudit(r.Context(), "WebhookRejected", provider, repository, deliveryID, "", "body_too_large", "", "")
+			observability.WebhookEvents.WithLabelValues(string(provider), "body_too_large").Inc()
+			s.writeError(w, apiError{status: http.StatusRequestEntityTooLarge, code: "payload_too_large", message: "webhook payload exceeds the 1 MiB limit"})
 			return
 		}
-		defer r.Body.Close()
-
 		secret, err := s.webhookSecret(r.Context(), repository)
 		if err != nil {
+			s.recordWebhookAudit(r.Context(), "WebhookRejected", provider, repository, deliveryID, "", "secret_unavailable", "", "")
 			s.writeError(w, forbidden(err.Error()))
 			return
 		}
 		if err := webhook.Verify(provider, r.Header, body, secret); err != nil {
 			observability.WebhookEvents.WithLabelValues(string(provider), "invalid_signature").Inc()
-			s.writeError(w, unauthorized(err.Error()))
+			s.recordWebhookAudit(r.Context(), "WebhookRejected", provider, repository, deliveryID, "", "signature_verification_failed", "", "")
+			s.writeError(w, unauthorized("webhook signature verification failed"))
 			return
 		}
 		event, err := webhook.Parse(provider, r.Header, body)
 		if err != nil {
 			observability.WebhookEvents.WithLabelValues(string(provider), "invalid_payload").Inc()
-			s.writeError(w, badRequest(err.Error()))
-			return
-		}
-		if !event.IsPush {
-			s.writeError(w, badRequest("only push events are supported"))
+			s.recordWebhookAudit(r.Context(), "WebhookRejected", provider, repository, deliveryID, "", "malformed_payload", "", "")
+			s.writeError(w, badRequest("malformed webhook payload"))
 			return
 		}
 		if event.EventID == "" {
+			s.recordWebhookAudit(r.Context(), "WebhookRejected", provider, repository, "", string(event.Type), "missing_delivery_id", event.Actor, "")
 			s.writeError(w, badRequest("webhook event ID is required"))
 			return
 		}
-		if event.CommitSHA == "" {
-			s.writeError(w, badRequest("webhook commit SHA is required"))
+		if len(event.EventID) > 255 {
+			s.recordWebhookAudit(r.Context(), "WebhookRejected", provider, repository, "", string(event.Type), "invalid_delivery_id", event.Actor, "")
+			s.writeError(w, badRequest("webhook event ID exceeds 255 characters"))
 			return
 		}
-		if event.Branch != repository.Spec.DefaultBranch {
-			s.writeError(w, badRequest("webhook branch does not match repository defaultBranch"))
-			return
+		if provider == webhook.ProviderGitHub && !event.Timestamp.IsZero() {
+			now := time.Now().UTC()
+			if event.Timestamp.Before(now.Add(-24*time.Hour)) || event.Timestamp.After(now.Add(5*time.Minute)) {
+				observability.WebhookEvents.WithLabelValues(string(provider), "replay_rejected").Inc()
+				s.recordWebhookAudit(r.Context(), "WebhookRejected", provider, repository, event.EventID, string(event.Type), "event_timestamp_outside_replay_window", event.Actor, "")
+				s.writeError(w, unauthorized("webhook event timestamp is outside the replay window"))
+				return
+			}
 		}
 
 		if existing, ok, err := s.existingBuildRunForEvent(r.Context(), provider, namespace, repository.Name, event.EventID); err != nil {
 			s.writeError(w, err)
 			return
 		} else if ok {
-			observability.WebhookEvents.WithLabelValues(string(provider), "replayed").Inc()
+			observability.WebhookEvents.WithLabelValues(string(provider), "duplicate").Inc()
+			buildRun := optionalBuildRunDTO(existing)
+			s.recordWebhookAudit(r.Context(), "WebhookDuplicate", provider, repository, event.EventID, string(event.Type), "delivery_id_already_processed", event.Actor, existing.Name)
 			writeJSON(w, http.StatusOK, WebhookResponse{
 				Repository: repository.Name,
 				EventID:    event.EventID,
-				BuildRun:   buildRunDTO(existing),
+				Event:      string(event.Type),
+				Result:     "duplicate",
+				Message:    "Webhook delivery was already processed.",
+				BuildRun:   buildRun,
 				Created:    false,
 			})
+			return
+		}
+
+		if event.IsPing {
+			if err := s.recordWebhookEvent(r.Context(), provider, repository, "", event); err != nil {
+				s.writeError(w, err)
+				return
+			}
+			s.recordWebhookAudit(r.Context(), "WebhookAccepted", provider, repository, event.EventID, string(event.Type), "ping", event.Actor, "")
+			observability.WebhookEvents.WithLabelValues(string(provider), "accepted").Inc()
+			writeJSON(w, http.StatusOK, WebhookResponse{Repository: repository.Name, EventID: event.EventID, Event: string(event.Type), Result: "accepted", Message: "GitHub ping accepted.", Created: false})
+			return
+		}
+
+		if !event.IsPush && !event.IsPullRequest {
+			if err := s.recordWebhookEvent(r.Context(), provider, repository, "", event); err != nil {
+				s.writeError(w, err)
+				return
+			}
+			s.recordWebhookAudit(r.Context(), "WebhookAccepted", provider, repository, event.EventID, string(event.Type), "event_ignored", event.Actor, "")
+			writeJSON(w, http.StatusOK, WebhookResponse{Repository: repository.Name, EventID: event.EventID, Event: string(event.Type), Result: "ignored", Message: "Webhook event is not configured to create a BuildRun.", Created: false})
+			return
+		}
+		if event.IsPullRequest && event.Action != "opened" && event.Action != "reopened" && event.Action != "synchronize" {
+			if err := s.recordWebhookEvent(r.Context(), provider, repository, "", event); err != nil {
+				s.writeError(w, err)
+				return
+			}
+			s.recordWebhookAudit(r.Context(), "WebhookAccepted", provider, repository, event.EventID, string(event.Type), "pull_request_action_ignored", event.Actor, "")
+			writeJSON(w, http.StatusOK, WebhookResponse{Repository: repository.Name, EventID: event.EventID, Event: string(event.Type), Result: "ignored", Message: "Pull request action is not configured to create a BuildRun.", Created: false})
+			return
+		}
+		if event.CommitSHA == "" {
+			s.recordWebhookAudit(r.Context(), "WebhookRejected", provider, repository, event.EventID, string(event.Type), "missing_commit_sha", event.Actor, "")
+			s.writeError(w, badRequest("webhook commit SHA is required"))
+			return
+		}
+		filterBranch := event.Branch
+		if event.IsPullRequest {
+			filterBranch = event.BaseBranch
+		}
+		if filterBranch != repository.Spec.DefaultBranch {
+			if err := s.recordWebhookEvent(r.Context(), provider, repository, "", event); err != nil {
+				s.writeError(w, err)
+				return
+			}
+			s.recordWebhookAudit(r.Context(), "WebhookAccepted", provider, repository, event.EventID, string(event.Type), "branch_ignored", event.Actor, "")
+			observability.WebhookEvents.WithLabelValues(string(provider), "ignored").Inc()
+			writeJSON(w, http.StatusOK, WebhookResponse{Repository: repository.Name, EventID: event.EventID, Event: string(event.Type), Result: "ignored", Message: "Webhook branch does not match repository defaultBranch.", Created: false})
 			return
 		}
 
@@ -652,7 +717,11 @@ func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
 			return
 		}
 
-		buildRun := buildRunFromWebhook(namespace, repository, project, template, event)
+		buildRun, err := buildRunFromWebhook(namespace, repository, project, template, event)
+		if err != nil {
+			s.writeError(w, badRequest(err.Error()))
+			return
+		}
 		policyEvaluator := s.PolicyEvaluator
 		if policyEvaluator == nil {
 			policyEvaluator = policy.NewDefaultEvaluator()
@@ -662,32 +731,39 @@ func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
 			EnforceAuthorization: true, TriggerAuthorized: true, SecretUseAuthorized: true,
 		})
 		if !decision.Allowed {
+			s.recordWebhookAudit(r.Context(), "WebhookRejected", provider, repository, event.EventID, string(event.Type), "policy_denied", event.Actor, "")
 			s.writeError(w, policyDenied(decision))
 			return
 		}
 		if err := s.Client.Create(r.Context(), &buildRun); err != nil {
+			if apierrors.IsAlreadyExists(err) {
+				existing := cicdv1alpha1.BuildRun{}
+				if getErr := s.Client.Get(r.Context(), client.ObjectKeyFromObject(&buildRun), &existing); getErr == nil {
+					s.recordWebhookAudit(r.Context(), "WebhookDuplicate", provider, repository, event.EventID, string(event.Type), "build_run_already_exists", event.Actor, existing.Name)
+					response := buildRunDTO(existing)
+					writeJSON(w, http.StatusOK, WebhookResponse{Repository: repository.Name, EventID: event.EventID, Event: string(event.Type), Result: "duplicate", Message: "Webhook delivery was already processed.", BuildRun: &response, Created: false})
+					return
+				}
+			}
 			s.writeError(w, err)
 			return
 		}
-		if err := s.recordWebhookEvent(r.Context(), provider, repository, buildRun, event); err != nil {
+		if err := s.recordWebhookEvent(r.Context(), provider, repository, buildRun.Name, event); err != nil {
 			observability.AuditWriteFailures.Inc()
 			s.writeError(w, err)
 			return
 		}
-		s.recordAudit(r.Context(), audit.Event{
-			Type:       "WebhookBuildRunCreated",
-			Actor:      event.Actor,
-			Project:    repository.Spec.ProjectRef,
-			Repository: repository.Name,
-			BuildRun:   buildRun.Name,
-			EventID:    event.EventID,
-			Message:    "Created BuildRun from webhook push event.",
-		})
+		s.recordWebhookAudit(r.Context(), "WebhookAccepted", provider, repository, event.EventID, string(event.Type), "build_run_created", event.Actor, buildRun.Name)
+		s.recordWebhookAudit(r.Context(), "BuildRunCreatedFromWebhook", provider, repository, event.EventID, string(event.Type), "build_run_created", event.Actor, buildRun.Name)
 		observability.WebhookEvents.WithLabelValues(string(provider), "accepted").Inc()
+		response := buildRunDTO(buildRun)
 		writeJSON(w, http.StatusCreated, WebhookResponse{
 			Repository: repository.Name,
 			EventID:    event.EventID,
-			BuildRun:   buildRunDTO(buildRun),
+			Event:      string(event.Type),
+			Result:     "created",
+			Message:    "BuildRun created from webhook.",
+			BuildRun:   &response,
 			Created:    true,
 		})
 	}
@@ -718,9 +794,15 @@ func (s Server) existingBuildRunForEvent(ctx context.Context, provider webhook.P
 		if indexed != nil && indexed.BuildRun != "" {
 			buildRun := cicdv1alpha1.BuildRun{}
 			if err := s.Client.Get(ctx, client.ObjectKey{Name: indexed.BuildRun, Namespace: namespace}, &buildRun); err != nil {
+				if apierrors.IsNotFound(err) {
+					return cicdv1alpha1.BuildRun{}, true, nil
+				}
 				return cicdv1alpha1.BuildRun{}, false, err
 			}
 			return buildRun, true, nil
+		}
+		if indexed != nil {
+			return cicdv1alpha1.BuildRun{}, true, nil
 		}
 	}
 	var list cicdv1alpha1.BuildRunList
@@ -735,7 +817,7 @@ func (s Server) existingBuildRunForEvent(ctx context.Context, provider webhook.P
 	return cicdv1alpha1.BuildRun{}, false, nil
 }
 
-func (s Server) recordWebhookEvent(ctx context.Context, provider webhook.Provider, repository *cicdv1alpha1.Repository, buildRun cicdv1alpha1.BuildRun, event webhook.Event) error {
+func (s Server) recordWebhookEvent(ctx context.Context, provider webhook.Provider, repository *cicdv1alpha1.Repository, buildRunName string, event webhook.Event) error {
 	if s.WebhookIndex == nil {
 		return nil
 	}
@@ -744,7 +826,39 @@ func (s Server) recordWebhookEvent(ctx context.Context, provider webhook.Provide
 		Repository: repository.Name,
 		EventID:    event.EventID,
 		Project:    repository.Spec.ProjectRef,
-		BuildRun:   buildRun.Name,
+		BuildRun:   buildRunName,
+	})
+}
+
+func optionalBuildRunDTO(buildRun cicdv1alpha1.BuildRun) *BuildRunResponse {
+	if buildRun.Name == "" {
+		return nil
+	}
+	response := buildRunDTO(buildRun)
+	return &response
+}
+
+func (s Server) recordWebhookAudit(ctx context.Context, eventType string, provider webhook.Provider, repository *cicdv1alpha1.Repository, eventID, webhookEvent, reason, actor, buildRun string) {
+	message := map[string]string{
+		"WebhookAccepted":            "Webhook delivery accepted.",
+		"WebhookRejected":            "Webhook delivery rejected.",
+		"WebhookDuplicate":           "Duplicate webhook delivery ignored.",
+		"BuildRunCreatedFromWebhook": "BuildRun created from webhook.",
+	}[eventType]
+	s.recordAudit(ctx, audit.Event{
+		Type:       eventType,
+		Actor:      actor,
+		Project:    repository.Spec.ProjectRef,
+		Repository: repository.Name,
+		BuildRun:   buildRun,
+		EventID:    eventID,
+		Message:    message,
+		Metadata: auditMetadata(map[string]string{
+			"provider":   string(provider),
+			"event":      webhookEvent,
+			"reason":     reason,
+			"deliveryID": eventID,
+		}),
 	})
 }
 
@@ -1135,17 +1249,25 @@ func splitLogLines(logs string) []string {
 	return strings.Split(trimmed, "\n")
 }
 
-func buildRunFromWebhook(namespace string, repository *cicdv1alpha1.Repository, project *cicdv1alpha1.Project, template *cicdv1alpha1.PipelineTemplate, event webhook.Event) cicdv1alpha1.BuildRun {
+func buildRunFromWebhook(namespace string, repository *cicdv1alpha1.Repository, project *cicdv1alpha1.Project, template *cicdv1alpha1.PipelineTemplate, event webhook.Event) (cicdv1alpha1.BuildRun, error) {
 	imageRepository := template.Spec.Build.Image
 	if imageRepository == "" {
 		imageRepository = strings.TrimRight(project.Spec.DefaultRegistry, "/") + "/" + repository.Name
 	}
-	tag := shortSHA(event.CommitSHA)
-	if tag == "" {
-		tag = event.Branch
+	name := buildRunNameForWebhook(repository.Name, event.EventID)
+	tagTemplate := ""
+	if project.Spec.ImageTagPolicy != nil {
+		tagTemplate = project.Spec.ImageTagPolicy.DefaultTagTemplate
+	}
+	tag, _, err := buildlogic.ResolveImageTag("", tagTemplate, buildlogic.TagInput{
+		Branch: event.Branch, CommitSHA: event.CommitSHA, Revision: event.CommitSHA,
+		BuildRunName: name, Timestamp: time.Now().UTC(),
+	})
+	if err != nil {
+		return cicdv1alpha1.BuildRun{}, err
 	}
 	return cicdv1alpha1.BuildRun{
-		ObjectMeta: objectMeta(buildRunNameForWebhook(repository.Name, event.EventID), namespace),
+		ObjectMeta: objectMeta(name, namespace),
 		Spec: cicdv1alpha1.BuildRunSpec{
 			ProjectRef:          repository.Spec.ProjectRef,
 			RepositoryRef:       repository.Name,
@@ -1164,7 +1286,7 @@ func buildRunFromWebhook(namespace string, repository *cicdv1alpha1.Repository, 
 			},
 			Executor: cicdv1alpha1.ExecutorTypeJob,
 		},
-	}
+	}, nil
 }
 
 func buildRunNameForWebhook(repositoryName, eventID string) string {

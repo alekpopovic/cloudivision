@@ -23,12 +23,18 @@ Important spec fields:
 | `displayName`, `description`, `ownerTeam` | Human ownership metadata. |
 | `namespace` | Namespace where runner RBAC/workloads are managed. |
 | `defaultRegistry`, `defaultBranch` | Artifact/source defaults. |
+| `registry.provider`, `registry.imagePrefix` | Registry adapter and resolved image prefix. |
+| `registry.credentialSecretRef` | Dedicated namespaced registry Secret name and optional Docker config key. |
 | `serviceAccountName` | Optional runner ServiceAccount override. |
 | `isolation.createNamespace` | Whether the controller creates the target namespace. |
 | `isolation.podSecurityLevel` | `baseline` or `restricted`. |
 | `isolation.networkPolicyMode` | `disabled`, `defaultDeny` or `egressAllowList`. |
 
 Status phases are `Pending`, `Ready` and `Error`. `namespaceReady` and the Ready/Failed condition explain whether namespace, runner RBAC and network policy reconciliation succeeded.
+
+Implemented registry providers and Secret formats are documented in the
+[registry provider](../registry/providers.md) and
+[credential](../registry/credentials.md) guides.
 
 ```yaml
 apiVersion: cicd.cloudivision.io/v1alpha1
@@ -73,7 +79,7 @@ spec:
 
 PipelineTemplate is reusable execution policy. `params` declares inputs. Ordered `steps` contain `name`, execution `image`, `command`, `args`, relative/absolute `workingDir`, literal environment values, timeout and continue-on-error behavior.
 
-`build` configures optional image creation with builder `buildkit`, `buildah` or `none`, context, Dockerfile, image and push behavior. `resources` supplies runner CPU/memory and total timeout. `security` controls privilege request, non-root and read-only-root-filesystem intent. `supplyChain` requests SBOM, scanning, signing and signed-base-image policy hooks.
+`build` configures optional image creation with builder `buildkit`, `buildah` or `none`, context, Dockerfile, image, push behavior, build arguments, target stage, platforms, labels and optional inline/registry/local cache. Registry and local cache modes require a cache reference. `resources` supplies runner CPU/memory and total timeout. `security` controls privilege request, non-root and read-only-root-filesystem intent. `supplyChain` requests SBOM, scanning, signing and signed-base-image policy hooks. BuildKit details and status conditions are documented in the [BuildKit guide](../build/buildkit.md).
 
 Status is `Ready` or `Error` with conditions and observed generation. The Job executor in v0.1 executes commands inside the runner image; per-step image isolation is not yet implemented and is documented as a dogfood limitation.
 

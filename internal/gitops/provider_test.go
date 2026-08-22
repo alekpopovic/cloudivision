@@ -109,8 +109,32 @@ func TestUpdateHelmValues(t *testing.T) {
 	}
 	values := readMapForTest(t, path)
 	image := values["image"].(map[string]any)
-	if image["repository"] != "ghcr.io/cloudivision/example" || image["tag"] != "v1" || image["digest"] != "sha256:123" {
+	if image["repository"] != "ghcr.io/cloudivision/example" || image["digest"] != "sha256:123" {
 		t.Fatalf("image values = %#v", image)
+	}
+	if _, exists := image["tag"]; exists {
+		t.Fatalf("image values retain mutable tag when digest exists: %#v", image)
+	}
+}
+
+func TestUpdateKustomizationPrefersDigest(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "kustomization.yaml")
+	if err := os.WriteFile(path, []byte("images:\n- name: ghcr.io/cloudivision/example\n  newTag: old\n"), 0o644); err != nil {
+		t.Fatalf("write kustomization: %v", err)
+	}
+
+	err := updateImageFiles(dir, "kustomization.yaml", cicdv1alpha1.GitOpsStrategyKustomizeImage, cicdv1alpha1.ImageRef{
+		Repository: "ghcr.io/cloudivision/example",
+		Tag:        "mutable",
+		Digest:     "sha256:123",
+	})
+	if err != nil {
+		t.Fatalf("updateImageFiles() error = %v", err)
+	}
+	content := string(mustRead(t, path))
+	if !strings.Contains(content, "digest: sha256:123") || strings.Contains(content, "newTag:") {
+		t.Fatalf("kustomization.yaml =\n%s", content)
 	}
 }
 
@@ -149,6 +173,36 @@ spec:
 		t.Fatalf("updateImageFiles() error = %v", err)
 	}
 	if !strings.Contains(string(mustRead(t, path)), "image: ghcr.io/cloudivision/example:v2") {
+		t.Fatalf("deployment.yaml =\n%s", string(mustRead(t, path)))
+	}
+}
+
+func TestUpdateRawYAMLWorkloadPrefersDigest(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deployment.yaml")
+	if err := os.WriteFile(path, []byte(`apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample
+spec:
+  template:
+    spec:
+      containers:
+      - name: app
+        image: old:tag
+`), 0o644); err != nil {
+		t.Fatalf("write deployment: %v", err)
+	}
+
+	err := updateImageFiles(dir, "deployment.yaml", cicdv1alpha1.GitOpsStrategyRawYAML, cicdv1alpha1.ImageRef{
+		Repository: "ghcr.io/cloudivision/example",
+		Tag:        "mutable",
+		Digest:     "sha256:123",
+	})
+	if err != nil {
+		t.Fatalf("updateImageFiles() error = %v", err)
+	}
+	if !strings.Contains(string(mustRead(t, path)), "image: ghcr.io/cloudivision/example@sha256:123") {
 		t.Fatalf("deployment.yaml =\n%s", string(mustRead(t, path)))
 	}
 }

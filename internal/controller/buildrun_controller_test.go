@@ -299,6 +299,61 @@ func TestBuildRunReconcileMarksFailed(t *testing.T) {
 	}
 }
 
+func TestBuildRunReconcileGeneratesDeterministicImageTag(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+	buildRun.Spec.Image.Tag = ""
+	buildRun.Spec.CommitSHA = "abcdef0123456789"
+	buildRun.Spec.Branch = "Feature/Payments"
+	if err := reconciler.Update(ctx, buildRun); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := reconciler.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Spec.Image.Tag != "feature-payments-abcdef012345" {
+		t.Fatalf("image tag = %q", updated.Spec.Image.Tag)
+	}
+	if updated.Status.Image == nil || updated.Status.Image.Tag != updated.Spec.Image.Tag {
+		t.Fatalf("status image = %#v, want generated tag %q", updated.Status.Image, updated.Spec.Image.Tag)
+	}
+	job := getRunnerJob(t, ctx, reconciler, updated)
+	if got := envValue(job.Spec.Template.Spec.Containers[0].Env, "IMAGE_TAG"); got != updated.Spec.Image.Tag {
+		t.Fatalf("Job IMAGE_TAG = %q, want %q", got, updated.Spec.Image.Tag)
+	}
+}
+
+func TestBuildRunReconcileRejectsInvalidImageTagTemplate(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+	buildRun.Spec.Image.Tag = ""
+	if err := reconciler.Update(ctx, buildRun); err != nil {
+		t.Fatal(err)
+	}
+	project := &cicdv1alpha1.Project{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: buildRun.Spec.ProjectRef, Namespace: buildRun.Namespace}, project); err != nil {
+		t.Fatal(err)
+	}
+	project.Spec.ImageTagPolicy = &cicdv1alpha1.ProjectImageTagPolicySpec{DefaultTagTemplate: "{{ .Unknown }}"}
+	if err := reconciler.Update(ctx, project); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := reconciler.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status.Failure.Reason != "ImageTagInvalid" || updated.Status.Phase != cicdv1alpha1.BuildRunPhaseFailed {
+		t.Fatalf("BuildRun status = %#v", updated.Status)
+	}
+}
+
 func TestBuildRunReconcileFailsWhenProjectNamespaceDiffers(t *testing.T) {
 	ctx := context.Background()
 	reconciler, buildRun := newBuildRunReconciler(t)
@@ -324,6 +379,43 @@ func TestBuildRunReconcileFailsWhenProjectNamespaceDiffers(t *testing.T) {
 	}
 	if !strings.Contains(updated.Status.Failure.Message, "must match BuildRun namespace") {
 		t.Fatalf("failure message = %q", updated.Status.Failure.Message)
+	}
+}
+
+func TestBuildRunReconcileReportsMissingRegistryCredentials(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+	project := &cicdv1alpha1.Project{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: buildRun.Spec.ProjectRef, Namespace: buildRun.Namespace}, project); err != nil {
+		t.Fatal(err)
+	}
+	project.Spec.Registry = &cicdv1alpha1.ProjectRegistrySpec{
+		Provider:            cicdv1alpha1.RegistryProviderGHCR,
+		CredentialSecretRef: &cicdv1alpha1.SecretKeyRef{Name: "missing-registry-auth"},
+	}
+	if err := reconciler.Update(ctx, project); err != nil {
+		t.Fatal(err)
+	}
+	template := &cicdv1alpha1.PipelineTemplate{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: buildRun.Spec.PipelineTemplateRef, Namespace: buildRun.Namespace}, template); err != nil {
+		t.Fatal(err)
+	}
+	template.Spec.Build.Enabled = true
+	template.Spec.Build.Builder = cicdv1alpha1.BuildBuilderBuildKit
+	template.Spec.Build.Push = true
+	if err := reconciler.Update(ctx, template); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := reconciler.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status.Failure.Reason != "RegistryCredentialsMissing" || !strings.Contains(updated.Status.Failure.Message, "missing-registry-auth") {
+		t.Fatalf("failure = %#v", updated.Status.Failure)
 	}
 }
 

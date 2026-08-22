@@ -48,6 +48,12 @@ export interface Project {
     defaultRegistry: string;
     defaultBranch?: string;
     serviceAccountName?: string;
+    registry?: {
+      provider?: 'generic' | 'ghcr' | 'gitlab' | 'harbor' | 'ecr' | 'gcr' | 'acr';
+      imagePrefix?: string;
+      credentialSecretRef?: { name: string; key?: string };
+    };
+    imageTagPolicy?: { defaultTagTemplate?: string };
     isolation?: {
       createNamespace: boolean;
       podSecurityLevel: 'baseline' | 'restricted';
@@ -86,6 +92,11 @@ export interface PipelineTemplate {
       builder?: 'buildkit' | 'buildah' | 'none';
       image?: string;
       push?: boolean;
+      buildArgs?: Record<string, string>;
+      target?: string;
+      platforms?: string[];
+      labels?: Record<string, string>;
+      cache?: { enabled?: boolean; mode?: 'inline' | 'registry' | 'local'; ref?: string };
     };
     resources?: Record<string, string | number>;
     security?: Record<string, boolean>;
@@ -165,7 +176,8 @@ export interface Environment {
     requiresApproval: boolean;
     gitOps?: { provider?: 'argocd' | 'flux' | 'generic'; applicationName?: string; namespace?: string };
     policy?: {
-		requireImageDigest?: boolean;
+      requireImageDigest?: boolean;
+      allowLatest?: boolean;
       requireSignedImages?: boolean;
       requireSBOM?: boolean;
       blockCriticalVulnerabilities?: boolean;

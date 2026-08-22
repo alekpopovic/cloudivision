@@ -112,9 +112,9 @@ func (r PostgresRecorder) Record(ctx context.Context, event Event) error {
 	}
 	_, err := r.DB.ExecContext(ctx, `
 insert into audit_events (
-  id, type, actor, project, repository, build_run, release, message, metadata, created_at
+  id, type, actor, project, repository, build_run, release, event_id, message, metadata, created_at
 ) values (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11
 )`,
 		event.ID,
 		event.Type,
@@ -123,6 +123,7 @@ insert into audit_events (
 		nullString(event.Repository),
 		nullString(event.BuildRun),
 		nullString(event.Release),
+		nullString(event.EventID),
 		nullString(event.Message),
 		string(metadata),
 		event.CreatedAt,
@@ -139,7 +140,7 @@ func (r PostgresRecorder) ListEvents(ctx context.Context, filter EventFilter) ([
 	}
 	rows, err := r.DB.QueryContext(ctx, `
 select id, type, coalesce(actor, ''), coalesce(project, ''), coalesce(repository, ''),
-       coalesce(build_run, ''), coalesce(release, ''), coalesce(message, ''),
+       coalesce(build_run, ''), coalesce(release, ''), coalesce(event_id, ''), coalesce(message, ''),
        metadata, created_at
 from audit_events
 where ($1 = '' or project = $1)
@@ -170,6 +171,7 @@ limit 200`,
 			&event.Repository,
 			&event.BuildRun,
 			&event.Release,
+			&event.EventID,
 			&event.Message,
 			&metadata,
 			&event.CreatedAt,
@@ -190,7 +192,7 @@ func (r PostgresRecorder) FindWebhookEvent(ctx context.Context, provider, reposi
 		return nil, errors.New("postgres webhook index requires a database")
 	}
 	row := r.DB.QueryRowContext(ctx, `
-select provider, repository, event_id, coalesce(project, ''), build_run, created_at
+select provider, repository, event_id, coalesce(project, ''), coalesce(build_run, ''), created_at
 from webhook_events
 where provider = $1 and repository = $2 and event_id = $3`,
 		provider,
@@ -222,7 +224,7 @@ on conflict (provider, repository, event_id) do nothing`,
 		event.Repository,
 		event.EventID,
 		nullString(event.Project),
-		event.BuildRun,
+		nullString(event.BuildRun),
 		event.CreatedAt,
 	)
 	if err != nil {

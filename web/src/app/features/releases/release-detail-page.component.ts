@@ -28,7 +28,9 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
           <h2 class="mb-3 text-sm font-semibold">GitOps deployment</h2>
           <app-key-value-list [items]="[
             { key: 'Environment', value: vm.release.spec.environmentRef || '-' },
-            { key: 'Image', value: image(vm.release) },
+            { key: 'Image repository', value: vm.release.spec.image.repository },
+            { key: 'Image tag', value: vm.release.spec.image.tag || 'Not recorded' },
+            { key: 'Image digest', value: vm.release.spec.image.digest || 'Not recorded' },
             { key: 'Git commit', value: vm.release.status?.gitCommit || 'Not committed' },
             { key: 'Provider', value: vm.release.status?.deployment?.provider || '-' },
             { key: 'Sync', value: vm.release.status?.deployment?.syncStatus || '-' },
@@ -65,10 +67,6 @@ export class ReleaseDetailPageComponent {
       return { release, buildRun: runs.find((run) => run.name === release.spec.buildRunRef) };
     })
   );
-
-  image(release: Release): string {
-    return `${release.spec.image.repository}${release.spec.image.digest ? '@' + release.spec.image.digest : ':' + (release.spec.image.tag || '-')}`;
-  }
 
   commitUrl(buildRun: BuildRun | undefined, release: Release): string {
     const repository = String(buildRun?.spec.gitOps?.['repoURL'] || '').replace(/\.git$/, '');

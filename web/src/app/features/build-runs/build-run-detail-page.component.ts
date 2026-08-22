@@ -51,7 +51,8 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
               { key: 'Commit SHA', value: vm.run.spec.commitSHA || 'Not reported' },
               { key: 'Branch', value: vm.run.spec.branch || 'Not reported' },
               { key: 'Triggered by', value: (vm.run.spec.triggeredBy.actor || '-') + ' via ' + vm.run.spec.triggeredBy.type },
-              { key: 'Image', value: image(vm.run) },
+              { key: 'Image repository', value: imageRepository(vm.run) || 'Not reported' },
+              { key: 'Image tag', value: imageTag(vm.run) || 'Not recorded' },
               { key: 'Image digest', value: vm.run.status?.image?.digest || vm.run.spec.image.digest || 'Not recorded' }
             ]" />
           </section>
@@ -135,9 +136,17 @@ export class BuildRunDetailPageComponent {
     }))
   );
 
-  image(run: BuildRun): string {
+  private imageRef(run: BuildRun): { repository?: string; tag?: string; digest?: string } {
     const image = run.status?.image?.repository ? run.status.image : run.spec.image;
-    return `${image.repository || ''}${image.tag ? ':' + image.tag : ''}${image.digest ? '@' + image.digest : ''}`;
+    return image;
+  }
+
+  imageRepository(run: BuildRun): string {
+    return this.imageRef(run).repository || '';
+  }
+
+  imageTag(run: BuildRun): string {
+    return this.imageRef(run).tag || '';
   }
 
   duration(run: BuildRun): string {

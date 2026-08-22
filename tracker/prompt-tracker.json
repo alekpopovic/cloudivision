@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-22T18:41:49Z",
-  "last_executed_prompt": 41,
-  "next_prompt": 42,
+  "updated_at": "2026-08-22T19:42:04Z",
+  "last_executed_prompt": 46,
+  "next_prompt": 47,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -395,40 +395,45 @@
       "title": "v0.2 Implementation Plan",
       "phase": "Roadmap",
       "file": "prompts/42-v0-2-implementation-plan.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Created the executable v0.2 implementation plan with seven epics, work items, CRD/API impacts, tests, acceptance criteria, risks, dependencies, milestone ordering, and explicit exclusions.",
+      "executed_at": "2026-08-22T18:57:18Z"
     },
     {
       "id": 43,
       "title": "BuildKit Builder Hardening",
       "phase": "Build Execution",
       "file": "prompts/43-buildkit-builder-hardening.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Hardened rootless BuildKit input/path validation, deterministic command options, cache settings, bounded failures, metadata digest capture, runner image-stage conditions/status, CRDs, docs, and tests. Go test/vet and Helm security checks passed.",
+      "executed_at": "2026-08-22T19:07:18Z"
     },
     {
       "id": 44,
       "title": "Registry Provider and Credentials",
       "phase": "Providers",
       "file": "prompts/44-registry-provider-and-credentials.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Added registry provider interface and generic/GHCR/GitLab/Harbor implementations, cloud skeletons, image/digest resolution, credential parsing/redaction, scoped Secret validation/projection, runner Docker config handling, CRDs/API models, docs, and tests. Go, Angular, Helm, and security gates passed.",
+      "executed_at": "2026-08-22T19:22:10Z"
     },
     {
       "id": 45,
       "title": "Image Tagging, Digest and Immutability",
       "phase": "Supply Chain",
       "file": "prompts/45-image-tagging-digest-and-immutability.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Implemented deterministic safe image tag templates, digest-first GitOps updates, production latest/digest policy, separate UI tag/digest fields, tests and documentation.",
+      "executed_at": "2026-08-22T19:31:35Z"
     },
     {
       "id": 46,
       "title": "GitHub Webhook Production Readiness",
       "phase": "API",
       "file": "prompts/46-github-webhook-production-readiness.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Hardened GitHub webhooks with HMAC verification, 1 MiB limit, push/PR/ping parsing, replay and delivery-ID idempotency, stable responses, bounded audit events, PostgreSQL migrations, tests and setup/security docs.",
+      "executed_at": "2026-08-22T19:42:04Z"
     },
     {
       "id": 47,

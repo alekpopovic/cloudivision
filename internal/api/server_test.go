@@ -186,6 +186,8 @@ func TestListBuildRunsPaginatesAndFilters(t *testing.T) {
 func TestGitHubWebhookCreatesBuildRun(t *testing.T) {
 	body := readFixture(t, "github_push.json")
 	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitHub)
+	recorder := &fakeAuditRecorder{}
+	server.Audit = recorder
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github/sample-repository?namespace=ci", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "push")
 	req.Header.Set("X-GitHub-Delivery", "github-event-1")
@@ -211,6 +213,165 @@ func TestGitHubWebhookCreatesBuildRun(t *testing.T) {
 	if buildRun.Spec.CommitSHA != "1234567890abcdef1234567890abcdef12345678" {
 		t.Fatalf("commitSHA = %q", buildRun.Spec.CommitSHA)
 	}
+	if !hasAuditType(recorder.events, "WebhookAccepted") || !hasAuditType(recorder.events, "BuildRunCreatedFromWebhook") {
+		t.Fatalf("audit events = %#v", recorder.events)
+	}
+}
+
+func TestGitHubWebhookRejectsMissingSignature(t *testing.T) {
+	body := readFixture(t, "github_push.json")
+	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitHub)
+	recorder := &fakeAuditRecorder{}
+	server.Audit = recorder
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github/sample-repository?namespace=ci", bytes.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "push")
+	req.Header.Set("X-GitHub-Delivery", "github-event-missing-signature")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	assertBuildRunCount(t, k8sClient, 0)
+	if !hasAuditType(recorder.events, "WebhookRejected") {
+		t.Fatalf("audit events = %#v", recorder.events)
+	}
+}
+
+func TestGitHubWebhookDuplicateDeliveryUsesIdempotencyBackend(t *testing.T) {
+	body := readFixture(t, "github_push.json")
+	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitHub)
+	index := newFakeWebhookIndex()
+	recorder := &fakeAuditRecorder{}
+	server.WebhookIndex = index
+	server.Audit = recorder
+
+	for attempt := 0; attempt < 2; attempt++ {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github/sample-repository?namespace=ci", bytes.NewReader(body))
+		req.Header.Set("X-GitHub-Event", "push")
+		req.Header.Set("X-GitHub-Delivery", "github-event-duplicate")
+		req.Header.Set("X-Hub-Signature-256", webhook.SignGitHub(body, "webhook-secret"))
+		rec := httptest.NewRecorder()
+		server.Handler().ServeHTTP(rec, req)
+		want := http.StatusCreated
+		if attempt == 1 {
+			want = http.StatusOK
+		}
+		if rec.Code != want {
+			t.Fatalf("attempt %d status = %d, body = %s", attempt+1, rec.Code, rec.Body.String())
+		}
+		if attempt == 1 {
+			var response WebhookResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil || response.Result != "duplicate" || response.Created {
+				t.Fatalf("duplicate response = %#v, error = %v", response, err)
+			}
+		}
+	}
+	assertBuildRunCount(t, k8sClient, 1)
+	if !hasAuditType(recorder.events, "WebhookDuplicate") {
+		t.Fatalf("audit events = %#v", recorder.events)
+	}
+}
+
+func TestGitHubWebhookIgnoresNonDefaultBranch(t *testing.T) {
+	body := bytes.ReplaceAll(readFixture(t, "github_push.json"), []byte("refs/heads/main"), []byte("refs/heads/feature"))
+	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitHub)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github/sample-repository?namespace=ci", bytes.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "push")
+	req.Header.Set("X-GitHub-Delivery", "github-event-ignored-branch")
+	req.Header.Set("X-Hub-Signature-256", webhook.SignGitHub(body, "webhook-secret"))
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var response WebhookResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil || response.Result != "ignored" || response.Created {
+		t.Fatalf("response = %#v, error = %v", response, err)
+	}
+	assertBuildRunCount(t, k8sClient, 0)
+}
+
+func TestGitHubWebhookAcceptsPingWithoutBuildRun(t *testing.T) {
+	body := []byte(`{"zen":"Keep it logically awesome.","sender":{"login":"octocat"}}`)
+	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitHub)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github/sample-repository?namespace=ci", bytes.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "ping")
+	req.Header.Set("X-GitHub-Delivery", "github-ping-1")
+	req.Header.Set("X-Hub-Signature-256", webhook.SignGitHub(body, "webhook-secret"))
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var response WebhookResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil || response.Event != "ping" || response.Result != "accepted" || response.BuildRun != nil {
+		t.Fatalf("response = %#v, error = %v", response, err)
+	}
+	assertBuildRunCount(t, k8sClient, 0)
+}
+
+func TestGitHubWebhookCreatesBuildRunForPullRequest(t *testing.T) {
+	body := []byte(`{"action":"synchronize","pull_request":{"head":{"ref":"feature/payments","sha":"abcdef0123456789"},"base":{"ref":"main"}},"repository":{"clone_url":"https://github.com/cloudivision/example.git"},"sender":{"login":"octocat"}}`)
+	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitHub)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github/sample-repository?namespace=ci", bytes.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "pull_request")
+	req.Header.Set("X-GitHub-Delivery", "github-pr-1")
+	req.Header.Set("X-Hub-Signature-256", webhook.SignGitHub(body, "webhook-secret"))
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var runs cicdv1alpha1.BuildRunList
+	if err := k8sClient.List(context.Background(), &runs, client.InNamespace("ci")); err != nil {
+		t.Fatal(err)
+	}
+	if len(runs.Items) != 1 || runs.Items[0].Spec.Branch != "feature/payments" || runs.Items[0].Spec.CommitSHA != "abcdef0123456789" {
+		t.Fatalf("BuildRuns = %#v", runs.Items)
+	}
+}
+
+func TestGitHubWebhookRejectsMalformedPayload(t *testing.T) {
+	body := []byte(`{"ref":`)
+	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitHub)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github/sample-repository?namespace=ci", bytes.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "push")
+	req.Header.Set("X-GitHub-Delivery", "github-malformed-1")
+	req.Header.Set("X-Hub-Signature-256", webhook.SignGitHub(body, "webhook-secret"))
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	assertBuildRunCount(t, k8sClient, 0)
+}
+
+func TestGitHubWebhookRejectsStaleTimestamp(t *testing.T) {
+	pushedAt := time.Now().UTC().Add(-25 * time.Hour).Unix()
+	body := []byte(fmt.Sprintf(`{"ref":"refs/heads/main","after":"abcdef0123456789","repository":{"pushed_at":%d},"sender":{"login":"octocat"}}`, pushedAt))
+	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitHub)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github/sample-repository?namespace=ci", bytes.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "push")
+	req.Header.Set("X-GitHub-Delivery", "github-stale-1")
+	req.Header.Set("X-Hub-Signature-256", webhook.SignGitHub(body, "webhook-secret"))
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	assertBuildRunCount(t, k8sClient, 0)
 }
 
 func TestWebhookIdempotencyFallsBackToKubernetesLookup(t *testing.T) {
@@ -269,7 +430,7 @@ func TestWebhookRejectsOversizedBody(t *testing.T) {
 
 	server.Handler().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
+	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
 	var buildRuns cicdv1alpha1.BuildRunList
@@ -720,6 +881,47 @@ type fakeAuditRecorder struct {
 
 func (r *fakeAuditRecorder) Record(_ context.Context, event audit.Event) error {
 	r.events = append(r.events, event)
+	return nil
+}
+
+func hasAuditType(events []audit.Event, eventType string) bool {
+	for _, event := range events {
+		if event.Type == eventType {
+			return true
+		}
+	}
+	return false
+}
+
+func assertBuildRunCount(t *testing.T, k8sClient client.Client, want int) {
+	t.Helper()
+	var buildRuns cicdv1alpha1.BuildRunList
+	if err := k8sClient.List(context.Background(), &buildRuns, client.InNamespace("ci")); err != nil {
+		t.Fatalf("list BuildRuns: %v", err)
+	}
+	if len(buildRuns.Items) != want {
+		t.Fatalf("len(BuildRuns) = %d, want %d", len(buildRuns.Items), want)
+	}
+}
+
+type fakeWebhookIndex struct {
+	events map[string]audit.WebhookEvent
+}
+
+func newFakeWebhookIndex() *fakeWebhookIndex {
+	return &fakeWebhookIndex{events: map[string]audit.WebhookEvent{}}
+}
+
+func (i *fakeWebhookIndex) FindWebhookEvent(_ context.Context, provider, repository, eventID string) (*audit.WebhookEvent, error) {
+	event, ok := i.events[provider+"/"+repository+"/"+eventID]
+	if !ok {
+		return nil, nil
+	}
+	return &event, nil
+}
+
+func (i *fakeWebhookIndex) RecordWebhookEvent(_ context.Context, event audit.WebhookEvent) error {
+	i.events[event.Provider+"/"+event.Repository+"/"+event.EventID] = event
 	return nil
 }
 

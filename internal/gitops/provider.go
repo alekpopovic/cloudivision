@@ -255,11 +255,14 @@ func updateHelmValues(path string, image cicdv1alpha1.ImageRef) error {
 		values["image"] = imageValues
 	}
 	imageValues["repository"] = image.Repository
-	if image.Tag != "" {
-		imageValues["tag"] = image.Tag
-	}
 	if image.Digest != "" {
 		imageValues["digest"] = image.Digest
+		delete(imageValues, "tag")
+	} else {
+		delete(imageValues, "digest")
+		if image.Tag != "" {
+			imageValues["tag"] = image.Tag
+		}
 	}
 	return writeYAML(path, values)
 }
@@ -280,11 +283,12 @@ func updateKustomization(path string, image cicdv1alpha1.ImageRef) error {
 		if name == image.Repository || name == "" {
 			item["name"] = image.Repository
 			item["newName"] = image.Repository
-			if image.Tag != "" {
-				item["newTag"] = image.Tag
-			}
 			if image.Digest != "" {
 				item["digest"] = image.Digest
+				delete(item, "newTag")
+			} else if image.Tag != "" {
+				item["newTag"] = image.Tag
+				delete(item, "digest")
 			}
 			updated = true
 			break
@@ -292,11 +296,10 @@ func updateKustomization(path string, image cicdv1alpha1.ImageRef) error {
 	}
 	if !updated {
 		item := map[string]any{"name": image.Repository, "newName": image.Repository}
-		if image.Tag != "" {
-			item["newTag"] = image.Tag
-		}
 		if image.Digest != "" {
 			item["digest"] = image.Digest
+		} else if image.Tag != "" {
+			item["newTag"] = image.Tag
 		}
 		images = append(images, item)
 	}
@@ -417,11 +420,11 @@ func nestedMap(root map[string]any, keys ...string) (map[string]any, bool) {
 
 func imageString(image cicdv1alpha1.ImageRef) string {
 	value := image.Repository
+	if image.Digest != "" {
+		return value + "@" + image.Digest
+	}
 	if image.Tag != "" {
 		value += ":" + image.Tag
-	}
-	if image.Digest != "" {
-		value += "@" + image.Digest
 	}
 	return value
 }
