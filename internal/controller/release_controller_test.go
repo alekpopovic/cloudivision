@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/domain"
@@ -64,8 +65,8 @@ func TestReleaseReconcileUpdatesGitOpsOnce(t *testing.T) {
 	if updated.Status.GitCommit != "abc123" {
 		t.Fatalf("gitCommit = %q, want abc123", updated.Status.GitCommit)
 	}
-	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseDeploying {
-		t.Fatalf("phase = %q, want Deploying", updated.Status.Phase)
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseWaitingForSync {
+		t.Fatalf("phase = %q, want WaitingForSync", updated.Status.Phase)
 	}
 }
 
@@ -100,32 +101,114 @@ func TestReleaseCommitCheckpointPreventsDuplicateAfterStatusFailure(t *testing.T
 	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
 		t.Fatalf("get updated Release error = %v", err)
 	}
-	if updated.Status.GitCommit != "abc123" || updated.Status.Phase != cicdv1alpha1.ReleasePhaseDeploying {
+	if updated.Status.GitCommit != "abc123" || updated.Status.Phase != cicdv1alpha1.ReleasePhaseGitOpsChangeCommitted {
 		t.Fatalf("status after retry = %#v", updated.Status)
 	}
 }
 
-func TestReleaseTransientGitOpsFailureRequeues(t *testing.T) {
+func TestReleaseGitCommitFailureIsSpecific(t *testing.T) {
 	ctx := context.Background()
 	reconciler, release, provider := newReleaseReconciler(t)
 	provider.updateErr = errors.New("temporary network failure")
 
-	result, err := reconciler.Reconcile(ctx, releaseRequestFor(release))
+	_, err := reconciler.Reconcile(ctx, releaseRequestFor(release))
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
-	}
-	if result.RequeueAfter != externalStateRequeue {
-		t.Fatalf("RequeueAfter = %s, want %s", result.RequeueAfter, externalStateRequeue)
 	}
 	updated := &cicdv1alpha1.Release{}
 	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
 		t.Fatalf("get Release error = %v", err)
 	}
-	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseDeploying {
-		t.Fatalf("phase = %q, want retryable Deploying", updated.Status.Phase)
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailedGitCommit {
+		t.Fatalf("phase = %q, want FailedGitCommit", updated.Status.Phase)
 	}
-	if hasCondition(updated.Status.Conditions, domain.ConditionFailed) {
-		t.Fatalf("conditions = %#v, transient error must not be terminal", updated.Status.Conditions)
+	if !hasCondition(updated.Status.Conditions, domain.ConditionFailed) {
+		t.Fatalf("conditions = %#v, want terminal failure", updated.Status.Conditions)
+	}
+}
+
+func TestReleaseGitOperationFailuresUseSpecificPhases(t *testing.T) {
+	tests := []struct {
+		name      string
+		operation gitops.Operation
+		phase     cicdv1alpha1.ReleasePhase
+	}{
+		{name: "clone", operation: gitops.OperationClone, phase: cicdv1alpha1.ReleasePhaseFailedGitClone},
+		{name: "commit", operation: gitops.OperationCommit, phase: cicdv1alpha1.ReleasePhaseFailedGitCommit},
+		{name: "push", operation: gitops.OperationPush, phase: cicdv1alpha1.ReleasePhaseFailedGitPush},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			reconciler, release, provider := newReleaseReconciler(t)
+			provider.updateErr = &gitops.OperationError{Operation: test.operation, Err: errors.New("injected failure")}
+			recorder := &countingEventRecorder{reasons: map[string]int{}}
+			reconciler.Recorder = recorder
+
+			if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+				t.Fatalf("Reconcile() error = %v", err)
+			}
+			updated := &cicdv1alpha1.Release{}
+			if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
+				t.Fatalf("get Release error = %v", err)
+			}
+			if updated.Status.Phase != test.phase {
+				t.Fatalf("phase = %q, want %q", updated.Status.Phase, test.phase)
+			}
+			if updated.Status.Failure.Reason == "" || updated.Status.Failure.Message == "" {
+				t.Fatalf("failure = %#v, want preserved reason and message", updated.Status.Failure)
+			}
+			if recorder.reasons[updated.Status.Failure.Reason] != 1 {
+				t.Fatalf("events = %#v, want one failure event", recorder.reasons)
+			}
+		})
+	}
+}
+
+func TestReleaseDeploymentTimeoutIsTerminal(t *testing.T) {
+	ctx := context.Background()
+	reconciler, release, provider := newReleaseReconciler(t)
+	release.Spec.DeploymentTimeout = metav1.Duration{Duration: time.Minute}
+	if err := reconciler.Update(ctx, release); err != nil {
+		t.Fatalf("update Release error = %v", err)
+	}
+	release.Status.StartedAt = &metav1.Time{Time: time.Now().Add(-2 * time.Minute)}
+	release.Status.Phase = cicdv1alpha1.ReleasePhaseWaitingForSync
+	if err := reconciler.Status().Update(ctx, release); err != nil {
+		t.Fatalf("update Release status error = %v", err)
+	}
+
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	updated := &cicdv1alpha1.Release{}
+	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
+		t.Fatalf("get Release error = %v", err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseTimedOut {
+		t.Fatalf("phase = %q, want TimedOut", updated.Status.Phase)
+	}
+	if provider.updateCalls != 0 {
+		t.Fatalf("updateCalls = %d, want 0", provider.updateCalls)
+	}
+}
+
+func TestReleaseProviderStatusFailureIsSpecific(t *testing.T) {
+	ctx := context.Background()
+	reconciler, release, provider := newReleaseReconciler(t)
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("commit Reconcile() error = %v", err)
+	}
+	provider.statusErr = errors.New("provider API denied request")
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("status Reconcile() error = %v", err)
+	}
+	updated := &cicdv1alpha1.Release{}
+	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
+		t.Fatalf("get Release error = %v", err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailedProviderStatus {
+		t.Fatalf("phase = %q, want FailedProviderStatus", updated.Status.Phase)
 	}
 }
 
@@ -180,19 +263,22 @@ func TestReleaseReconcileDeploysAfterApproval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
-	if result.RequeueAfter != externalStateRequeue {
-		t.Fatalf("RequeueAfter = %s, want %s", result.RequeueAfter, externalStateRequeue)
+	if !result.Requeue {
+		t.Fatalf("result = %#v, want immediate requeue after commit", result)
 	}
 
 	updated := &cicdv1alpha1.Release{}
 	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
 		t.Fatalf("get Release error = %v", err)
 	}
-	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseDeploying {
-		t.Fatalf("phase = %q, want Deploying", updated.Status.Phase)
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseGitOpsChangeCommitted {
+		t.Fatalf("phase = %q, want GitOpsChangeCommitted", updated.Status.Phase)
 	}
 	if provider.updateCalls != 1 {
 		t.Fatalf("updateCalls = %d, want 1", provider.updateCalls)
+	}
+	if updated.Status.Approval.ApprovedBy != "alice" || updated.Status.Approval.ApprovedAt == nil {
+		t.Fatalf("approval status = %#v, want alice and timestamp", updated.Status.Approval)
 	}
 }
 
@@ -215,8 +301,8 @@ func TestReleaseReconcileRejectedReleaseDoesNotDeploy(t *testing.T) {
 	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
 		t.Fatalf("get Release error = %v", err)
 	}
-	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailed {
-		t.Fatalf("phase = %q, want Failed", updated.Status.Phase)
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailedApproval {
+		t.Fatalf("phase = %q, want FailedApproval", updated.Status.Phase)
 	}
 	if !hasConditionReason(updated.Status.Conditions, "Failed", "ReleaseRejected") {
 		t.Fatalf("conditions = %#v, want ReleaseRejected failure", updated.Status.Conditions)
@@ -250,8 +336,8 @@ func TestReleaseReconcileBlocksWhenSupplyChainPolicyIsNotSatisfied(t *testing.T)
 	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
 		t.Fatalf("get Release error = %v", err)
 	}
-	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailed {
-		t.Fatalf("phase = %q, want Failed", updated.Status.Phase)
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailedValidation {
+		t.Fatalf("phase = %q, want FailedValidation", updated.Status.Phase)
 	}
 	if !hasConditionReason(updated.Status.Conditions, "Failed", "PolicyNotSatisfied") {
 		t.Fatalf("conditions = %#v, want PolicyNotSatisfied failure", updated.Status.Conditions)
@@ -296,8 +382,8 @@ func TestReleaseReconcileAllowsSatisfiedSupplyChainPolicy(t *testing.T) {
 	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
 		t.Fatalf("get Release error = %v", err)
 	}
-	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseDeploying {
-		t.Fatalf("phase = %q, want Deploying", updated.Status.Phase)
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseGitOpsChangeCommitted {
+		t.Fatalf("phase = %q, want GitOpsChangeCommitted", updated.Status.Phase)
 	}
 	if provider.updateCalls != 1 {
 		t.Fatalf("updateCalls = %d, want 1", provider.updateCalls)
@@ -313,6 +399,9 @@ func TestReleaseReconcileMarksDeployedFromArgoCDStatus(t *testing.T) {
 
 	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
+	}
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("status Reconcile() error = %v", err)
 	}
 
 	updated := &cicdv1alpha1.Release{}
@@ -339,6 +428,13 @@ func TestReleaseReconcileKeepsDeployingWhenArgoCDUnavailable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
+	if result.RequeueAfter != 0 || !result.Requeue {
+		t.Fatalf("first result = %#v, want immediate requeue after commit", result)
+	}
+	result, err = reconciler.Reconcile(ctx, releaseRequestFor(release))
+	if err != nil {
+		t.Fatalf("status Reconcile() error = %v", err)
+	}
 	if result.RequeueAfter != externalStateRequeue {
 		t.Fatalf("RequeueAfter = %s, want %s", result.RequeueAfter, externalStateRequeue)
 	}
@@ -347,11 +443,11 @@ func TestReleaseReconcileKeepsDeployingWhenArgoCDUnavailable(t *testing.T) {
 	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
 		t.Fatalf("get Release error = %v", err)
 	}
-	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseDeploying {
-		t.Fatalf("phase = %q, want Deploying", updated.Status.Phase)
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseWaitingForSync {
+		t.Fatalf("phase = %q, want WaitingForSync", updated.Status.Phase)
 	}
-	if !hasCondition(updated.Status.Conditions, "ArgoCDStatusUnavailable") {
-		t.Fatalf("conditions = %#v, want ArgoCDStatusUnavailable", updated.Status.Conditions)
+	if !hasCondition(updated.Status.Conditions, "ProviderStatusUnavailable") {
+		t.Fatalf("conditions = %#v, want ProviderStatusUnavailable", updated.Status.Conditions)
 	}
 }
 
@@ -420,7 +516,8 @@ type fakeGitOpsProvider struct {
 
 type statusFailureClient struct {
 	client.Client
-	fail bool
+	fail         bool
+	passedUpdate bool
 }
 
 func (c *statusFailureClient) Status() client.SubResourceWriter {
@@ -438,7 +535,10 @@ func (w statusFailureWriter) Create(ctx context.Context, obj client.Object, subR
 
 func (w statusFailureWriter) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
 	if w.parent.fail {
-		return apiConflict(obj.GetName())
+		if w.parent.passedUpdate {
+			return apiConflict(obj.GetName())
+		}
+		w.parent.passedUpdate = true
 	}
 	return w.delegate.Update(ctx, obj, opts...)
 }

@@ -310,11 +310,11 @@ func (s Server) approveRelease(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if release.Status.Phase == cicdv1alpha1.ReleasePhaseDeployed || release.Status.Phase == cicdv1alpha1.ReleasePhaseDeploying {
+	if releasePromotionStarted(release.Status.Phase) {
 		s.writeError(w, conflict("release is already deploying or deployed"))
 		return
 	}
-	if release.Spec.Approval.RejectedBy != "" || release.Status.Phase == cicdv1alpha1.ReleasePhaseFailed {
+	if release.Spec.Approval.RejectedBy != "" || releasePhaseFailed(release.Status.Phase) {
 		s.writeError(w, conflict("rejected or failed release cannot be approved"))
 		return
 	}
@@ -361,11 +361,11 @@ func (s Server) rejectRelease(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if release.Status.Phase == cicdv1alpha1.ReleasePhaseDeployed || release.Status.Phase == cicdv1alpha1.ReleasePhaseDeploying {
+	if releasePromotionStarted(release.Status.Phase) {
 		s.writeError(w, conflict("release is already deploying or deployed"))
 		return
 	}
-	if release.Spec.Approval.RejectedBy != "" || release.Status.Phase == cicdv1alpha1.ReleasePhaseFailed {
+	if release.Spec.Approval.RejectedBy != "" || releasePhaseFailed(release.Status.Phase) {
 		s.writeError(w, conflict("release is already rejected or failed"))
 		return
 	}
@@ -393,9 +393,11 @@ func (s Server) rejectRelease(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, err)
 		return
 	}
-	release.Status.Phase = cicdv1alpha1.ReleasePhaseFailed
+	release.Status.Phase = cicdv1alpha1.ReleasePhaseFailedApproval
 	release.Status.ObservedGeneration = release.Generation
 	release.Status.CompletedAt = &now
+	release.Status.Approval = cicdv1alpha1.ReleaseApprovalStatus{RejectedBy: actor, RejectedAt: &now}
+	release.Status.Failure = cicdv1alpha1.FailureStatus{Reason: "ReleaseRejected", Message: "Release was rejected by " + actor + "."}
 	domain.SetCondition(&release.Status.Conditions, metav1.Condition{
 		Type:               domain.ConditionFailed,
 		Status:             metav1.ConditionTrue,
@@ -418,6 +420,29 @@ func (s Server) rejectRelease(w http.ResponseWriter, r *http.Request) {
 		Metadata: auditMetadata(map[string]string{"comment": req.Comment, "namespace": release.Namespace}),
 	})
 	writeJSON(w, http.StatusOK, releaseDTO(*release))
+}
+
+func releasePromotionStarted(phase cicdv1alpha1.ReleasePhase) bool {
+	switch phase {
+	case cicdv1alpha1.ReleasePhasePreparingGitOpsChange, cicdv1alpha1.ReleasePhaseGitOpsChangeCommitted,
+		cicdv1alpha1.ReleasePhaseWaitingForSync, cicdv1alpha1.ReleasePhaseDeployed,
+		cicdv1alpha1.ReleasePhaseRolledBack:
+		return true
+	default:
+		return false
+	}
+}
+
+func releasePhaseFailed(phase cicdv1alpha1.ReleasePhase) bool {
+	switch phase {
+	case cicdv1alpha1.ReleasePhaseFailedValidation, cicdv1alpha1.ReleasePhaseFailedApproval,
+		cicdv1alpha1.ReleasePhaseFailedGitClone, cicdv1alpha1.ReleasePhaseFailedGitCommit,
+		cicdv1alpha1.ReleasePhaseFailedGitPush, cicdv1alpha1.ReleasePhaseFailedProviderStatus,
+		cicdv1alpha1.ReleasePhaseTimedOut:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s Server) releaseApprovalActionInput(w http.ResponseWriter, r *http.Request) (*cicdv1alpha1.Release, ReleaseApprovalRequest, bool) {

@@ -73,6 +73,11 @@ spec:
               buildRunRef:
                 minLength: 1
                 type: string
+              deploymentTimeout:
+                default: 30m
+                description: DeploymentTimeout limits time spent preparing and waiting
+                  for GitOps deployment.
+                type: string
               environmentRef:
                 minLength: 1
                 type: string
@@ -108,6 +113,19 @@ spec:
                 && self.image.digest != ”)
           status:
             properties:
+              approval:
+                properties:
+                  approvedAt:
+                    format: date-time
+                    type: string
+                  approvedBy:
+                    type: string
+                  rejectedAt:
+                    format: date-time
+                    type: string
+                  rejectedBy:
+                    type: string
+                type: object
               completedAt:
                 format: date-time
                 type: string
@@ -178,6 +196,13 @@ spec:
                   syncStatus:
                     type: string
                 type: object
+              failure:
+                properties:
+                  message:
+                    type: string
+                  reason:
+                    type: string
+                type: object
               gitCommit:
                 type: string
               observedGeneration:
@@ -187,10 +212,18 @@ spec:
                 enum:
                 - Pending
                 - AwaitingApproval
-                - Deploying
+                - PreparingGitOpsChange
+                - GitOpsChangeCommitted
+                - WaitingForSync
                 - Deployed
-                - Failed
                 - RolledBack
+                - FailedValidation
+                - FailedApproval
+                - FailedGitClone
+                - FailedGitCommit
+                - FailedGitPush
+                - FailedProviderStatus
+                - TimedOut
                 type: string
               startedAt:
                 format: date-time

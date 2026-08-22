@@ -15,6 +15,23 @@ import (
 
 var ErrDeploymentStatusUnavailable = errors.New("deployment status unavailable")
 
+type Operation string
+
+const (
+	OperationClone  Operation = "clone"
+	OperationCommit Operation = "commit"
+	OperationPush   Operation = "push"
+)
+
+// OperationError identifies the Git stage that failed without exposing credentials.
+type OperationError struct {
+	Operation Operation
+	Err       error
+}
+
+func (e *OperationError) Error() string { return fmt.Sprintf("git %s failed: %v", e.Operation, e.Err) }
+func (e *OperationError) Unwrap() error { return e.Err }
+
 type Provider interface {
 	UpdateImage(ctx context.Context, req UpdateImageRequest) (*UpdateImageResult, error)
 	ReadDeploymentStatus(ctx context.Context, req DeploymentStatusRequest) (*DeploymentStatus, error)
@@ -131,27 +148,27 @@ func (p GitRepositoryProvider) UpdateImage(ctx context.Context, req UpdateImageR
 
 	repoDir := filepath.Join(workdir, "repo")
 	if err := gitClient.Clone(ctx, req.RepositoryURL, repoDir); err != nil {
-		return nil, err
+		return nil, &OperationError{Operation: OperationClone, Err: err}
 	}
 	if err := gitClient.CheckoutBranch(ctx, repoDir, req.Branch); err != nil {
-		return nil, err
+		return nil, &OperationError{Operation: OperationClone, Err: err}
 	}
 	if err := updateImageFiles(repoDir, req.Path, strategy, req.Image); err != nil {
-		return nil, err
+		return nil, &OperationError{Operation: OperationCommit, Err: err}
 	}
 	if err := gitClient.AddAll(ctx, repoDir); err != nil {
-		return nil, err
+		return nil, &OperationError{Operation: OperationCommit, Err: err}
 	}
 	message := fmt.Sprintf("cloudivision: release %s image %s", req.ReleaseName, imageString(req.Image))
 	if err := gitClient.Commit(ctx, repoDir, message); err != nil {
-		return nil, err
+		return nil, &OperationError{Operation: OperationCommit, Err: err}
 	}
 	commit, err := gitClient.Head(ctx, repoDir)
 	if err != nil {
-		return nil, err
+		return nil, &OperationError{Operation: OperationCommit, Err: err}
 	}
 	if err := gitClient.Push(ctx, repoDir, req.Branch); err != nil {
-		return nil, err
+		return nil, &OperationError{Operation: OperationPush, Err: err}
 	}
 	return &UpdateImageResult{Commit: commit}, nil
 }

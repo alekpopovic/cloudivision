@@ -123,12 +123,20 @@ const (
 type ReleasePhase string
 
 const (
-	ReleasePhasePending          ReleasePhase = "Pending"
-	ReleasePhaseAwaitingApproval ReleasePhase = "AwaitingApproval"
-	ReleasePhaseDeploying        ReleasePhase = "Deploying"
-	ReleasePhaseDeployed         ReleasePhase = "Deployed"
-	ReleasePhaseFailed           ReleasePhase = "Failed"
-	ReleasePhaseRolledBack       ReleasePhase = "RolledBack"
+	ReleasePhasePending               ReleasePhase = "Pending"
+	ReleasePhaseAwaitingApproval      ReleasePhase = "AwaitingApproval"
+	ReleasePhasePreparingGitOpsChange ReleasePhase = "PreparingGitOpsChange"
+	ReleasePhaseGitOpsChangeCommitted ReleasePhase = "GitOpsChangeCommitted"
+	ReleasePhaseWaitingForSync        ReleasePhase = "WaitingForSync"
+	ReleasePhaseDeployed              ReleasePhase = "Deployed"
+	ReleasePhaseRolledBack            ReleasePhase = "RolledBack"
+	ReleasePhaseFailedValidation      ReleasePhase = "FailedValidation"
+	ReleasePhaseFailedApproval        ReleasePhase = "FailedApproval"
+	ReleasePhaseFailedGitClone        ReleasePhase = "FailedGitClone"
+	ReleasePhaseFailedGitCommit       ReleasePhase = "FailedGitCommit"
+	ReleasePhaseFailedGitPush         ReleasePhase = "FailedGitPush"
+	ReleasePhaseFailedProviderStatus  ReleasePhase = "FailedProviderStatus"
+	ReleasePhaseTimedOut              ReleasePhase = "TimedOut"
 )
 
 type ReleaseStrategy string
@@ -594,6 +602,9 @@ type ReleaseSpec struct {
 	Approval    ReleaseApprovalSpec `json:"approval,omitempty"`
 	// +kubebuilder:validation:Enum=gitops
 	Strategy ReleaseStrategy `json:"strategy"`
+	// DeploymentTimeout limits time spent preparing and waiting for GitOps deployment.
+	// +kubebuilder:default:="30m"
+	DeploymentTimeout metav1.Duration `json:"deploymentTimeout,omitempty"`
 }
 
 type ReleaseDeploymentStatus struct {
@@ -603,8 +614,15 @@ type ReleaseDeploymentStatus struct {
 	HealthStatus    string `json:"healthStatus,omitempty"`
 }
 
+type ReleaseApprovalStatus struct {
+	ApprovedBy string       `json:"approvedBy,omitempty"`
+	ApprovedAt *metav1.Time `json:"approvedAt,omitempty"`
+	RejectedBy string       `json:"rejectedBy,omitempty"`
+	RejectedAt *metav1.Time `json:"rejectedAt,omitempty"`
+}
+
 type ReleaseStatus struct {
-	// +kubebuilder:validation:Enum=Pending;AwaitingApproval;Deploying;Deployed;Failed;RolledBack
+	// +kubebuilder:validation:Enum=Pending;AwaitingApproval;PreparingGitOpsChange;GitOpsChangeCommitted;WaitingForSync;Deployed;RolledBack;FailedValidation;FailedApproval;FailedGitClone;FailedGitCommit;FailedGitPush;FailedProviderStatus;TimedOut
 	Phase              ReleasePhase       `json:"phase,omitempty"`
 	Conditions         []metav1.Condition `json:"conditions,omitempty"`
 	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
@@ -615,6 +633,8 @@ type ReleaseStatus struct {
 	// +optional
 	GitCommit  string                  `json:"gitCommit,omitempty"`
 	Deployment ReleaseDeploymentStatus `json:"deployment,omitempty"`
+	Approval   ReleaseApprovalStatus   `json:"approval,omitempty"`
+	Failure    FailureStatus           `json:"failure,omitempty"`
 }
 
 // +kubebuilder:object:root=true

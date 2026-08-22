@@ -22,6 +22,7 @@ import (
 const (
 	gitCommitCheckpointAnnotation = "cloudivision.io/gitops-commit"
 	externalStateRequeue          = 30 * time.Second
+	defaultDeploymentTimeout      = 30 * time.Minute
 )
 
 // ReleaseReconciler reconciles Release resources.
@@ -29,6 +30,7 @@ type ReleaseReconciler struct {
 	client.Client
 	GitOpsProvider gitops.Provider
 	StatusReader   gitops.StatusReader
+	Recorder       EventRecorder
 }
 
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=releases,verbs=get;list;watch;create;update;patch;delete
@@ -61,34 +63,31 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 		"buildRun", release.Spec.BuildRunRef,
 		"correlationId", release.Annotations[observability.CorrelationIDAnno],
 	)
-	if release.Status.Phase == cicdv1alpha1.ReleasePhaseDeployed || release.Status.Phase == cicdv1alpha1.ReleasePhaseRolledBack {
+	if releasePhaseTerminal(release.Status.Phase) {
 		return ctrl.Result{}, nil
 	}
 
 	if release.Spec.Approval.RejectedBy != "" {
-		if release.Status.Phase == cicdv1alpha1.ReleasePhaseFailed && hasConditionReason(release.Status.Conditions, domain.ConditionFailed, "ReleaseRejected") {
-			return ctrl.Result{}, nil
-		}
-		return ctrl.Result{}, r.markFailed(ctx, release, "ReleaseRejected", fmt.Sprintf("Release was rejected by %s.", release.Spec.Approval.RejectedBy))
-	}
-	if release.Status.Phase == cicdv1alpha1.ReleasePhaseFailed &&
-		!hasConditionReason(release.Status.Conditions, domain.ConditionFailed, "GitOpsUpdateFailed") &&
-		!hasConditionReason(release.Status.Conditions, domain.ConditionFailed, "ArgoCDStatusFailed") {
-		return ctrl.Result{}, nil
+		release.Status.Approval = approvalStatus(release)
+		return ctrl.Result{}, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedApproval, "ReleaseRejected", fmt.Sprintf("Release was rejected by %s.", release.Spec.Approval.RejectedBy))
 	}
 
 	buildRun, err := r.loadBuildRun(ctx, release)
 	if err != nil {
-		return ctrl.Result{}, r.markFailed(ctx, release, "BuildRunUnavailable", err.Error())
+		return ctrl.Result{}, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedValidation, "BuildRunUnavailable", err.Error())
 	}
 
 	environment, err := r.loadEnvironment(ctx, release)
 	if err != nil {
-		return ctrl.Result{}, r.markFailed(ctx, release, "EnvironmentUnavailable", err.Error())
+		return ctrl.Result{}, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedValidation, "EnvironmentUnavailable", err.Error())
 	}
 
 	if releaseRequiresApproval(release, environment) && release.Spec.Approval.ApprovedBy == "" {
 		return ctrl.Result{}, r.markAwaitingApproval(ctx, release)
+	}
+	release.Status.Approval = approvalStatus(release)
+	if deploymentTimedOut(release, time.Now()) {
+		return ctrl.Result{}, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseTimedOut, "DeploymentTimedOut", "Release exceeded its configured deployment timeout.")
 	}
 
 	blocked, err := r.enforceEnvironmentPolicy(ctx, release, buildRun, environment)
@@ -101,6 +100,9 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 		commit = release.Annotations[gitCommitCheckpointAnnotation]
 	}
 	if commit == "" {
+		if err := r.markPreparingGitOpsChange(ctx, release); err != nil {
+			return ctrl.Result{}, err
+		}
 		provider := r.GitOpsProvider
 		if provider == nil {
 			provider = gitops.GitRepositoryProvider{}
@@ -114,29 +116,51 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 			Image:         release.Spec.Image,
 		})
 		if err != nil {
-			if statusErr := r.markExternalRetry(ctx, release, "GitOpsUpdateFailed", err.Error()); statusErr != nil {
-				return ctrl.Result{}, statusErr
-			}
-			return ctrl.Result{RequeueAfter: externalStateRequeue}, nil
+			phase, reason := gitFailure(err)
+			return ctrl.Result{}, r.markFailed(ctx, release, phase, reason, err.Error())
 		}
 		if result == nil || result.Commit == "" {
-			return ctrl.Result{}, fmt.Errorf("GitOps provider returned an empty commit")
+			return ctrl.Result{}, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedGitCommit, "EmptyGitCommit", "GitOps provider returned an empty commit.")
 		}
 		commit = result.Commit
 		if err := r.persistGitCommitCheckpoint(ctx, release, commit); err != nil {
 			return ctrl.Result{}, err
 		}
 		logger.Info("updated GitOps repository", "commit", commit)
+		release.Status.GitCommit = commit
+		if err := r.markGitOpsChangeCommitted(ctx, release); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
 	}
 	release.Status.GitCommit = commit
 
-	if err := r.markDeploying(ctx, release); err != nil {
+	if release.Status.Phase == cicdv1alpha1.ReleasePhasePreparingGitOpsChange || release.Status.Phase == cicdv1alpha1.ReleasePhasePending || release.Status.Phase == "" {
+		if err := r.markGitOpsChangeCommitted(ctx, release); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
+	}
+	if err := r.markWaitingForSync(ctx, release); err != nil {
 		return ctrl.Result{}, err
 	}
-	if environment.Spec.GitOps.Provider == cicdv1alpha1.GitOpsProviderArgoCD {
-		return r.syncArgoCDStatus(ctx, release, environment)
+	if environment.Spec.GitOps.Provider == cicdv1alpha1.GitOpsProviderGeneric {
+		return ctrl.Result{}, r.markDeployed(ctx, release, "GitOpsCommitApplied", "Generic GitOps policy treats a committed change as deployed.")
 	}
-	return ctrl.Result{}, nil
+	return r.syncProviderStatus(ctx, release, environment)
+}
+
+func releasePhaseTerminal(phase cicdv1alpha1.ReleasePhase) bool {
+	switch phase {
+	case cicdv1alpha1.ReleasePhaseDeployed, cicdv1alpha1.ReleasePhaseRolledBack,
+		cicdv1alpha1.ReleasePhaseFailedValidation, cicdv1alpha1.ReleasePhaseFailedApproval,
+		cicdv1alpha1.ReleasePhaseFailedGitClone, cicdv1alpha1.ReleasePhaseFailedGitCommit,
+		cicdv1alpha1.ReleasePhaseFailedGitPush, cicdv1alpha1.ReleasePhaseFailedProviderStatus,
+		cicdv1alpha1.ReleasePhaseTimedOut:
+		return true
+	default:
+		return false
+	}
 }
 
 func releaseRequiresApproval(release *cicdv1alpha1.Release, environment *cicdv1alpha1.Environment) bool {
@@ -150,6 +174,7 @@ func (r *ReleaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.StatusReader == nil {
 		r.StatusReader = gitops.ArgoCDStatusReader{Client: mgr.GetClient()}
 	}
+	r.Recorder = mgr.GetEventRecorderFor("release-controller")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cicdv1alpha1.Release{}).
 		Complete(r)
@@ -180,13 +205,13 @@ func (r *ReleaseReconciler) loadEnvironment(ctx context.Context, release *cicdv1
 func (r *ReleaseReconciler) enforceEnvironmentPolicy(ctx context.Context, release *cicdv1alpha1.Release, buildRun *cicdv1alpha1.BuildRun, environment *cicdv1alpha1.Environment) (bool, error) {
 	policy := environment.Spec.Policy
 	if policy.RequireSignedImages && buildRun.Status.SupplyChain.SignatureRef == "" {
-		return true, r.markFailed(ctx, release, "PolicyNotSatisfied", fmt.Sprintf("Environment %q requires signed images, but BuildRun %q has no signature reference.", environment.Name, buildRun.Name))
+		return true, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedValidation, "PolicyNotSatisfied", fmt.Sprintf("Environment %q requires signed images, but BuildRun %q has no signature reference.", environment.Name, buildRun.Name))
 	}
 	if policy.RequireSBOM && buildRun.Status.SupplyChain.SBOMPath == "" && buildRun.Status.SupplyChain.SBOMDigest == "" {
-		return true, r.markFailed(ctx, release, "PolicyNotSatisfied", fmt.Sprintf("Environment %q requires an SBOM, but BuildRun %q has no SBOM metadata.", environment.Name, buildRun.Name))
+		return true, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedValidation, "PolicyNotSatisfied", fmt.Sprintf("Environment %q requires an SBOM, but BuildRun %q has no SBOM metadata.", environment.Name, buildRun.Name))
 	}
 	if policy.BlockCriticalVulnerabilities && buildRun.Status.SupplyChain.ScannerResultsRef == "" {
-		return true, r.markFailed(ctx, release, "PolicyNotSatisfied", fmt.Sprintf("Environment %q blocks critical vulnerabilities, but BuildRun %q has no scanner results reference.", environment.Name, buildRun.Name))
+		return true, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedValidation, "PolicyNotSatisfied", fmt.Sprintf("Environment %q blocks critical vulnerabilities, but BuildRun %q has no scanner results reference.", environment.Name, buildRun.Name))
 	}
 	return false, nil
 }
@@ -200,6 +225,7 @@ func (r *ReleaseReconciler) markAwaitingApproval(ctx context.Context, release *c
 	now := metav1.Now()
 	release.Status.Phase = cicdv1alpha1.ReleasePhaseAwaitingApproval
 	release.Status.ObservedGeneration = release.Generation
+	release.Status.Approval = approvalStatus(release)
 	domain.SetCondition(&release.Status.Conditions, metav1.Condition{
 		Type:               "AwaitingApproval",
 		Status:             metav1.ConditionTrue,
@@ -211,30 +237,63 @@ func (r *ReleaseReconciler) markAwaitingApproval(ctx context.Context, release *c
 	return r.updateReleaseStatus(ctx, release)
 }
 
-func (r *ReleaseReconciler) markDeploying(ctx context.Context, release *cicdv1alpha1.Release) error {
-	if release.Status.Phase == cicdv1alpha1.ReleasePhaseDeploying &&
+func (r *ReleaseReconciler) markPreparingGitOpsChange(ctx context.Context, release *cicdv1alpha1.Release) error {
+	if release.Status.Phase == cicdv1alpha1.ReleasePhasePreparingGitOpsChange &&
 		release.Status.ObservedGeneration == release.Generation &&
-		conditionCurrent(release.Status.Conditions, "GitOpsUpdated", release.Generation) {
+		conditionCurrent(release.Status.Conditions, "GitOpsPrepared", release.Generation) {
 		return nil
 	}
 	now := metav1.Now()
-	release.Status.Phase = cicdv1alpha1.ReleasePhaseDeploying
+	release.Status.Phase = cicdv1alpha1.ReleasePhasePreparingGitOpsChange
 	release.Status.ObservedGeneration = release.Generation
 	if release.Status.StartedAt == nil {
 		release.Status.StartedAt = &now
 	}
 	domain.SetCondition(&release.Status.Conditions, metav1.Condition{
-		Type:               "GitOpsUpdated",
+		Type:               "GitOpsPrepared",
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: release.Generation,
-		Reason:             "GitCommitCreated",
-		Message:            "GitOps repository has been updated.",
+		Reason:             "ConfigurationValidated",
+		Message:            "Release image, environment, and GitOps configuration are valid.",
 		LastTransitionTime: now,
 	})
 	return r.updateReleaseStatus(ctx, release)
 }
 
-func (r *ReleaseReconciler) markDeployed(ctx context.Context, release *cicdv1alpha1.Release) error {
+func (r *ReleaseReconciler) markGitOpsChangeCommitted(ctx context.Context, release *cicdv1alpha1.Release) error {
+	now := metav1.Now()
+	release.Status.Phase = cicdv1alpha1.ReleasePhaseGitOpsChangeCommitted
+	release.Status.ObservedGeneration = release.Generation
+	domain.SetCondition(&release.Status.Conditions, metav1.Condition{
+		Type:               "GitOpsChangeCommitted",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: release.Generation,
+		Reason:             "GitCommitPushed",
+		Message:            "GitOps change was committed and pushed.",
+		LastTransitionTime: now,
+	})
+	return r.updateReleaseStatus(ctx, release)
+}
+
+func (r *ReleaseReconciler) markWaitingForSync(ctx context.Context, release *cicdv1alpha1.Release) error {
+	if release.Status.Phase == cicdv1alpha1.ReleasePhaseWaitingForSync {
+		return nil
+	}
+	now := metav1.Now()
+	release.Status.Phase = cicdv1alpha1.ReleasePhaseWaitingForSync
+	release.Status.ObservedGeneration = release.Generation
+	domain.SetCondition(&release.Status.Conditions, metav1.Condition{
+		Type:               "DeploymentReady",
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: release.Generation,
+		Reason:             "WaitingForProviderSync",
+		Message:            "GitOps change is waiting for provider sync and health confirmation.",
+		LastTransitionTime: now,
+	})
+	return r.updateReleaseStatus(ctx, release)
+}
+
+func (r *ReleaseReconciler) markDeployed(ctx context.Context, release *cicdv1alpha1.Release, reason, message string) error {
 	now := metav1.Now()
 	release.Status.Phase = cicdv1alpha1.ReleasePhaseDeployed
 	release.Status.CompletedAt = &now
@@ -243,23 +302,24 @@ func (r *ReleaseReconciler) markDeployed(ctx context.Context, release *cicdv1alp
 		Type:               domain.ConditionReady,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: release.Generation,
-		Reason:             "ApplicationHealthy",
-		Message:            "GitOps application is synced and healthy.",
+		Reason:             reason,
+		Message:            message,
 		LastTransitionTime: now,
 	})
 	return r.updateReleaseStatus(ctx, release)
 }
 
-func (r *ReleaseReconciler) markFailed(ctx context.Context, release *cicdv1alpha1.Release, reason, message string) error {
-	if release.Status.Phase == cicdv1alpha1.ReleasePhaseFailed &&
+func (r *ReleaseReconciler) markFailed(ctx context.Context, release *cicdv1alpha1.Release, phase cicdv1alpha1.ReleasePhase, reason, message string) error {
+	if release.Status.Phase == phase &&
 		release.Status.ObservedGeneration == release.Generation &&
 		hasConditionReason(release.Status.Conditions, domain.ConditionFailed, reason) {
 		return nil
 	}
 	now := metav1.Now()
-	release.Status.Phase = cicdv1alpha1.ReleasePhaseFailed
+	release.Status.Phase = phase
 	release.Status.ObservedGeneration = release.Generation
 	release.Status.CompletedAt = &now
+	release.Status.Failure = cicdv1alpha1.FailureStatus{Reason: reason, Message: message}
 	domain.SetCondition(&release.Status.Conditions, metav1.Condition{
 		Type:               domain.ConditionFailed,
 		Status:             metav1.ConditionTrue,
@@ -268,24 +328,9 @@ func (r *ReleaseReconciler) markFailed(ctx context.Context, release *cicdv1alpha
 		Message:            message,
 		LastTransitionTime: now,
 	})
-	return r.updateReleaseStatus(ctx, release)
-}
-
-func (r *ReleaseReconciler) markExternalRetry(ctx context.Context, release *cicdv1alpha1.Release, reason, message string) error {
-	now := metav1.Now()
-	release.Status.Phase = cicdv1alpha1.ReleasePhaseDeploying
-	release.Status.ObservedGeneration = release.Generation
-	if release.Status.StartedAt == nil {
-		release.Status.StartedAt = &now
+	if r.Recorder != nil {
+		r.Recorder.Event(release, "Warning", reason, message)
 	}
-	domain.SetCondition(&release.Status.Conditions, metav1.Condition{
-		Type:               "GitOpsReady",
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: release.Generation,
-		Reason:             reason,
-		Message:            message,
-		LastTransitionTime: now,
-	})
 	return r.updateReleaseStatus(ctx, release)
 }
 
@@ -317,7 +362,7 @@ func (r *ReleaseReconciler) persistGitCommitCheckpoint(ctx context.Context, rele
 	})
 }
 
-func (r *ReleaseReconciler) syncArgoCDStatus(ctx context.Context, release *cicdv1alpha1.Release, environment *cicdv1alpha1.Environment) (ctrl.Result, error) {
+func (r *ReleaseReconciler) syncProviderStatus(ctx context.Context, release *cicdv1alpha1.Release, environment *cicdv1alpha1.Environment) (ctrl.Result, error) {
 	reader := r.StatusReader
 	if reader == nil {
 		reader = gitops.ArgoCDStatusReader{Client: r.Client}
@@ -330,21 +375,18 @@ func (r *ReleaseReconciler) syncArgoCDStatus(ctx context.Context, release *cicdv
 	if err != nil {
 		if errors.Is(err, gitops.ErrDeploymentStatusUnavailable) {
 			domain.SetCondition(&release.Status.Conditions, metav1.Condition{
-				Type:               "ArgoCDStatusUnavailable",
+				Type:               "ProviderStatusUnavailable",
 				Status:             metav1.ConditionTrue,
 				ObservedGeneration: release.Generation,
 				Reason:             "ApplicationUnavailable",
-				Message:            "Argo CD Application status is not available; keeping release in Deploying phase.",
+				Message:            "GitOps provider status is not available; keeping release in WaitingForSync phase.",
 			})
 			if updateErr := r.updateReleaseStatus(ctx, release); updateErr != nil {
 				return ctrl.Result{}, updateErr
 			}
 			return ctrl.Result{RequeueAfter: externalStateRequeue}, nil
 		}
-		if updateErr := r.markExternalRetry(ctx, release, "ArgoCDStatusFailed", err.Error()); updateErr != nil {
-			return ctrl.Result{}, updateErr
-		}
-		return ctrl.Result{RequeueAfter: externalStateRequeue}, nil
+		return ctrl.Result{}, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedProviderStatus, "ProviderStatusFailed", err.Error())
 	}
 	release.Status.Deployment = cicdv1alpha1.ReleaseDeploymentStatus{
 		Provider:        string(environment.Spec.GitOps.Provider),
@@ -353,12 +395,45 @@ func (r *ReleaseReconciler) syncArgoCDStatus(ctx context.Context, release *cicdv
 		HealthStatus:    status.HealthStatus,
 	}
 	if status.SyncStatus == "Synced" && status.HealthStatus == "Healthy" {
-		return ctrl.Result{}, r.markDeployed(ctx, release)
+		return ctrl.Result{}, r.markDeployed(ctx, release, "ApplicationHealthy", "GitOps application is synced and healthy.")
 	}
 	if err := r.updateReleaseStatus(ctx, release); err != nil {
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{RequeueAfter: externalStateRequeue}, nil
+}
+
+func approvalStatus(release *cicdv1alpha1.Release) cicdv1alpha1.ReleaseApprovalStatus {
+	return cicdv1alpha1.ReleaseApprovalStatus{
+		ApprovedBy: release.Spec.Approval.ApprovedBy,
+		ApprovedAt: release.Spec.Approval.ApprovedAt,
+		RejectedBy: release.Spec.Approval.RejectedBy,
+		RejectedAt: release.Spec.Approval.RejectedAt,
+	}
+}
+
+func deploymentTimedOut(release *cicdv1alpha1.Release, now time.Time) bool {
+	if release.Status.StartedAt == nil {
+		return false
+	}
+	timeout := release.Spec.DeploymentTimeout.Duration
+	if timeout <= 0 {
+		timeout = defaultDeploymentTimeout
+	}
+	return !now.Before(release.Status.StartedAt.Add(timeout))
+}
+
+func gitFailure(err error) (cicdv1alpha1.ReleasePhase, string) {
+	operationError := &gitops.OperationError{}
+	if errors.As(err, &operationError) {
+		switch operationError.Operation {
+		case gitops.OperationClone:
+			return cicdv1alpha1.ReleasePhaseFailedGitClone, "GitCloneFailed"
+		case gitops.OperationPush:
+			return cicdv1alpha1.ReleasePhaseFailedGitPush, "GitPushFailed"
+		}
+	}
+	return cicdv1alpha1.ReleasePhaseFailedGitCommit, "GitCommitFailed"
 }
 
 func (r *ReleaseReconciler) updateReleaseStatus(ctx context.Context, release *cicdv1alpha1.Release) error {

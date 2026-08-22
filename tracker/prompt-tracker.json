@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-22T00:01:52Z",
-  "last_executed_prompt": 27,
-  "next_prompt": 28,
+  "updated_at": "2026-08-22T00:08:58Z",
+  "last_executed_prompt": 28,
+  "next_prompt": 29,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -269,9 +269,9 @@
       "title": "Release State Machine Hardening",
       "phase": "Release / GitOps",
       "file": "prompts/28-release-state-machine-hardening.md",
-      "status": "pending",
-      "executed_at": null,
-      "notes": ""
+      "status": "done",
+      "executed_at": "2026-08-22T00:08:58Z",
+      "notes": "Hardened Release phases, idempotent Git checkpointing, explicit Git/provider failures, deployment timeout, approval metadata, events, CRDs, tests, and lifecycle docs."
     },
     {
       "id": 29,

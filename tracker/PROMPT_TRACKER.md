@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-22T00:01:52Z`
-Last executed prompt: `27`
-Next prompt: `28`
+Updated at: `2026-08-22T00:08:58Z`
+Last executed prompt: `28`
+Next prompt: `29`
 
 ## How to update
 
@@ -56,7 +56,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 25 | done | API Evolution | CRD Validation Hardening With Defaults and CEL | `prompts/25-crd-validation-hardening-with-defaults-and-cel.md` | CRD required/default/enum/CEL validation hardened; generated bases and Helm bundle synchronized; invalid admission fixtures and schema drift tests added. |
 | 26 | done | Reliability | Controller Reliability and Conflict Handling | `prompts/26-controller-reliability-and-conflict-handling.md` | Controllers hardened for idempotency, conflict-safe conditions, child recreation, retryable external state and GitOps commit checkpointing; finalizer decisions documented and tests expanded. |
 | 27 | done | Security | Runner Threat Model and Security Conformance | `prompts/27-runner-threat-model-and-security-conformance.md` | Added runner threat model and rendered Helm security conformance checks for privileged containers, docker.sock, hostPath, and broad RBAC. |
-| 28 | pending | Release / GitOps | Release State Machine Hardening | `prompts/28-release-state-machine-hardening.md` |  |
+| 28 | done | Release / GitOps | Release State Machine Hardening | `prompts/28-release-state-machine-hardening.md` | Hardened Release phases, idempotent Git checkpointing, explicit Git/provider failures, deployment timeout, approval metadata, events, CRDs, tests, and lifecycle docs. |
 | 29 | pending | Release / GitOps | PR-Based GitOps Promotion | `prompts/29-pr-based-gitops-promotion.md` |  |
 | 30 | pending | Supply Chain | Real Supply Chain Adapters | `prompts/30-real-supply-chain-adapters.md` |  |
 | 31 | pending | Frontend | Angular UX Upgrade for Real CI/CD Debugging | `prompts/31-angular-ux-upgrade-for-real-ci-cd-debugging.md` |  |

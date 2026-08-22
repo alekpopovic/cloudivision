@@ -322,8 +322,8 @@ func TestRejectReleaseMarksFailedAndRecordsAudit(t *testing.T) {
 	if updated.Spec.Approval.RejectedBy != "dev-user@localhost" || updated.Spec.Approval.RejectedAt == nil {
 		t.Fatalf("approval = %#v, want rejected by dev-user@localhost", updated.Spec.Approval)
 	}
-	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailed {
-		t.Fatalf("phase = %q, want Failed", updated.Status.Phase)
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailedApproval {
+		t.Fatalf("phase = %q, want FailedApproval", updated.Status.Phase)
 	}
 	if len(recorder.events) != 1 || recorder.events[0].Type != "ReleaseRejected" || recorder.events[0].Actor != "dev-user@localhost" {
 		t.Fatalf("audit events = %#v", recorder.events)
