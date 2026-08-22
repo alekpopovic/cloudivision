@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-22T02:13:33Z`
+Updated at: `2026-08-22T18:41:49Z`
 Last executed prompt: `41`
-Next prompt: `None`
+Next prompt: `42`
 
 ## How to update
 
@@ -70,3 +70,37 @@ Replace `21` with the last prompt that was successfully executed.
 | 39 | done | Release | Public Release Process and v0.1.0 | `prompts/39-public-release-process-and-v0-1-0.md` | Added semver release metadata, changelog/checklist, local artifact builder, GHCR image/signing workflow, checksums, Helm/CRD packaging, and public registry defaults. Local 0.1.0 artifact and checksum smoke test passed; Syft/Cosign were unavailable locally and explicitly skipped. |
 | 40 | done | Release | v0.1 Final Gate: Hardening Sprint Review | `prompts/40-v0-1-final-gate-hardening-sprint-review.md` | Final gate passed on a clean kind cluster after safe CRD, Helm, web, status-schema, fixture, API RBAC, upgrade-harness, and Angular dependency fixes. Go/vet/web/Helm/security passed; conformance 5/5 with one external GitOps skip, live upgrade passed, limited scale 10/10; recommendation is ship v0.1.0 alpha with known issues. |
 | 41 | done | Roadmap | v0.2 Roadmap Planning | `prompts/41-v0-2-roadmap-planning.md` | Created a focused v0.2 roadmap and ordered backlog tied to the v0.1 final-gate gaps: authenticated immutable image builds, durable GitHub webhooks, real GitOps/Argo convergence, stage-oriented Angular UX, security closure, cross-version upgrade, dependency triage, and measured scale. Deferred v0.3 and enterprise scope is explicit. |
+| 42 | pending | Roadmap | v0.2 Implementation Plan | `prompts/42-v0-2-implementation-plan.md` |  |
+| 43 | pending | Build Execution | BuildKit Builder Hardening | `prompts/43-buildkit-builder-hardening.md` |  |
+| 44 | pending | Providers | Registry Provider and Credentials | `prompts/44-registry-provider-and-credentials.md` |  |
+| 45 | pending | Supply Chain | Image Tagging, Digest and Immutability | `prompts/45-image-tagging-digest-and-immutability.md` |  |
+| 46 | pending | API | GitHub Webhook Production Readiness | `prompts/46-github-webhook-production-readiness.md` |  |
+| 47 | pending | API | Branch, Tag and Pull Request Event Filters | `prompts/47-branch-tag-and-pull-request-event-filters.md` |  |
+| 48 | pending | Build Execution | BuildRun Retry, Cancel and Rerun | `prompts/48-buildrun-retry-cancel-and-rerun.md` |  |
+| 49 | pending | Storage | Log Storage Abstraction | `prompts/49-log-storage-abstraction.md` |  |
+| 50 | pending | Storage | Artifact Storage | `prompts/50-artifact-storage.md` |  |
+| 51 | pending | Scale | Project Quotas and Runner Concurrency | `prompts/51-project-quotas-and-runner-concurrency.md` |  |
+| 52 | pending | API | API Pagination and Server-Side Filtering | `prompts/52-api-pagination-and-server-side-filtering.md` |  |
+| 53 | pending | Build Execution | Runner Workspace and Dependency Cache | `prompts/53-runner-workspace-and-dependency-cache.md` |  |
+| 54 | pending | Release / GitOps | GitOps Helm Values Production Flow | `prompts/54-gitops-helm-values-production-flow.md` |  |
+| 55 | pending | Release / GitOps | GitOps Kustomize and Raw YAML Support | `prompts/55-gitops-kustomize-and-raw-yaml-support.md` |  |
+| 56 | pending | Release / GitOps | Argo CD and Flux Status Integration | `prompts/56-argo-cd-and-flux-status-integration.md` |  |
+| 57 | pending | Release / GitOps | Release Promotion and Rollback | `prompts/57-release-promotion-and-rollback.md` |  |
+| 58 | pending | Providers | Notifications | `prompts/58-notifications.md` |  |
+| 59 | pending | Security | Secret Provider Integrations | `prompts/59-secret-provider-integrations.md` |  |
+| 60 | pending | Templates | Pipeline Template Catalog | `prompts/60-pipeline-template-catalog.md` |  |
+| 61 | pending | Frontend | Angular Pipeline Editor Upgrade | `prompts/61-angular-pipeline-editor-upgrade.md` |  |
+| 62 | pending | Frontend | Angular First-Run and Onboarding Polish | `prompts/62-angular-first-run-and-onboarding-polish.md` |  |
+| 63 | pending | CLI | CLI Packaging and Distribution | `prompts/63-cli-packaging-and-distribution.md` |  |
+| 64 | pending | Installation | Helm Chart Production Hardening | `prompts/64-helm-chart-production-hardening.md` |  |
+| 65 | pending | API Evolution | CRD v1beta1 API Implementation | `prompts/65-crd-v1beta1-api-implementation.md` |  |
+| 66 | pending | API Evolution | Admission Webhooks and Defaulting | `prompts/66-admission-webhooks-and-defaulting.md` |  |
+| 67 | pending | Architecture | Multi-Cluster Architecture | `prompts/67-multi-cluster-architecture.md` |  |
+| 68 | pending | Architecture | Remote Runner / Agent Mode | `prompts/68-remote-runner-agent-mode.md` |  |
+| 69 | pending | Multi-Tenancy | Organizations, Teams and Memberships | `prompts/69-organizations-teams-and-memberships.md` |  |
+| 70 | pending | Audit | Audit Export and Compliance Reports | `prompts/70-audit-export-and-compliance-reports.md` |  |
+| 71 | pending | API | OpenAPI, SDK and API Client Generation | `prompts/71-openapi-sdk-and-api-client-generation.md` |  |
+| 72 | pending | Extensibility | Plugin System v1 | `prompts/72-plugin-system-v1.md` |  |
+| 73 | pending | Examples | More Real-World Examples | `prompts/73-more-real-world-examples.md` |  |
+| 74 | pending | Release | v0.2 Final Gate | `prompts/74-v0-2-final-gate.md` |  |
+| 75 | pending | Roadmap | v0.3 Roadmap Planning | `prompts/75-v0-3-roadmap-planning.md` |  |
