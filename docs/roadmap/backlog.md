@@ -95,9 +95,9 @@ are ordered; the team should finish a vertical slice before starting another.
 
 ### M8. v0.1-to-v0.2 release qualification
 
-- **Problem:** v0.1 could only run a same-version upgrade and GitHub reports 64
-  dependency alerts whose applicability is not represented by local npm runtime
-  audit alone.
+- **Problem:** v0.1 could only run a same-version upgrade and GitHub reports six
+  dependency alerts (two high, four moderate) whose applicability is not
+  represented by local npm runtime audit alone.
 - **Proposed solution:** run the live upgrade from the published v0.1 artifacts;
   inventory Go/npm/container/workflow alerts; fix exploitable findings; document
   scoped exceptions; execute external integration conformance and a measured
