@@ -1,0 +1,40 @@
+# cloudivision CLI
+
+Build the CLI with `make build` or `go build -o bin/cloudivision ./cmd/cloudivision`. The API URL is resolved from `--api-url`, `CLOU_DIVISION_API_URL`, `~/.cloudivision/config.yaml`, then `http://localhost:8080`. Token and namespace use the same flag → environment → config precedence; the default namespace is `default`.
+
+```sh
+cloudivision --api-url http://localhost:8080 --token "$TOKEN" login
+cloudivision --namespace ci project list
+cloudivision repo add --name app --project storefront --url https://github.com/acme/app.git --pipeline-template node
+cloudivision pipeline list
+```
+
+Trigger and watch a build:
+
+```sh
+cloudivision -n ci build trigger \
+  --project storefront --repository app --pipeline-template node \
+  --revision main --branch main --param target=production --watch
+
+cloudivision -n ci build list --phase Failed --limit 50
+cloudivision -n ci build get BUILD_NAME --output json
+cloudivision -n ci build logs BUILD_NAME --tail 200 --follow
+cloudivision -n ci build watch BUILD_NAME --timeout 20m
+```
+
+`build watch` exits 0 for `Succeeded` and non-zero for `Failed`, `Cancelled`, API failure, or timeout. `build logs --follow` polls the bounded log endpoint; it is not an unbounded streaming transport.
+
+Release operations:
+
+```sh
+cloudivision -n ci release list
+cloudivision -n ci release get RELEASE_NAME --output json
+cloudivision -n ci release approve RELEASE_NAME --actor alice --comment "change approved"
+cloudivision -n ci release reject RELEASE_NAME --actor alice --comment "rollback required"
+```
+
+The `release rollback` command reports that rollback is unavailable in the v0.1 API. Revert through GitOps and create an auditable replacement Release; the CLI does not apply manifests directly.
+
+Run `cloudivision doctor` to check API health, authentication, provider/GitOps health and, when `kubectl` is available, CRDs, deployments, runner image configuration, and Job RBAC. `WARN` means an optional Kubernetes check could not run; `FAIL` makes doctor exit non-zero.
+
+Use `--output json` for automation. Never put tokens in shell history; prefer `CLOU_DIVISION_TOKEN` from a secure process environment or a mode-0600 config file. `login` never prints the token.

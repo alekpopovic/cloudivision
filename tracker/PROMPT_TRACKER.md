@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-22T01:07:35Z`
-Last executed prompt: `36`
-Next prompt: `37`
+Updated at: `2026-08-22T01:14:53Z`
+Last executed prompt: `37`
+Next prompt: `38`
 
 ## How to update
 
@@ -65,7 +65,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 34 | done | Operations | Upgrade, Backup, Restore and Uninstall | `prompts/34-upgrade-backup-restore-and-uninstall.md` | Added lifecycle operations runbooks plus offline/live Helm upgrade test, fixtures, CRD retention assertions, and Make target. |
 | 35 | done | Observability | Observability Dashboards and Alerts | `prompts/35-observability-dashboards-and-alerts.md` | Added Grafana dashboard, Prometheus alerts, bounded operational metrics, controller metrics Service, runbooks, and OpenTelemetry tracing plan. |
 | 36 | done | Scale | Performance and Scale Test Harness | `prompts/36-performance-and-scale-test-harness.md` | Added safe scale harness, BuildRun pagination/filtering, bounded Angular list rendering, controller indexes, and configurable concurrency. |
-| 37 | pending | CLI | cloudivision CLI | `prompts/37-cloudivision-cli.md` |  |
+| 37 | done | CLI | cloudivision CLI | `prompts/37-cloudivision-cli.md` | Added cloudivision CLI with config/auth precedence, resource/build/release commands, watch/logs, doctor, tests, build target, and docs. |
 | 38 | pending | Documentation | Documentation Restructure for Users and Operators | `prompts/38-documentation-restructure-for-users-and-operators.md` |  |
 | 39 | pending | Release | Public Release Process and v0.1.0 | `prompts/39-public-release-process-and-v0-1-0.md` |  |
 | 40 | pending | Release | v0.1 Final Gate: Hardening Sprint Review | `prompts/40-v0-1-final-gate-hardening-sprint-review.md` |  |

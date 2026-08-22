@@ -33,6 +33,15 @@ cloudivision is an early v0.1 platform under active hardening. The repository co
 
 ## Local kind quickstart
 
+After port-forwarding the API, the optional developer CLI can trigger and inspect builds:
+
+```sh
+go build -o bin/cloudivision ./cmd/cloudivision
+CLOU_DIVISION_API_URL=http://localhost:8080 bin/cloudivision -n cloudivision doctor
+```
+
+See the [CLI reference](docs/reference/cli.md) for build, log, watch and release commands.
+
 This quickstart runs cloudivision in a local kind cluster. It installs the CRDs, controller, API server, and Angular web UI with the Helm chart.
 
 ### Prerequisites

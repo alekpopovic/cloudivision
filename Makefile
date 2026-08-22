@@ -92,6 +92,7 @@ build:
 	go build -o bin/cloudivision-api ./cmd/api
 	go build -o bin/cloudivision-controller ./cmd/controller
 	go build -o bin/cloudivision-runner ./cmd/runner
+	go build -o bin/cloudivision ./cmd/cloudivision
 	@if [ -f web/package.json ]; then npm --prefix web run build; fi
 
 run-api:
