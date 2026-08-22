@@ -27,8 +27,10 @@ import (
 const (
 	ConditionRepositoryCloned  = "RepositoryCloned"
 	ConditionStepsCompleted    = "StepsCompleted"
+	ConditionImageBuildStarted = "ImageBuildStarted"
 	ConditionImageBuilt        = "ImageBuilt"
 	ConditionImagePushed       = "ImagePushed"
+	ConditionImageDigest       = "ImageDigestCaptured"
 	ConditionSupplyChainReady  = "SupplyChainReady"
 	ConditionSBOMGenerated     = "SBOMGenerated"
 	ConditionImageScanned      = "ImageScanned"
@@ -164,22 +166,58 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 		Digest:          buildRun.Spec.Image.Digest,
 	}
 	if template.Spec.Build.Enabled {
+		r.setCondition(buildRun, ConditionImageBuildStarted, metav1.ConditionTrue, "ImageBuildStarted", "Image build started.")
+		if err := r.updateStatus(ctx, buildRun); err != nil {
+			return err
+		}
+		contextDir, err := build.ResolveContextDir(sourceDir, template.Spec.Build.ContextDir)
+		if err != nil {
+			reason := build.FailureReason(err)
+			r.setCondition(buildRun, ConditionImageBuilt, metav1.ConditionFalse, reason, "Image build context is invalid.")
+			return r.fail(ctx, buildRun, reason, redactor.Mask(err.Error()))
+		}
 		req := build.BuildRequest{
-			ContextDir:      filepath.Join(sourceDir, template.Spec.Build.ContextDir),
+			ContextDir:      contextDir,
 			Dockerfile:      template.Spec.Build.Dockerfile,
 			ImageRepository: buildRun.Spec.Image.Repository,
 			ImageTag:        buildRun.Spec.Image.Tag,
 			Push:            template.Spec.Build.Push,
-			Env:             buildParamsEnv(buildRun.Spec.Params),
+			BuildArgs:       template.Spec.Build.BuildArgs,
+			Target:          template.Spec.Build.Target,
+			Platforms:       template.Spec.Build.Platforms,
+			Labels:          template.Spec.Build.Labels,
+			Cache: build.CacheConfig{
+				Enabled: template.Spec.Build.Cache.Enabled,
+				Mode:    build.CacheMode(template.Spec.Build.Cache.Mode),
+				Ref:     template.Spec.Build.Cache.Ref,
+			},
+			Env: buildParamsEnv(buildRun.Spec.Params),
 		}
 		buildResult, err := r.Builder.Build(ctx, req)
 		if err != nil {
-			return r.fail(ctx, buildRun, "ImageBuildFailed", redactor.Mask(err.Error()))
+			reason := build.FailureReason(err)
+			r.setCondition(buildRun, ConditionImageBuilt, metav1.ConditionFalse, reason, "Image build did not complete.")
+			if reason == build.ReasonDigestCaptureFailed {
+				r.setCondition(buildRun, ConditionImageDigest, metav1.ConditionFalse, reason, "BuildKit did not return a valid image digest.")
+			}
+			return r.fail(ctx, buildRun, reason, redactor.Mask(err.Error()))
 		}
 		result = buildResult
+		buildRun.Status.Image = &cicdv1alpha1.ImageRef{
+			Repository: result.ImageRepository,
+			Tag:        result.Tag,
+			Digest:     result.Digest,
+		}
 		r.setCondition(buildRun, ConditionImageBuilt, metav1.ConditionTrue, "ImageBuilt", "Image build completed.")
 		if template.Spec.Build.Push {
 			r.setCondition(buildRun, ConditionImagePushed, metav1.ConditionTrue, "ImagePushed", "Image push completed.")
+		} else {
+			r.setCondition(buildRun, ConditionImagePushed, metav1.ConditionFalse, "PushDisabled", "Image push was disabled for this pipeline.")
+		}
+		if result.Digest != "" {
+			r.setCondition(buildRun, ConditionImageDigest, metav1.ConditionTrue, "ImageDigestCaptured", "Image digest was captured from BuildKit metadata.")
+		} else {
+			r.setCondition(buildRun, ConditionImageDigest, metav1.ConditionFalse, "ImageDigestUnavailable", "BuildKit did not return an image digest.")
 		}
 		if err := r.updateStatus(ctx, buildRun); err != nil {
 			return err

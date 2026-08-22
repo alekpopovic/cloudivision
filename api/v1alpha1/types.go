@@ -60,6 +60,14 @@ const (
 	BuildBuilderNone     BuildBuilder = "none"
 )
 
+type BuildCacheMode string
+
+const (
+	BuildCacheModeInline   BuildCacheMode = "inline"
+	BuildCacheModeRegistry BuildCacheMode = "registry"
+	BuildCacheModeLocal    BuildCacheMode = "local"
+)
+
 type BuildRunPhase string
 
 const (
@@ -306,6 +314,16 @@ type PipelineStep struct {
 	ContinueOnError bool `json:"continueOnError,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!self.enabled || self.mode == 'inline' || (has(self.ref) && self.ref != ”)",message="cache.ref is required for registry and local cache modes"
+type PipelineBuildCacheSpec struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// +kubebuilder:validation:Enum=inline;registry;local
+	// +kubebuilder:default:=inline
+	Mode BuildCacheMode `json:"mode,omitempty"`
+	// +optional
+	Ref string `json:"ref,omitempty"`
+}
+
 type PipelineBuildSpec struct {
 	Enabled bool `json:"enabled"`
 	// +kubebuilder:default:=.
@@ -318,6 +336,17 @@ type PipelineBuildSpec struct {
 	Image string `json:"image,omitempty"`
 	// +kubebuilder:default:=true
 	Push bool `json:"push"`
+	// +optional
+	BuildArgs map[string]string `json:"buildArgs,omitempty"`
+	// +optional
+	Target string `json:"target,omitempty"`
+	// +kubebuilder:validation:MaxItems=16
+	// +listType=set
+	Platforms []string `json:"platforms,omitempty"`
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+	// +optional
+	Cache PipelineBuildCacheSpec `json:"cache,omitempty"`
 }
 
 type PipelineResourceSpec struct {

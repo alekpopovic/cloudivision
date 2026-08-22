@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-22T18:57:18Z",
-  "last_executed_prompt": 42,
-  "next_prompt": 43,
+  "updated_at": "2026-08-22T19:07:18Z",
+  "last_executed_prompt": 43,
+  "next_prompt": 44,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -404,8 +404,9 @@
       "title": "BuildKit Builder Hardening",
       "phase": "Build Execution",
       "file": "prompts/43-buildkit-builder-hardening.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Hardened rootless BuildKit input/path validation, deterministic command options, cache settings, bounded failures, metadata digest capture, runner image-stage conditions/status, CRDs, docs, and tests. Go test/vet and Helm security checks passed.",
+      "executed_at": "2026-08-22T19:07:18Z"
     },
     {
       "id": 44,

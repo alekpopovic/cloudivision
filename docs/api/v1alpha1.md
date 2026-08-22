@@ -73,7 +73,7 @@ spec:
 
 PipelineTemplate is reusable execution policy. `params` declares inputs. Ordered `steps` contain `name`, execution `image`, `command`, `args`, relative/absolute `workingDir`, literal environment values, timeout and continue-on-error behavior.
 
-`build` configures optional image creation with builder `buildkit`, `buildah` or `none`, context, Dockerfile, image and push behavior. `resources` supplies runner CPU/memory and total timeout. `security` controls privilege request, non-root and read-only-root-filesystem intent. `supplyChain` requests SBOM, scanning, signing and signed-base-image policy hooks.
+`build` configures optional image creation with builder `buildkit`, `buildah` or `none`, context, Dockerfile, image, push behavior, build arguments, target stage, platforms, labels and optional inline/registry/local cache. Registry and local cache modes require a cache reference. `resources` supplies runner CPU/memory and total timeout. `security` controls privilege request, non-root and read-only-root-filesystem intent. `supplyChain` requests SBOM, scanning, signing and signed-base-image policy hooks. BuildKit details and status conditions are documented in the [BuildKit guide](../build/buildkit.md).
 
 Status is `Ready` or `Error` with conditions and observed generation. The Job executor in v0.1 executes commands inside the runner image; per-step image isolation is not yet implemented and is documented as a dogfood limitation.
 

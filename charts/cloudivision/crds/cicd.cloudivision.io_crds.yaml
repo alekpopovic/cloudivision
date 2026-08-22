@@ -566,12 +566,33 @@ spec:
             properties:
               build:
                 properties:
+                  buildArgs:
+                    additionalProperties:
+                      type: string
+                    type: object
                   builder:
                     enum:
                     - buildkit
                     - buildah
                     - none
                     type: string
+                  cache:
+                    properties:
+                      enabled:
+                        type: boolean
+                      mode:
+                        default: inline
+                        enum:
+                        - inline
+                        - registry
+                        - local
+                        type: string
+                      ref:
+                        type: string
+                    type: object
+                    x-kubernetes-validations:
+                    - message: cache.ref is required for registry and local cache modes
+                      rule: '!self.enabled || self.mode == ''inline'' || (has(self.ref) && self.ref != '''')'
                   contextDir:
                     default: .
                     type: string
@@ -582,9 +603,21 @@ spec:
                     type: boolean
                   image:
                     type: string
+                  labels:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  platforms:
+                    items:
+                      type: string
+                    maxItems: 16
+                    type: array
+                    uniqueItems: true
                   push:
                     default: true
                     type: boolean
+                  target:
+                    type: string
                 required:
                 - builder
                 - enabled

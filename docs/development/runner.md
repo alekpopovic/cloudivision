@@ -19,4 +19,6 @@ limits. See [runner security](../security/runner-security.md).
 
 Image builds require `buildctl` or `buildctl-daemonless.sh` and an intentionally
 configured rootless BuildKit service. A developer pipeline can set
-`spec.build.enabled: false` when testing clone and step execution only.
+`spec.build.enabled: false` when testing clone and step execution only. See the
+[BuildKit build guide](../build/buildkit.md) for supported options, path rules,
+digest behavior, failure reasons, and rootless security requirements.

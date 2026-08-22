@@ -194,10 +194,65 @@ func TestRunnerRecordsSupplyChainHookResults(t *testing.T) {
 		t.Fatalf("provenanceRef = %q, want oci://provenance", updated.Status.SupplyChain.ProvenanceRef)
 	}
 	assertCondition(t, updated.Status.Conditions, ConditionSupplyChainReady)
+	assertCondition(t, updated.Status.Conditions, ConditionImageBuildStarted)
+	assertCondition(t, updated.Status.Conditions, ConditionImageBuilt)
+	assertCondition(t, updated.Status.Conditions, ConditionImagePushed)
+	assertCondition(t, updated.Status.Conditions, ConditionImageDigest)
 	assertCondition(t, updated.Status.Conditions, ConditionSBOMGenerated)
 	assertCondition(t, updated.Status.Conditions, ConditionImageScanned)
 	assertCondition(t, updated.Status.Conditions, ConditionImageSigned)
 	assertCondition(t, updated.Status.Conditions, ConditionProvenanceWritten)
+}
+
+func TestRunnerForwardsBuildKitOptionsAndMapsBuilderFailure(t *testing.T) {
+	ctx := context.Background()
+	repo := createGitRepository(t)
+	buildRun := testBuildRun(repo)
+	template := testPipelineTemplate(nil)
+	template.Spec.Build = cicdv1alpha1.PipelineBuildSpec{
+		Enabled:    true,
+		ContextDir: ".",
+		Dockerfile: "docker/release.Dockerfile",
+		Builder:    cicdv1alpha1.BuildBuilderBuildKit,
+		Push:       true,
+		BuildArgs:  map[string]string{"VERSION": "1.2.3"},
+		Target:     "release",
+		Platforms:  []string{"linux/amd64", "linux/arm64"},
+		Labels:     map[string]string{"app": "example"},
+		Cache: cicdv1alpha1.PipelineBuildCacheSpec{
+			Enabled: true,
+			Mode:    cicdv1alpha1.BuildCacheModeRegistry,
+			Ref:     "ghcr.io/cloudivision/example:cache",
+		},
+	}
+	builder := &recordingBuilder{err: &build.Error{Reason: build.ReasonBuildKitUnavailable, Message: "BuildKit unavailable"}}
+	k8sClient := newFakeRunnerClient(t, buildRun, testRepository(repo), template)
+	runner := Runner{
+		Client: k8sClient, Git: cloudivisiongit.ExecClient{}, Steps: steps.Runner{}, Builder: builder,
+		Workspace: filepath.Join(t.TempDir(), "workspace"),
+	}
+
+	err := runner.Run(ctx, testConfig(repo))
+	if err == nil {
+		t.Fatal("Run() error = nil, want BuildKit failure")
+	}
+	if builder.request.Target != "release" || builder.request.Cache.Mode != build.CacheModeRegistry {
+		t.Fatalf("builder request = %#v", builder.request)
+	}
+	if got := builder.request.BuildArgs["VERSION"]; got != "1.2.3" {
+		t.Fatalf("build arg VERSION = %q", got)
+	}
+	if got := strings.Join(builder.request.Platforms, ","); got != "linux/amd64,linux/arm64" {
+		t.Fatalf("platforms = %q", got)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if getErr := k8sClient.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); getErr != nil {
+		t.Fatal(getErr)
+	}
+	if updated.Status.Failure.Reason != build.ReasonBuildKitUnavailable {
+		t.Fatalf("failure = %#v", updated.Status.Failure)
+	}
+	assertCondition(t, updated.Status.Conditions, ConditionImageBuildStarted)
 }
 
 func TestRunnerReportsMissingRequiredSBOMAdapter(t *testing.T) {
@@ -242,6 +297,16 @@ func (successBuilder) Build(context.Context, build.BuildRequest) (*build.BuildRe
 		Tag:             "main",
 		Digest:          "sha256:abc123",
 	}, nil
+}
+
+type recordingBuilder struct {
+	request build.BuildRequest
+	err     error
+}
+
+func (b *recordingBuilder) Build(_ context.Context, req build.BuildRequest) (*build.BuildResult, error) {
+	b.request = req
+	return nil, b.err
 }
 
 type fakeSBOMGenerator struct{}

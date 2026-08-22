@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-22T18:57:18Z`
-Last executed prompt: `42`
-Next prompt: `43`
+Updated at: `2026-08-22T19:07:18Z`
+Last executed prompt: `43`
+Next prompt: `44`
 
 ## How to update
 
@@ -71,7 +71,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 40 | done | Release | v0.1 Final Gate: Hardening Sprint Review | `prompts/40-v0-1-final-gate-hardening-sprint-review.md` | Final gate passed on a clean kind cluster after safe CRD, Helm, web, status-schema, fixture, API RBAC, upgrade-harness, and Angular dependency fixes. Go/vet/web/Helm/security passed; conformance 5/5 with one external GitOps skip, live upgrade passed, limited scale 10/10; recommendation is ship v0.1.0 alpha with known issues. |
 | 41 | done | Roadmap | v0.2 Roadmap Planning | `prompts/41-v0-2-roadmap-planning.md` | Created a focused v0.2 roadmap and ordered backlog tied to the v0.1 final-gate gaps: authenticated immutable image builds, durable GitHub webhooks, real GitOps/Argo convergence, stage-oriented Angular UX, security closure, cross-version upgrade, dependency triage, and measured scale. Deferred v0.3 and enterprise scope is explicit. |
 | 42 | done | Roadmap | v0.2 Implementation Plan | `prompts/42-v0-2-implementation-plan.md` | Created the executable v0.2 implementation plan with seven epics, work items, CRD/API impacts, tests, acceptance criteria, risks, dependencies, milestone ordering, and explicit exclusions. |
-| 43 | pending | Build Execution | BuildKit Builder Hardening | `prompts/43-buildkit-builder-hardening.md` |  |
+| 43 | done | Build Execution | BuildKit Builder Hardening | `prompts/43-buildkit-builder-hardening.md` | Hardened rootless BuildKit input/path validation, deterministic command options, cache settings, bounded failures, metadata digest capture, runner image-stage conditions/status, CRDs, docs, and tests. Go test/vet and Helm security checks passed. |
 | 44 | pending | Providers | Registry Provider and Credentials | `prompts/44-registry-provider-and-credentials.md` |  |
 | 45 | pending | Supply Chain | Image Tagging, Digest and Immutability | `prompts/45-image-tagging-digest-and-immutability.md` |  |
 | 46 | pending | API | GitHub Webhook Production Readiness | `prompts/46-github-webhook-production-readiness.md` |  |
