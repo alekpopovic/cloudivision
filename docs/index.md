@@ -18,7 +18,7 @@ cloudivision is a Kubernetes-native CI/CD platform: BuildRuns execute as Kuberne
 
 - Operators: [Helm install](operations/install-helm.md), [upgrade](operations/upgrade.md), [backup/restore](operations/backup-restore.md), [observability](operations/observability.md), [troubleshooting](operations/troubleshooting.md), and [hardening](operations/security-hardening.md).
 - Security reviewers: [threat model](security/threat-model.md), [runner security](security/runner-security.md), [supply chain](security/supply-chain.md), [auth/RBAC](security/auth-rbac.md), and [webhooks](security/webhook-security.md).
-- Contributors: [architecture](development/architecture.md), [controllers](development/controllers.md), [runner](development/runner.md), [API](development/api.md), [frontend](development/frontend.md), [testing](development/testing.md), [contributing](development/contributing.md), and [release process](development/release-process.md).
+- Contributors: [architecture](development/architecture.md), [controllers](development/controllers.md), [runner](development/runner.md), [API](development/api.md), [frontend](development/frontend.md), [testing](development/testing.md), [contributing](development/contributing.md), [brand system](brand.md), and [release process](development/release-process.md).
 - Reference: [HTTP API](reference/api.md), [CRDs](reference/crds.md), [Helm values](reference/helm-values.md), and [configuration](reference/configuration.md).
 - Planning: [v0.1 final gate](readiness/v0.1-final-gate.md), [v0.2 roadmap](roadmap/v0.2.md), and [prioritized backlog](roadmap/backlog.md).
 

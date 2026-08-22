@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">cloudivision architecture</title>
+  <desc id="desc">A Git event becomes a BuildRun, runs in an isolated Kubernetes Job, publishes an immutable image, updates a GitOps repository, and is deployed by Argo CD or Flux.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#081426"/>
+      <stop offset="1" stop-color="#10284A"/>
+    </linearGradient>
+    <linearGradient id="flow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4F7CFF"/>
+      <stop offset="1" stop-color="#2DD4BF"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 10 5 0 10Z" fill="#2DD4BF"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="520" rx="32" fill="url(#bg)"/>
+  <circle cx="1090" cy="-10" r="230" fill="#4F7CFF" opacity=".08"/>
+  <circle cx="80" cy="500" r="190" fill="#2DD4BF" opacity=".06"/>
+
+  <text x="64" y="66" fill="#F8FAFC" font-family="Inter,Segoe UI,sans-serif" font-size="28" font-weight="700">From commit to deployment, without leaving Kubernetes</text>
+  <text x="64" y="96" fill="#9FB3CF" font-family="Inter,Segoe UI,sans-serif" font-size="16">Desired state in CRDs · execution in Jobs · delivery through GitOps</text>
+
+  <path d="M160 216H1036" fill="none" stroke="url(#flow)" stroke-width="5" stroke-linecap="round" marker-end="url(#arrow)" filter="url(#glow)"/>
+  <g fill="none" stroke="#2DD4BF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m280 208 10 8-10 8"/>
+    <path d="m465 208 10 8-10 8"/>
+    <path d="m650 208 10 8-10 8"/>
+    <path d="m835 208 10 8-10 8"/>
+    <path d="m1020 208 10 8-10 8"/>
+  </g>
+
+  <g font-family="Inter,Segoe UI,sans-serif" text-anchor="middle">
+    <g transform="translate(120 160)">
+      <rect width="150" height="116" rx="20" fill="#10213D" stroke="#31517C"/>
+      <circle cx="75" cy="42" r="19" fill="#4F7CFF"/>
+      <path d="M64 42h22M75 31v22" stroke="#F8FAFC" stroke-width="3" stroke-linecap="round"/>
+      <text x="75" y="84" fill="#F8FAFC" font-size="17" font-weight="700">Git event</text>
+      <text x="75" y="104" fill="#9FB3CF" font-size="12">push · PR · manual</text>
+    </g>
+
+    <g transform="translate(305 160)">
+      <rect width="150" height="116" rx="20" fill="#10213D" stroke="#31517C"/>
+      <rect x="52" y="22" width="46" height="40" rx="9" fill="#4F7CFF"/>
+      <path d="M62 34h26M62 44h18M62 54h22" stroke="#DCE7FF" stroke-width="3" stroke-linecap="round"/>
+      <text x="75" y="84" fill="#F8FAFC" font-size="17" font-weight="700">BuildRun</text>
+      <text x="75" y="104" fill="#9FB3CF" font-size="12">declarative CI state</text>
+    </g>
+
+    <g transform="translate(490 160)">
+      <rect width="150" height="116" rx="20" fill="#10213D" stroke="#31517C"/>
+      <path d="m75 19 26 15v30L75 79 49 64V34l26-15Z" fill="#2DD4BF"/>
+      <path d="m49 34 26 15 26-15M75 49v30" fill="none" stroke="#081426" stroke-width="3"/>
+      <text x="75" y="94" fill="#F8FAFC" font-size="17" font-weight="700">Runner Job</text>
+      <text x="75" y="111" fill="#9FB3CF" font-size="12">isolated · rootless</text>
+    </g>
+
+    <g transform="translate(675 160)">
+      <rect width="150" height="116" rx="20" fill="#10213D" stroke="#31517C"/>
+      <path d="m75 19 28 15-28 15-28-15 28-15Z" fill="#4F7CFF"/>
+      <path d="m47 47 28 15 28-15M47 60l28 15 28-15" fill="none" stroke="#2DD4BF" stroke-width="4" stroke-linejoin="round"/>
+      <text x="75" y="94" fill="#F8FAFC" font-size="17" font-weight="700">OCI image</text>
+      <text x="75" y="111" fill="#9FB3CF" font-size="12">digest · evidence</text>
+    </g>
+
+    <g transform="translate(860 160)">
+      <rect width="150" height="116" rx="20" fill="#10213D" stroke="#31517C"/>
+      <circle cx="58" cy="42" r="10" fill="#4F7CFF"/>
+      <circle cx="93" cy="31" r="10" fill="#2DD4BF"/>
+      <circle cx="93" cy="62" r="10" fill="#4F7CFF"/>
+      <path d="M67 39 84 33M67 46l17 12" stroke="#DCE7FF" stroke-width="4" stroke-linecap="round"/>
+      <text x="75" y="94" fill="#F8FAFC" font-size="17" font-weight="700">GitOps repo</text>
+      <text x="75" y="111" fill="#9FB3CF" font-size="12">commit · pull request</text>
+    </g>
+
+    <g transform="translate(1045 160)">
+      <rect width="110" height="116" rx="20" fill="#10213D" stroke="#31517C"/>
+      <path d="M55 18 76 27v15c0 15-9 25-21 30-12-5-21-15-21-30V27l21-9Z" fill="#2DD4BF"/>
+      <path d="m45 42 7 7 14-17" fill="none" stroke="#081426" stroke-width="4" stroke-linecap="round"/>
+      <text x="55" y="94" fill="#F8FAFC" font-size="17" font-weight="700">Deploy</text>
+      <text x="55" y="111" fill="#9FB3CF" font-size="12">Argo CD · Flux</text>
+    </g>
+  </g>
+
+  <g transform="translate(120 345)" font-family="Inter,Segoe UI,sans-serif">
+    <rect width="960" height="112" rx="22" fill="#0B1B31" stroke="#24446D"/>
+    <text x="32" y="38" fill="#2DD4BF" font-size="13" font-weight="700" letter-spacing="1.8">KUBERNETES CONTROL PLANE</text>
+    <text x="32" y="70" fill="#F8FAFC" font-size="18" font-weight="700">Controllers continuously reconcile desired state</text>
+    <text x="32" y="94" fill="#9FB3CF" font-size="14">CRDs hold runtime truth · API and Angular UI expose bounded views · audit, policy and metrics remain observable</text>
+    <g transform="translate(760 24)">
+      <rect width="168" height="64" rx="16" fill="#122B4C"/>
+      <circle cx="32" cy="32" r="12" fill="#4F7CFF"/>
+      <path d="M27 32h10M32 27v10" stroke="#F8FAFC" stroke-width="2.5" stroke-linecap="round"/>
+      <text x="56" y="29" fill="#F8FAFC" font-size="13" font-weight="700">API + UI</text>
+      <text x="56" y="47" fill="#9FB3CF" font-size="11">operate &amp; debug</text>
+    </g>
+  </g>
+</svg>

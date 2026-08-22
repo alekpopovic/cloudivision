@@ -1,6 +1,7 @@
 apiVersion: v2
 name: cloudivision
-description: Kubernetes-native CI/CD platform
+description: Kubernetes-native CI/CD control plane with isolated builds and GitOps delivery
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
+icon: https://raw.githubusercontent.com/alekpopovic/cloudivision/main/web/public/assets/brand/cloudivision-mark.png

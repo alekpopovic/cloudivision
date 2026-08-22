@@ -1,235 +1,177 @@
-# cloudivision
+<p align="center">
+  <img src="web/public/assets/brand/cloudivision-mark.png" alt="cloudivision modular C logo" width="150">
+</p>
 
-cloudivision is an early-stage, open-source Kubernetes-native CI/CD platform. It is designed to run inside a Kubernetes cluster and model CI/CD workflows with Kubernetes APIs, controllers, Jobs, and GitOps deployment integrations.
+<h1 align="center">cloudivision</h1>
 
-## Architecture
+<p align="center">
+  <strong>Kubernetes-native CI/CD, from verified source event to observable GitOps release.</strong>
+</p>
 
-The platform is planned as a monorepo with these major parts:
+<p align="center">
+  Pipelines are custom resources. Builds run as isolated Kubernetes Jobs.<br>
+  Deployments happen through Git—not from the CI runner.
+</p>
 
-- Kubernetes API types under `api/v1alpha1`
-- a controller/operator under `cmd/controller` and `internal/controller`
-- an API server under `cmd/api`
-- a build runner under `cmd/runner`
-- executor abstractions under `internal/executor`
-- build, Git, GitOps, webhook, auth, audit, and Kubernetes helper packages under `internal`
-- an Angular + Tailwind CSS web UI under `web`
-- Helm and Kubernetes installation assets under `charts` and `config`
+<p align="center">
+  <a href="https://github.com/alekpopovic/cloudivision/actions/workflows/ci.yaml"><img src="https://github.com/alekpopovic/cloudivision/actions/workflows/ci.yaml/badge.svg" alt="CI status"></a>
+  <img src="https://img.shields.io/badge/release-v0.1.0-4F7CFF" alt="Release v0.1.0">
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26">
+  <img src="https://img.shields.io/badge/Angular-20-DD0031?logo=angular&logoColor=white" alt="Angular 20">
+  <img src="https://img.shields.io/badge/Kubernetes-native-326CE5?logo=kubernetes&logoColor=white" alt="Kubernetes native">
+</p>
 
-Runtime state for pipelines, builds, and releases belongs in Kubernetes custom resource status. PostgreSQL may be added later for audit logs, cached UI views, webhook idempotency, and user/team metadata, but it is not required for the first scaffold.
+> [!IMPORTANT]
+> v0.1.0 is an alpha release. The clean-cluster gate passes, but the default
+> disabled authentication mode is for development only. Read the
+> [final gate](docs/readiness/v0.1-final-gate.md) before production evaluation.
 
-## MVP flow
+## How it works
 
-The initial product flow is:
+<p align="center">
+  <img src="docs/assets/brand/architecture.svg" alt="cloudivision architecture: Git event to BuildRun, isolated runner Job, OCI image, GitOps repository, and Argo CD or Flux deployment" width="100%">
+</p>
 
-```text
-webhook -> API -> BuildRun CR -> controller -> Kubernetes Job -> registry -> GitOps repo -> Argo CD/Flux
+The Kubernetes API remains the source of runtime truth. Controllers reconcile
+desired state idempotently, the runner creates artifacts, and GitOps controllers
+own target-cluster deployment.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: webhook or manual trigger
+    Pending --> Running: Job / PipelineRun created
+    Running --> Succeeded: steps + image evidence complete
+    Running --> Failed: bounded diagnostic captured
+    Succeeded --> ReleasePending: GitOps enabled
+    ReleasePending --> Deploying: commit or PR recorded
+    Deploying --> Released: provider healthy
+    Deploying --> Failed: degraded or timed out
 ```
 
-CI creates artifacts. CD happens through GitOps by updating deployment repositories and letting Argo CD or Flux reconcile the target environments. The CI runner must not directly apply application manifests to target namespaces in the MVP.
+## Why cloudivision
 
-## Status
+| | Capability | What it gives you |
+| --- | --- | --- |
+| <img src="web/public/assets/brand/icons/platform.svg" alt="" width="42"> | **Kubernetes-native state** | Projects, repositories, pipelines, builds, environments, and releases live as CRDs with status. |
+| <img src="web/public/assets/brand/icons/pipeline.svg" alt="" width="42"> | **Pluggable execution** | Kubernetes Jobs are the MVP executor; Tekton remains behind the same interface. |
+| <img src="web/public/assets/brand/icons/build.svg" alt="" width="42"> | **Artifact-first CI** | Rootless build paths, immutable image evidence, policy, SBOM, scanning, signing, and provenance hooks. |
+| <img src="web/public/assets/brand/icons/deploy.svg" alt="" width="42"> | **GitOps delivery** | Direct commits or pull requests update deployment repositories; Argo CD and Flux can report health. |
+| <img src="web/public/assets/brand/icons/security.svg" alt="" width="42"> | **Secure defaults** | Non-root workloads, no Docker socket, no default privilege, namespaced runner RBAC, signed webhooks, and redaction. |
+| <img src="web/public/assets/brand/icons/observe.svg" alt="" width="42"> | **Operational visibility** | Angular debugging UI, CLI, structured conditions, logs, metrics, events, audit adapters, dashboards, and alerts. |
 
-cloudivision v0.1 is ready to publish as an alpha with documented limitations.
-The clean-cluster gate covers installation, the quickstart BuildRun, API/UI health,
-conformance, same-version upgrade, security checks, and limited scale. See the
-[v0.1 final gate](docs/readiness/v0.1-final-gate.md) for the evidence and the
-[v0.2 roadmap](docs/roadmap/v0.2.md) for the next production-readiness increment.
+## Quickstart on kind
 
-## Documentation
+Prerequisites: Docker, kind, kubectl, Helm, Go 1.26+, and Node.js 24/npm.
 
-Start at the [documentation home](docs/index.md). New installations should follow
-the [kind quickstart](docs/getting-started/quickstart-kind.md), then the guides for a
-[first build](docs/getting-started/first-build.md),
-[webhook](docs/getting-started/first-webhook.md), and
-[GitOps release](docs/getting-started/first-release.md).
+```sh
+git clone https://github.com/alekpopovic/cloudivision.git
+cd cloudivision
+./hack/kind-create.sh
+./hack/kind-load-images.sh
+./hack/install-dev.sh
+```
 
-## Local kind quickstart
+Run the credential-free sample:
 
-After port-forwarding the API, the optional developer CLI can trigger and inspect builds:
+```sh
+kubectl apply \
+  -f deploy/examples/project.yaml \
+  -f deploy/examples/repository.yaml \
+  -f deploy/examples/pipeline-template-nodejs.yaml \
+  -f deploy/examples/environment-dev.yaml \
+  -f deploy/examples/buildrun-manual.yaml
+
+kubectl -n cloudivision get buildrun demo-buildrun-manual -w
+kubectl -n cloudivision logs \
+  -l cloudivision.io/buildrun=demo-buildrun-manual \
+  --tail=100
+```
+
+The sample clones Docker's public getting-started Node.js application and verifies
+its source without requiring BuildKit or registry credentials. Continue with the
+[full kind quickstart](docs/getting-started/quickstart-kind.md) or
+[create your first build](docs/getting-started/first-build.md).
+
+### Open the API and UI
+
+```sh
+# terminal 1
+kubectl -n cloudivision port-forward \
+  svc/cloudivision-cloudivision-api 8080:8080
+
+# terminal 2
+kubectl -n cloudivision port-forward \
+  svc/cloudivision-cloudivision-web 4200:80
+```
+
+- API health: `http://localhost:8080/healthz`
+- Angular UI: `http://localhost:4200`
+
+Optional CLI check:
 
 ```sh
 go build -o bin/cloudivision ./cmd/cloudivision
-CLOU_DIVISION_API_URL=http://localhost:8080 bin/cloudivision -n cloudivision doctor
+CLOU_DIVISION_API_URL=http://localhost:8080 \
+  bin/cloudivision -n cloudivision doctor
 ```
 
-See the [CLI reference](docs/reference/cli.md) for build, log, watch and release commands.
+## Platform map
 
-This quickstart runs cloudivision in a local kind cluster. It installs the CRDs, controller, API server, and Angular web UI with the Helm chart.
+| Component | Responsibility | Source |
+| --- | --- | --- |
+| Controller | Reconciles Projects, BuildRuns, Jobs, Releases, RBAC, and network policy | [`cmd/controller`](cmd/controller), [`internal/controller`](internal/controller) |
+| API | REST facade, webhook intake, auth, logs, providers, and audit | [`cmd/api`](cmd/api), [`internal/api`](internal/api) |
+| Runner | Clones source, executes steps, builds/pushes images, and records evidence | [`cmd/runner`](cmd/runner), [`internal/runner`](internal/runner) |
+| CLI | Developer and operator workflows over the API | [`cmd/cloudivision`](cmd/cloudivision), [`internal/cli`](internal/cli) |
+| Web | Angular + TypeScript + Tailwind operations UI | [`web`](web) |
+| APIs | `cicd.cloudivision.io/v1alpha1` domain and generated CRDs | [`api/v1alpha1`](api/v1alpha1), [`config/crd`](config/crd) |
+| Packaging | Helm chart, example resources, and local kind automation | [`charts/cloudivision`](charts/cloudivision), [`deploy/examples`](deploy/examples), [`hack`](hack) |
 
-### Prerequisites
+## Security model
 
-- Docker
-- kind
-- kubectl
-- Helm
-- Go 1.26 or newer
-- Node.js/npm for building the Angular web image
+cloudivision treats repository code as untrusted:
 
-### Create the kind cluster
+- runner workloads are non-root and resource-bounded;
+- privileged containers, hostPath, Docker-in-Docker, and Docker socket mounts are
+  not defaults;
+- Project namespaces receive scoped ServiceAccounts, Roles, and RoleBindings;
+- the API permission template is bound only inside reconciled Project namespaces;
+- webhook signatures are checked before BuildRun creation;
+- credentials and known secret values are redacted from logs and status; and
+- CI runs rendered Helm security checks and a production dependency audit.
 
-```sh
-./hack/kind-create.sh
-```
+Start with the [threat model](docs/security/threat-model.md),
+[runner security](docs/security/runner-security.md), and
+[operator hardening guide](docs/operations/security-hardening.md).
 
-The script creates a `cloudivision-dev` kind cluster and starts a local registry at `localhost:5001` when Docker is available.
+## Documentation
 
-### Build and load images
+| Start | Build and release | Operate | Extend |
+| --- | --- | --- | --- |
+| [Documentation home](docs/index.md) | [First build](docs/getting-started/first-build.md) | [Helm install](docs/operations/install-helm.md) | [Architecture](docs/development/architecture.md) |
+| [kind quickstart](docs/getting-started/quickstart-kind.md) | [First webhook](docs/getting-started/first-webhook.md) | [Upgrade](docs/operations/upgrade.md) | [Add a provider](docs/development/adding-provider.md) |
+| [CLI reference](docs/reference/cli.md) | [First GitOps release](docs/getting-started/first-release.md) | [Troubleshooting](docs/operations/troubleshooting.md) | [Contributing](docs/development/contributing.md) |
+| [CRD reference](docs/reference/crds.md) | [Policy model](docs/concepts/policy.md) | [Observability](docs/operations/observability.md) | [Brand system](docs/brand.md) |
 
-```sh
-./hack/kind-load-images.sh
-```
+## Release status
 
-This builds:
+- Version: **v0.1.0 alpha**
+- Readiness decision: **ship with known issues**
+- Next increment: [v0.2 roadmap](docs/roadmap/v0.2.md)
+- Prioritized work: [product backlog](docs/roadmap/backlog.md)
+- Changes: [CHANGELOG.md](CHANGELOG.md)
 
-- `ghcr.io/alekpopovic/cloudivision/controller:dev`
-- `ghcr.io/alekpopovic/cloudivision/api:dev`
-- `ghcr.io/alekpopovic/cloudivision/runner:dev`
-- `ghcr.io/alekpopovic/cloudivision/web:dev`
-
-and loads them into the kind cluster.
-
-### Install cloudivision
-
-```sh
-./hack/install-dev.sh
-```
-
-Check the installed pods:
-
-```sh
-kubectl -n cloudivision get pods
-kubectl -n cloudivision get crds | grep cloudivision
-```
-
-### Apply sample CRs
+Useful local gates:
 
 ```sh
-kubectl apply -f deploy/examples/project.yaml
-kubectl apply -f deploy/examples/repository.yaml
-kubectl apply -f deploy/examples/pipeline-template-nodejs.yaml
-kubectl apply -f deploy/examples/environment-dev.yaml
-kubectl apply -f deploy/examples/buildrun-manual.yaml
-```
-
-The default sample repository points at Docker's public getting-started Node.js
-application and verifies its root Dockerfile and client package. For your own app,
-update `deploy/examples/repository.yaml`, the pipeline paths, and image repository.
-
-For an explanation of every resource and command, see [Create your first BuildRun](docs/guides/first-buildrun.md).
-
-### Check the BuildRun
-
-```sh
-kubectl -n cloudivision get buildruns
-kubectl -n cloudivision describe buildrun demo-buildrun-manual
-kubectl -n cloudivision get jobs,pods
-```
-
-View runner logs:
-
-```sh
-kubectl -n cloudivision logs -l cloudivision.io/buildrun=demo-buildrun-manual --tail=100
-```
-
-### Open the API and Angular web UI
-
-In one terminal:
-
-```sh
-kubectl -n cloudivision port-forward svc/cloudivision-cloudivision-api 8080:8080
-```
-
-In another terminal:
-
-```sh
-kubectl -n cloudivision port-forward svc/cloudivision-cloudivision-web 4200:80
-```
-
-Then open:
-
-- API health: `http://localhost:8080/healthz`
-- Web UI: `http://localhost:4200`
-
-The Helm chart writes the web runtime config to `/assets/config.json`. For local port-forwarding, the default empty `apiBaseUrl` lets the UI call the same origin. If you serve the UI separately, set `web.config.apiBaseUrl` in Helm values.
-
-## Troubleshooting
-
-The most common installation and runtime checks are collected in the maintained [troubleshooting guide](docs/operations/troubleshooting.md). Webhook setup is covered by [Configure your first webhook](docs/getting-started/first-webhook.md), and deployment promotion by [Create your first GitOps release](docs/getting-started/first-release.md). Older guides remain available as deeper implementation notes.
-
-### CRD not installed
-
-Run:
-
-```sh
+mise exec -- go test ./...
+mise exec -- go vet ./...
+npm --prefix web ci
+npm --prefix web run build
 helm template cloudivision charts/cloudivision --include-crds
-kubectl get crds | grep cicd.cloudivision.io
+make security-check
 ```
 
-Reinstall with:
-
-```sh
-./hack/install-dev.sh
-```
-
-### Runner image cannot be pulled
-
-Load images into kind again:
-
-```sh
-./hack/kind-load-images.sh
-kubectl -n cloudivision describe pod -l cloudivision.io/buildrun=demo-buildrun-manual
-```
-
-For kind, `imagePullPolicy: IfNotPresent` is expected. The chart and examples use the `dev` tag by default.
-
-### BuildKit not available
-
-The quickstart pipeline has `build.enabled: false`, so it does not require BuildKit. If you enable image builds, the runner image or build environment must provide `buildctl` or `buildctl-daemonless.sh`; otherwise the runner fails with setup guidance.
-
-### RBAC forbidden
-
-Check the controller and runner ServiceAccounts:
-
-```sh
-kubectl -n cloudivision logs deploy/cloudivision-cloudivision-controller
-kubectl -n cloudivision get role,rolebinding,serviceaccount
-```
-
-The Project controller creates namespaced runner RBAC for the project namespace. Re-apply `deploy/examples/project.yaml` if the namespace or ServiceAccount is missing.
-
-### Pod Security rejection
-
-The sample Project requests `restricted` Pod Security labels. Describe the rejected pod or namespace:
-
-```sh
-kubectl describe namespace cloudivision
-kubectl -n cloudivision describe pod -l cloudivision.io/buildrun=demo-buildrun-manual
-```
-
-Keep runner workloads non-root and avoid privileged containers, hostPath mounts, and Docker socket mounts.
-
-### Git credentials missing
-
-The quickstart uses a public repository and does not require credentials. Private repositories need a Kubernetes Secret referenced from `Repository.spec.credentialSecretRef`.
-
-### Angular UI cannot reach API
-
-For local port-forwarding, either open the UI through the web service and use same-origin API routing, or set:
-
-```sh
-helm upgrade --install cloudivision charts/cloudivision \
-  --namespace cloudivision \
-  --set web.config.apiBaseUrl=http://localhost:8080
-```
-
-Then restart the web port-forward.
-
-### CORS blocked in local development
-
-Allow the Angular origin in Helm values:
-
-```sh
-helm upgrade --install cloudivision charts/cloudivision \
-  --namespace cloudivision \
-  --set api.cors.allowedOrigins='{http://localhost:4200,http://localhost:4201}'
-```
+Contributions should preserve the core boundary: **CI creates artifacts; CD
+deploys through GitOps.** See [contributing](docs/development/contributing.md) and
+the [release process](docs/development/release-process.md).

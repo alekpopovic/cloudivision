@@ -8,6 +8,9 @@ guarantees documented in `docs/api/compatibility-policy.md`.
 
 ### Features
 
+- Added the cloudivision visual identity, reusable icon system, architecture chart,
+  modern README, favicon, and branded Angular application shell.
+
 ### Fixes
 
 ### Security

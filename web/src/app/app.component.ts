@@ -16,14 +16,14 @@ export class AppComponent {
   readonly currentUser$ = this.api.currentUser().pipe(catchError(() => of(null)));
 
   readonly nav = [
-    { label: 'Dashboard', path: '/dashboard' },
-		{ label: 'First Run', path: '/first-run' },
-    { label: 'Projects', path: '/projects' },
-    { label: 'Repositories', path: '/repositories' },
-    { label: 'Pipeline Templates', path: '/pipeline-templates' },
-		{ label: 'Providers', path: '/providers' },
-    { label: 'Build Runs', path: '/build-runs' },
-    { label: 'Environments', path: '/environments' },
-    { label: 'Releases', path: '/releases' }
+    { label: 'Dashboard', path: '/dashboard', icon: 'observe' },
+    { label: 'First Run', path: '/first-run', icon: 'pipeline' },
+    { label: 'Projects', path: '/projects', icon: 'platform' },
+    { label: 'Repositories', path: '/repositories', icon: 'source' },
+    { label: 'Pipeline Templates', path: '/pipeline-templates', icon: 'pipeline' },
+    { label: 'Providers', path: '/providers', icon: 'platform' },
+    { label: 'Build Runs', path: '/build-runs', icon: 'build' },
+    { label: 'Environments', path: '/environments', icon: 'deploy' },
+    { label: 'Releases', path: '/releases', icon: 'deploy' }
   ];
 }
