@@ -145,6 +145,13 @@ const (
 	ReleaseStrategyGitOps ReleaseStrategy = "gitops"
 )
 
+type PromotionMode string
+
+const (
+	PromotionModeDirectCommit PromotionMode = "direct-commit"
+	PromotionModePullRequest  PromotionMode = "pull-request"
+)
+
 type SecretKeyRef struct {
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
@@ -590,7 +597,15 @@ type ReleaseApprovalSpec struct {
 	Comment string `json:"comment,omitempty"`
 }
 
-// +kubebuilder:validation:XValidation:rule="(has(self.image.tag) && self.image.tag != ”) || (has(self.image.digest) && self.image.digest != ”)",message="release image must include a tag or digest"
+type PullRequestSpec struct {
+	TitleTemplate string   `json:"titleTemplate,omitempty"`
+	BodyTemplate  string   `json:"bodyTemplate,omitempty"`
+	TargetBranch  string   `json:"targetBranch,omitempty"`
+	Reviewers     []string `json:"reviewers,omitempty"`
+	Labels        []string `json:"labels,omitempty"`
+}
+
+// +kubebuilder:validation:XValidation:rule="(has(self.image.tag) && size(self.image.tag) > 0) || (has(self.image.digest) && size(self.image.digest) > 0)",message="release image must include a tag or digest"
 type ReleaseSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	ProjectRef string `json:"projectRef"`
@@ -602,6 +617,10 @@ type ReleaseSpec struct {
 	Approval    ReleaseApprovalSpec `json:"approval,omitempty"`
 	// +kubebuilder:validation:Enum=gitops
 	Strategy ReleaseStrategy `json:"strategy"`
+	// +kubebuilder:validation:Enum=direct-commit;pull-request
+	// +kubebuilder:default:=direct-commit
+	PromotionMode PromotionMode   `json:"promotionMode,omitempty"`
+	PullRequest   PullRequestSpec `json:"pullRequest,omitempty"`
 	// DeploymentTimeout limits time spent preparing and waiting for GitOps deployment.
 	// +kubebuilder:default:="30m"
 	DeploymentTimeout metav1.Duration `json:"deploymentTimeout,omitempty"`
@@ -621,6 +640,15 @@ type ReleaseApprovalStatus struct {
 	RejectedAt *metav1.Time `json:"rejectedAt,omitempty"`
 }
 
+type PullRequestStatus struct {
+	Provider     string `json:"provider,omitempty"`
+	URL          string `json:"url,omitempty"`
+	Reference    string `json:"reference,omitempty"`
+	HeadBranch   string `json:"headBranch,omitempty"`
+	TargetBranch string `json:"targetBranch,omitempty"`
+	MergeStatus  string `json:"mergeStatus,omitempty"`
+}
+
 type ReleaseStatus struct {
 	// +kubebuilder:validation:Enum=Pending;AwaitingApproval;PreparingGitOpsChange;GitOpsChangeCommitted;WaitingForSync;Deployed;RolledBack;FailedValidation;FailedApproval;FailedGitClone;FailedGitCommit;FailedGitPush;FailedProviderStatus;TimedOut
 	Phase              ReleasePhase       `json:"phase,omitempty"`
@@ -631,10 +659,11 @@ type ReleaseStatus struct {
 	// +optional
 	CompletedAt *metav1.Time `json:"completedAt,omitempty"`
 	// +optional
-	GitCommit  string                  `json:"gitCommit,omitempty"`
-	Deployment ReleaseDeploymentStatus `json:"deployment,omitempty"`
-	Approval   ReleaseApprovalStatus   `json:"approval,omitempty"`
-	Failure    FailureStatus           `json:"failure,omitempty"`
+	GitCommit   string                  `json:"gitCommit,omitempty"`
+	Deployment  ReleaseDeploymentStatus `json:"deployment,omitempty"`
+	Approval    ReleaseApprovalStatus   `json:"approval,omitempty"`
+	PullRequest PullRequestStatus       `json:"pullRequest,omitempty"`
+	Failure     FailureStatus           `json:"failure,omitempty"`
 }
 
 // +kubebuilder:object:root=true

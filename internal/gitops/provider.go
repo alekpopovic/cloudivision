@@ -44,6 +44,7 @@ type StatusReader interface {
 type UpdateImageRequest struct {
 	RepositoryURL string
 	Branch        string
+	BaseBranch    string
 	Path          string
 	Strategy      cicdv1alpha1.GitOpsStrategy
 	ReleaseName   string
@@ -68,6 +69,7 @@ type DeploymentStatus struct {
 type Git interface {
 	Clone(ctx context.Context, url, destination string) error
 	CheckoutBranch(ctx context.Context, repositoryDir, branch string) error
+	CreateBranch(ctx context.Context, repositoryDir, baseBranch, branch string) error
 	AddAll(ctx context.Context, repositoryDir string) error
 	Commit(ctx context.Context, repositoryDir, message string) error
 	Push(ctx context.Context, repositoryDir, branch string) error
@@ -85,6 +87,15 @@ func (ExecGit) CheckoutBranch(ctx context.Context, repositoryDir, branch string)
 		return nil
 	}
 	return runGit(ctx, repositoryDir, "checkout branch", "git", "checkout", branch)
+}
+
+func (ExecGit) CreateBranch(ctx context.Context, repositoryDir, baseBranch, branch string) error {
+	if baseBranch != "" {
+		if err := runGit(ctx, repositoryDir, "checkout GitOps target branch", "git", "checkout", baseBranch); err != nil {
+			return err
+		}
+	}
+	return runGit(ctx, repositoryDir, "create GitOps promotion branch", "git", "checkout", "-B", branch)
 }
 
 func (ExecGit) AddAll(ctx context.Context, repositoryDir string) error {
@@ -150,7 +161,12 @@ func (p GitRepositoryProvider) UpdateImage(ctx context.Context, req UpdateImageR
 	if err := gitClient.Clone(ctx, req.RepositoryURL, repoDir); err != nil {
 		return nil, &OperationError{Operation: OperationClone, Err: err}
 	}
-	if err := gitClient.CheckoutBranch(ctx, repoDir, req.Branch); err != nil {
+	if req.BaseBranch != "" {
+		err = gitClient.CreateBranch(ctx, repoDir, req.BaseBranch, req.Branch)
+	} else {
+		err = gitClient.CheckoutBranch(ctx, repoDir, req.Branch)
+	}
+	if err != nil {
 		return nil, &OperationError{Operation: OperationClone, Err: err}
 	}
 	if err := updateImageFiles(repoDir, req.Path, strategy, req.Image); err != nil {

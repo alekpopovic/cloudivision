@@ -1148,6 +1148,29 @@ spec:
               projectRef:
                 minLength: 1
                 type: string
+              promotionMode:
+                default: direct-commit
+                enum:
+                - direct-commit
+                - pull-request
+                type: string
+              pullRequest:
+                properties:
+                  bodyTemplate:
+                    type: string
+                  labels:
+                    items:
+                      type: string
+                    type: array
+                  reviewers:
+                    items:
+                      type: string
+                    type: array
+                  targetBranch:
+                    type: string
+                  titleTemplate:
+                    type: string
+                type: object
               strategy:
                 enum:
                 - gitops
@@ -1161,8 +1184,8 @@ spec:
             type: object
             x-kubernetes-validations:
             - message: release image must include a tag or digest
-              rule: (has(self.image.tag) && self.image.tag != ”) || (has(self.image.digest)
-                && self.image.digest != ”)
+              rule: (has(self.image.tag) && size(self.image.tag) > 0) || (has(self.image.digest)
+                && size(self.image.digest) > 0)
           status:
             properties:
               approval:
@@ -1277,6 +1300,21 @@ spec:
                 - FailedProviderStatus
                 - TimedOut
                 type: string
+              pullRequest:
+                properties:
+                  headBranch:
+                    type: string
+                  mergeStatus:
+                    type: string
+                  provider:
+                    type: string
+                  reference:
+                    type: string
+                  targetBranch:
+                    type: string
+                  url:
+                    type: string
+                type: object
               startedAt:
                 format: date-time
                 type: string

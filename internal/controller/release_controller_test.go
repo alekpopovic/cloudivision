@@ -47,6 +47,8 @@ func TestReleaseReconcileAwaitsApproval(t *testing.T) {
 func TestReleaseReconcileUpdatesGitOpsOnce(t *testing.T) {
 	ctx := context.Background()
 	reconciler, release, provider := newReleaseReconciler(t)
+	prProvider := &fakePullRequestProvider{status: "open"}
+	reconciler.PullRequestProvider = prProvider
 
 	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
 		t.Fatalf("first Reconcile() error = %v", err)
@@ -62,11 +64,98 @@ func TestReleaseReconcileUpdatesGitOpsOnce(t *testing.T) {
 	if provider.updateCalls != 1 {
 		t.Fatalf("updateCalls = %d, want 1", provider.updateCalls)
 	}
+	if prProvider.createCalls != 0 || prProvider.readCalls != 0 {
+		t.Fatalf("direct commit unexpectedly called PR provider: %#v", prProvider)
+	}
 	if updated.Status.GitCommit != "abc123" {
 		t.Fatalf("gitCommit = %q, want abc123", updated.Status.GitCommit)
 	}
 	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseWaitingForSync {
 		t.Fatalf("phase = %q, want WaitingForSync", updated.Status.Phase)
+	}
+}
+
+func TestReleasePullRequestPromotionCreatesOnePullRequest(t *testing.T) {
+	ctx := context.Background()
+	reconciler, release, provider := newReleaseReconciler(t)
+	release.Spec.PromotionMode = cicdv1alpha1.PromotionModePullRequest
+	release.Spec.PullRequest = cicdv1alpha1.PullRequestSpec{TargetBranch: "production", Reviewers: []string{"platform"}, Labels: []string{"release"}}
+	if err := reconciler.Update(ctx, release); err != nil {
+		t.Fatalf("update Release error = %v", err)
+	}
+	prProvider := &fakePullRequestProvider{status: "open"}
+	reconciler.PullRequestProvider = prProvider
+
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("first Reconcile() error = %v", err)
+	}
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("second Reconcile() error = %v", err)
+	}
+	updated := &cicdv1alpha1.Release{}
+	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
+		t.Fatalf("get Release error = %v", err)
+	}
+	if prProvider.createCalls != 1 {
+		t.Fatalf("createCalls = %d, want 1", prProvider.createCalls)
+	}
+	if provider.lastRequest.Branch != "cloudivision/"+release.Name || provider.lastRequest.BaseBranch != "production" {
+		t.Fatalf("GitOps branches = head %q base %q", provider.lastRequest.Branch, provider.lastRequest.BaseBranch)
+	}
+	if updated.Status.PullRequest.URL == "" || updated.Status.PullRequest.MergeStatus != "open" {
+		t.Fatalf("pullRequest status = %#v", updated.Status.PullRequest)
+	}
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseGitOpsChangeCommitted {
+		t.Fatalf("phase = %q, want GitOpsChangeCommitted while PR is open", updated.Status.Phase)
+	}
+}
+
+func TestReleaseMergedPullRequestAllowsSyncWait(t *testing.T) {
+	ctx := context.Background()
+	reconciler, release, _ := newReleaseReconciler(t)
+	release.Spec.PromotionMode = cicdv1alpha1.PromotionModePullRequest
+	if err := reconciler.Update(ctx, release); err != nil {
+		t.Fatalf("update Release error = %v", err)
+	}
+	prProvider := &fakePullRequestProvider{status: "open"}
+	reconciler.PullRequestProvider = prProvider
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("create Reconcile() error = %v", err)
+	}
+	prProvider.status = "merged"
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("merge Reconcile() error = %v", err)
+	}
+	updated := &cicdv1alpha1.Release{}
+	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
+		t.Fatalf("get Release error = %v", err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseWaitingForSync {
+		t.Fatalf("phase = %q, want WaitingForSync", updated.Status.Phase)
+	}
+}
+
+func TestReleaseClosedPullRequestBlocksPromotion(t *testing.T) {
+	ctx := context.Background()
+	reconciler, release, _ := newReleaseReconciler(t)
+	release.Spec.PromotionMode = cicdv1alpha1.PromotionModePullRequest
+	if err := reconciler.Update(ctx, release); err != nil {
+		t.Fatalf("update Release error = %v", err)
+	}
+	prProvider := &fakePullRequestProvider{status: "closed"}
+	reconciler.PullRequestProvider = prProvider
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("create Reconcile() error = %v", err)
+	}
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("status Reconcile() error = %v", err)
+	}
+	updated := &cicdv1alpha1.Release{}
+	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
+		t.Fatalf("get Release error = %v", err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailedApproval {
+		t.Fatalf("phase = %q, want FailedApproval", updated.Status.Phase)
 	}
 }
 
@@ -512,6 +601,13 @@ type fakeGitOpsProvider struct {
 	updateErr   error
 	status      *gitops.DeploymentStatus
 	statusErr   error
+	lastRequest gitops.UpdateImageRequest
+}
+
+type fakePullRequestProvider struct {
+	createCalls int
+	readCalls   int
+	status      string
 }
 
 type statusFailureClient struct {
@@ -551,12 +647,23 @@ func apiConflict(name string) error {
 	return apierrors.NewConflict(schema.GroupResource{Group: "cicd.cloudivision.io", Resource: "releases"}, name, errors.New("injected conflict"))
 }
 
-func (p *fakeGitOpsProvider) UpdateImage(context.Context, gitops.UpdateImageRequest) (*gitops.UpdateImageResult, error) {
+func (p *fakeGitOpsProvider) UpdateImage(_ context.Context, req gitops.UpdateImageRequest) (*gitops.UpdateImageResult, error) {
 	p.updateCalls++
+	p.lastRequest = req
 	if p.updateErr != nil {
 		return nil, p.updateErr
 	}
 	return &gitops.UpdateImageResult{Commit: p.commit}, nil
+}
+
+func (p *fakePullRequestProvider) CreateOrUpdatePullRequest(_ context.Context, req gitops.PullRequestRequest) (*gitops.PullRequestResult, error) {
+	p.createCalls++
+	return &gitops.PullRequestResult{Provider: "github", URL: "https://github.com/example/repo/pull/1", Reference: "1", HeadBranch: req.HeadBranch, TargetBranch: req.TargetBranch, MergeStatus: p.status}, nil
+}
+
+func (p *fakePullRequestProvider) ReadPullRequestStatus(_ context.Context, req gitops.PullRequestStatusRequest) (*gitops.PullRequestResult, error) {
+	p.readCalls++
+	return &gitops.PullRequestResult{Provider: "github", URL: "https://github.com/example/repo/pull/1", Reference: req.Reference, HeadBranch: "cloudivision/release", TargetBranch: "main", MergeStatus: p.status}, nil
 }
 
 func (p fakeGitOpsProvider) ReadDeploymentStatus(context.Context, gitops.DeploymentStatusRequest) (*gitops.DeploymentStatus, error) {

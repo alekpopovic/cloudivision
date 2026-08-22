@@ -17,10 +17,10 @@ export class StatusBadgeComponent {
     if (['succeeded', 'ready', 'deployed', 'synced', 'healthy'].includes(normalized)) {
       return 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200';
     }
-    if (['failed', 'error', 'cancelled', 'rolledback'].includes(normalized)) {
+		if (normalized.startsWith('failed') || ['error', 'cancelled', 'rolledback', 'timedout'].includes(normalized)) {
       return 'bg-rose-50 text-rose-700 ring-1 ring-rose-200';
     }
-    if (['running', 'queued', 'deploying', 'awaitingapproval', 'pending'].includes(normalized)) {
+		if (['running', 'queued', 'deploying', 'awaitingapproval', 'pending', 'preparinggitopschange', 'gitopschangecommitted', 'waitingforsync'].includes(normalized)) {
       return 'bg-amber-50 text-amber-700 ring-1 ring-amber-200';
     }
     return 'bg-slate-100 text-slate-700 ring-1 ring-slate-200';

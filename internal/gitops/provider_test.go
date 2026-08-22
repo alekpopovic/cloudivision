@@ -70,6 +70,28 @@ func TestGitRepositoryProviderTreatsNoOpImageUpdateAsSuccess(t *testing.T) {
 	}
 }
 
+func TestGitRepositoryProviderCreatesPromotionBranchFromTarget(t *testing.T) {
+	ctx := context.Background()
+	remote := createRemoteGitOpsRepo(t, map[string]string{
+		"kustomization.yaml": "images:\n- name: ghcr.io/cloudivision/example\n  newTag: old\n",
+	})
+	result, err := (GitRepositoryProvider{}).UpdateImage(ctx, UpdateImageRequest{
+		RepositoryURL: remote,
+		Branch:        "cloudivision/release-1",
+		BaseBranch:    "main",
+		Strategy:      cicdv1alpha1.GitOpsStrategyKustomizeImage,
+		ReleaseName:   "release-1",
+		Image:         cicdv1alpha1.ImageRef{Repository: "ghcr.io/cloudivision/example", Tag: "v2"},
+	})
+	if err != nil {
+		t.Fatalf("UpdateImage() error = %v", err)
+	}
+	output := runGitTestOutput(t, "", "git", "--git-dir", remote, "rev-parse", "refs/heads/cloudivision/release-1")
+	if strings.TrimSpace(output) != result.Commit {
+		t.Fatalf("promotion branch commit = %q, want %q", strings.TrimSpace(output), result.Commit)
+	}
+}
+
 func TestUpdateHelmValues(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "values.yaml")
@@ -164,6 +186,17 @@ func runGitTest(t *testing.T, dir, name string, args ...string) {
 	if err != nil {
 		t.Fatalf("%s %s failed: %s: %v", name, strings.Join(args, " "), string(output), err)
 	}
+}
+
+func runGitTestOutput(t *testing.T, dir, name string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%s %s failed: %s: %v", name, strings.Join(args, " "), string(output), err)
+	}
+	return string(output)
 }
 
 func readMapForTest(t *testing.T, path string) map[string]any {

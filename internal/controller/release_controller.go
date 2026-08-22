@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
@@ -28,9 +29,10 @@ const (
 // ReleaseReconciler reconciles Release resources.
 type ReleaseReconciler struct {
 	client.Client
-	GitOpsProvider gitops.Provider
-	StatusReader   gitops.StatusReader
-	Recorder       EventRecorder
+	GitOpsProvider      gitops.Provider
+	StatusReader        gitops.StatusReader
+	PullRequestProvider gitops.PullRequestProvider
+	Recorder            EventRecorder
 }
 
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=releases,verbs=get;list;watch;create;update;patch;delete
@@ -107,9 +109,11 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 		if provider == nil {
 			provider = gitops.GitRepositoryProvider{}
 		}
+		branch, baseBranch := gitOpsBranches(release, buildRun)
 		result, err := provider.UpdateImage(ctx, gitops.UpdateImageRequest{
 			RepositoryURL: buildRun.Spec.GitOps.RepoURL,
-			Branch:        buildRun.Spec.GitOps.Branch,
+			Branch:        branch,
+			BaseBranch:    baseBranch,
 			Path:          buildRun.Spec.GitOps.Path,
 			Strategy:      buildRun.Spec.GitOps.Strategy,
 			ReleaseName:   release.Name,
@@ -128,6 +132,11 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		logger.Info("updated GitOps repository", "commit", commit)
 		release.Status.GitCommit = commit
+		if releasePromotionMode(release) == cicdv1alpha1.PromotionModePullRequest {
+			if err := r.ensurePullRequest(ctx, release, buildRun); err != nil {
+				return ctrl.Result{}, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedProviderStatus, "PullRequestCreateFailed", err.Error())
+			}
+		}
 		if err := r.markGitOpsChangeCommitted(ctx, release); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -136,10 +145,27 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 	release.Status.GitCommit = commit
 
 	if release.Status.Phase == cicdv1alpha1.ReleasePhasePreparingGitOpsChange || release.Status.Phase == cicdv1alpha1.ReleasePhasePending || release.Status.Phase == "" {
+		if releasePromotionMode(release) == cicdv1alpha1.PromotionModePullRequest && release.Status.PullRequest.Reference == "" {
+			if err := r.ensurePullRequest(ctx, release, buildRun); err != nil {
+				return ctrl.Result{}, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedProviderStatus, "PullRequestCreateFailed", err.Error())
+			}
+		}
 		if err := r.markGitOpsChangeCommitted(ctx, release); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
+	}
+	if releasePromotionMode(release) == cicdv1alpha1.PromotionModePullRequest {
+		ready, closed, err := r.syncPullRequestStatus(ctx, release, buildRun)
+		if err != nil {
+			return ctrl.Result{}, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedProviderStatus, "PullRequestStatusFailed", err.Error())
+		}
+		if closed {
+			return ctrl.Result{}, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedApproval, "PullRequestClosed", "Pull request was closed without being merged.")
+		}
+		if !ready {
+			return ctrl.Result{RequeueAfter: externalStateRequeue}, nil
+		}
 	}
 	if err := r.markWaitingForSync(ctx, release); err != nil {
 		return ctrl.Result{}, err
@@ -165,6 +191,111 @@ func releasePhaseTerminal(phase cicdv1alpha1.ReleasePhase) bool {
 
 func releaseRequiresApproval(release *cicdv1alpha1.Release, environment *cicdv1alpha1.Environment) bool {
 	return release.Spec.Approval.Required || (environment != nil && environment.Spec.RequiresApproval)
+}
+
+func releasePromotionMode(release *cicdv1alpha1.Release) cicdv1alpha1.PromotionMode {
+	if release.Spec.PromotionMode == "" {
+		return cicdv1alpha1.PromotionModeDirectCommit
+	}
+	return release.Spec.PromotionMode
+}
+
+func gitOpsBranches(release *cicdv1alpha1.Release, buildRun *cicdv1alpha1.BuildRun) (branch, baseBranch string) {
+	if releasePromotionMode(release) != cicdv1alpha1.PromotionModePullRequest {
+		return buildRun.Spec.GitOps.Branch, ""
+	}
+	target := release.Spec.PullRequest.TargetBranch
+	if target == "" {
+		target = buildRun.Spec.GitOps.Branch
+	}
+	if target == "" {
+		target = "main"
+	}
+	return "cloudivision/" + release.Name, target
+}
+
+func (r *ReleaseReconciler) pullRequestProvider(repositoryURL string) gitops.PullRequestProvider {
+	if r.PullRequestProvider != nil {
+		return r.PullRequestProvider
+	}
+	return gitops.PullRequestProviderForRepository(repositoryURL)
+}
+
+func (r *ReleaseReconciler) ensurePullRequest(ctx context.Context, release *cicdv1alpha1.Release, buildRun *cicdv1alpha1.BuildRun) error {
+	head, target := gitOpsBranches(release, buildRun)
+	result, err := r.pullRequestProvider(buildRun.Spec.GitOps.RepoURL).CreateOrUpdatePullRequest(ctx, gitops.PullRequestRequest{
+		RepositoryURL: buildRun.Spec.GitOps.RepoURL,
+		ReleaseName:   release.Name,
+		HeadBranch:    head,
+		TargetBranch:  target,
+		Title:         renderPromotionTemplate(release.Spec.PullRequest.TitleTemplate, "cloudivision: promote {{release.name}}", release),
+		Body:          renderPromotionTemplate(release.Spec.PullRequest.BodyTemplate, "Promotes {{image}} for Release {{release.name}}.", release),
+		Reviewers:     release.Spec.PullRequest.Reviewers,
+		Labels:        release.Spec.PullRequest.Labels,
+	})
+	if err != nil {
+		return err
+	}
+	if result == nil || result.Reference == "" {
+		return errors.New("pull request provider returned an empty reference")
+	}
+	release.Status.PullRequest = pullRequestStatus(result)
+	return r.updateReleaseStatus(ctx, release)
+}
+
+func (r *ReleaseReconciler) syncPullRequestStatus(ctx context.Context, release *cicdv1alpha1.Release, buildRun *cicdv1alpha1.BuildRun) (ready, closed bool, err error) {
+	if release.Status.PullRequest.Reference == "" {
+		if err := r.ensurePullRequest(ctx, release, buildRun); err != nil {
+			return false, false, err
+		}
+	}
+	result, err := r.pullRequestProvider(buildRun.Spec.GitOps.RepoURL).ReadPullRequestStatus(ctx, gitops.PullRequestStatusRequest{
+		RepositoryURL: buildRun.Spec.GitOps.RepoURL,
+		Reference:     release.Status.PullRequest.Reference,
+	})
+	if err != nil {
+		return false, false, err
+	}
+	if result == nil {
+		return false, false, errors.New("pull request provider returned an empty status")
+	}
+	release.Status.PullRequest = pullRequestStatus(result)
+	if err := r.updateReleaseStatus(ctx, release); err != nil {
+		return false, false, err
+	}
+	switch strings.ToLower(result.MergeStatus) {
+	case "merged":
+		return true, false, nil
+	case "closed":
+		return false, true, nil
+	default:
+		return false, false, nil
+	}
+}
+
+func pullRequestStatus(result *gitops.PullRequestResult) cicdv1alpha1.PullRequestStatus {
+	return cicdv1alpha1.PullRequestStatus{
+		Provider:     result.Provider,
+		URL:          result.URL,
+		Reference:    result.Reference,
+		HeadBranch:   result.HeadBranch,
+		TargetBranch: result.TargetBranch,
+		MergeStatus:  result.MergeStatus,
+	}
+}
+
+func renderPromotionTemplate(template, fallback string, release *cicdv1alpha1.Release) string {
+	if template == "" {
+		template = fallback
+	}
+	image := release.Spec.Image.Repository
+	if release.Spec.Image.Digest != "" {
+		image += "@" + release.Spec.Image.Digest
+	} else if release.Spec.Image.Tag != "" {
+		image += ":" + release.Spec.Image.Tag
+	}
+	replacer := strings.NewReplacer("{{release.name}}", release.Name, "{{image}}", image)
+	return replacer.Replace(template)
 }
 
 func (r *ReleaseReconciler) SetupWithManager(mgr ctrl.Manager) error {

@@ -67,10 +67,14 @@ export class DashboardPageComponent {
         { label: 'Projects', value: projects.length },
         { label: 'Latest BuildRuns', value: buildRuns.length },
         { label: 'Failed Builds', value: buildRuns.filter((run) => run.status?.phase === 'Failed').length },
-        { label: 'Releases In Progress', value: releases.filter((release) => release.status?.phase === 'Deploying').length }
+				{ label: 'Releases In Progress', value: releases.filter((release) => this.releaseInProgress(release.status?.phase)).length }
       ],
       buildRuns: buildRuns.slice(0, 6),
-      releases: releases.filter((release) => release.status?.phase === 'Deploying').slice(0, 6)
+			releases: releases.filter((release) => this.releaseInProgress(release.status?.phase)).slice(0, 6)
     }))
   );
+
+	private releaseInProgress(phase?: string): boolean {
+		return ['PreparingGitOpsChange', 'GitOpsChangeCommitted', 'WaitingForSync'].includes(phase || '');
+	}
 }

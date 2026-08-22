@@ -77,4 +77,19 @@ describe('ReleasesPageComponent', () => {
     expect(api.approveCalls).toBe(1);
     expect(api.rejectCalls).toBe(0);
   }));
+
+	it('shows pull request promotion metadata and link', fakeAsync(() => {
+		api.releasesResponse[0].spec.promotionMode = 'pull-request';
+		api.releasesResponse[0].status = {
+			phase: 'GitOpsChangeCommitted',
+			pullRequest: { provider: 'github', url: 'https://github.com/example/repo/pull/7', reference: '7', mergeStatus: 'open' }
+		};
+		fixture.detectChanges();
+		tick(0);
+		fixture.detectChanges();
+
+		expect(fixture.nativeElement.textContent).toContain('Promotion: pull-request');
+		expect(fixture.nativeElement.textContent).toContain('Merge: open');
+		expect(fixture.nativeElement.querySelector('a').href).toContain('/pull/7');
+	}));
 });

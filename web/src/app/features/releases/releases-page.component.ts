@@ -29,11 +29,16 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
             </div>
             <app-status-badge [status]="release.status?.phase || 'Pending'" />
           </div>
-          <div class="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-3">
+          <div class="mt-3 grid gap-2 text-xs text-slate-600 md:grid-cols-4">
             <span>Image: {{ release.spec.image.repository }}:{{ release.spec.image.tag || '-' }}</span>
+						<span>Promotion: {{ release.spec.promotionMode || 'direct-commit' }}</span>
             <span>Sync: {{ release.status?.deployment?.syncStatus || '-' }}</span>
             <span>Health: {{ release.status?.deployment?.healthStatus || '-' }}</span>
           </div>
+					<div class="mt-2 flex flex-wrap items-center gap-3 text-xs" *ngIf="release.status?.pullRequest as pullRequest">
+						<span class="text-slate-600">Merge: {{ pullRequest.mergeStatus || 'unknown' }}</span>
+						<a *ngIf="pullRequest.url" class="font-medium text-blue-700 hover:underline" [href]="pullRequest.url" target="_blank" rel="noopener noreferrer">Open {{ pullRequest.provider || 'Git' }} PR {{ pullRequest.reference || '' }}</a>
+					</div>
           <ng-container *ngIf="currentUser$ | async as currentUser">
             <div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" *ngIf="canActOnApproval(release, currentUser)">
               <p class="font-medium">Approval required</p>

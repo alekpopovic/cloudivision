@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-22T00:08:58Z",
-  "last_executed_prompt": 28,
-  "next_prompt": 29,
+  "updated_at": "2026-08-22T00:15:20Z",
+  "last_executed_prompt": 29,
+  "next_prompt": 30,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -278,9 +278,9 @@
       "title": "PR-Based GitOps Promotion",
       "phase": "Release / GitOps",
       "file": "prompts/29-pr-based-gitops-promotion.md",
-      "status": "pending",
-      "executed_at": null,
-      "notes": ""
+      "status": "done",
+      "executed_at": "2026-08-22T00:15:20Z",
+      "notes": "Added optional PR-based GitOps promotion, deterministic branches, GitHub/GitLab provider skeletons, idempotent PR reconciliation, CRD/status metadata, UI link, docs, and tests."
     },
     {
       "id": 30,

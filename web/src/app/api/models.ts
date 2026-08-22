@@ -170,11 +170,27 @@ export interface Release {
       comment?: string;
     };
     strategy: 'gitops';
+		promotionMode?: 'direct-commit' | 'pull-request';
+		pullRequest?: {
+			titleTemplate?: string;
+			bodyTemplate?: string;
+			targetBranch?: string;
+			reviewers?: string[];
+			labels?: string[];
+		};
   };
   status?: {
     phase?: string;
     gitCommit?: string;
     deployment?: { provider?: string; applicationName?: string; syncStatus?: string; healthStatus?: string };
+		pullRequest?: {
+			provider?: string;
+			url?: string;
+			reference?: string;
+			headBranch?: string;
+			targetBranch?: string;
+			mergeStatus?: string;
+		};
     conditions?: Condition[];
   };
 }
