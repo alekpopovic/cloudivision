@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-22T19:42:04Z",
-  "last_executed_prompt": 46,
-  "next_prompt": 47,
+  "updated_at": "2026-08-22T23:52:10Z",
+  "last_executed_prompt": 47,
+  "next_prompt": 48,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -440,8 +440,9 @@
       "title": "Branch, Tag and Pull Request Event Filters",
       "phase": "API",
       "file": "prompts/47-branch-tag-and-pull-request-event-filters.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Added auditable branch/tag/PR webhook filters, safe fork/trusted-actor defaults, Angular configuration/summary, CRD schemas, tests and docs. go test ./... and Angular build passed.",
+      "executed_at": "2026-08-22T23:52:10Z"
     },
     {
       "id": 48,

@@ -72,7 +72,13 @@ export interface Repository {
     url: string;
     defaultBranch: string;
     pipelineTemplateRef: string;
-    webhook?: { enabled: boolean; events?: string[] };
+    webhook?: {
+      enabled: boolean;
+      events?: string[];
+      branchFilters?: { include?: string[]; exclude?: string[] };
+      tagFilters?: { include?: string[]; exclude?: string[] };
+      pullRequest?: { enabled?: boolean; events?: string[]; buildForks?: boolean; requireTrustedActor?: boolean };
+    };
   };
   status?: { phase?: string; lastWebhookAt?: string; conditions?: Condition[] };
 }

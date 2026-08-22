@@ -277,6 +277,8 @@ func TestGitHubWebhookDuplicateDeliveryUsesIdempotencyBackend(t *testing.T) {
 func TestGitHubWebhookIgnoresNonDefaultBranch(t *testing.T) {
 	body := bytes.ReplaceAll(readFixture(t, "github_push.json"), []byte("refs/heads/main"), []byte("refs/heads/feature"))
 	server, k8sClient := newWebhookTestServer(t, cicdv1alpha1.RepositoryProviderGitHub)
+	auditRecorder := &fakeAuditRecorder{}
+	server.Audit = auditRecorder
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/github/sample-repository?namespace=ci", bytes.NewReader(body))
 	req.Header.Set("X-GitHub-Event", "push")
 	req.Header.Set("X-GitHub-Delivery", "github-event-ignored-branch")
@@ -293,6 +295,9 @@ func TestGitHubWebhookIgnoresNonDefaultBranch(t *testing.T) {
 		t.Fatalf("response = %#v, error = %v", response, err)
 	}
 	assertBuildRunCount(t, k8sClient, 0)
+	if !hasAuditReason(auditRecorder.events, "branch_ignored") {
+		t.Fatalf("audit events = %#v", auditRecorder.events)
+	}
 }
 
 func TestGitHubWebhookAcceptsPingWithoutBuildRun(t *testing.T) {
@@ -799,7 +804,8 @@ func newWebhookTestServer(t *testing.T, provider cicdv1alpha1.RepositoryProvider
 			DefaultBranch:       "main",
 			PipelineTemplateRef: "sample-template",
 			Webhook: cicdv1alpha1.RepositoryWebhook{
-				Enabled: true,
+				Enabled:     true,
+				PullRequest: cicdv1alpha1.RepositoryPullRequestFilters{Enabled: true},
 				SecretRef: cicdv1alpha1.RequiredSecretKeyRef{
 					Name: "webhook-secret",
 					Key:  "secret",
@@ -887,6 +893,16 @@ func (r *fakeAuditRecorder) Record(_ context.Context, event audit.Event) error {
 func hasAuditType(events []audit.Event, eventType string) bool {
 	for _, event := range events {
 		if event.Type == eventType {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAuditReason(events []audit.Event, reason string) bool {
+	for _, event := range events {
+		var metadata map[string]string
+		if json.Unmarshal(event.Metadata, &metadata) == nil && metadata["reason"] == reason {
 			return true
 		}
 	}

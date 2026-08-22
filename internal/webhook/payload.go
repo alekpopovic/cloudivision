@@ -26,6 +26,9 @@ type Event struct {
 	EventID       string
 	Type          EventType
 	Action        string
+	IsTag         bool
+	IsFork        bool
+	TrustedActor  bool
 	Timestamp     time.Time
 	IsPush        bool
 	IsPullRequest bool
@@ -74,8 +77,11 @@ func parseGitHub(headers http.Header, body []byte) (Event, error) {
 		PullRequest struct {
 			UpdatedAt time.Time `json:"updated_at"`
 			Head      struct {
-				Ref string `json:"ref"`
-				SHA string `json:"sha"`
+				Ref  string `json:"ref"`
+				SHA  string `json:"sha"`
+				Repo struct {
+					FullName string `json:"full_name"`
+				} `json:"repo"`
 			} `json:"head"`
 			Base struct {
 				Ref string `json:"ref"`
@@ -84,6 +90,7 @@ func parseGitHub(headers http.Header, body []byte) (Event, error) {
 		Repository struct {
 			CloneURL string `json:"clone_url"`
 			HTMLURL  string `json:"html_url"`
+			FullName string `json:"full_name"`
 			PushedAt int64  `json:"pushed_at"`
 		} `json:"repository"`
 		Sender struct {
@@ -93,7 +100,8 @@ func parseGitHub(headers http.Header, body []byte) (Event, error) {
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return Event{}, fmt.Errorf("parse GitHub payload: %w", err)
 	}
-	branch := branchFromRef(payload.Ref)
+	isTag := strings.HasPrefix(payload.Ref, "refs/tags/")
+	branch := refName(payload.Ref)
 	commitSHA := payload.After
 	baseBranch := ""
 	var timestamp time.Time
@@ -106,6 +114,7 @@ func parseGitHub(headers http.Header, body []byte) (Event, error) {
 		commitSHA = payload.PullRequest.Head.SHA
 		timestamp = payload.PullRequest.UpdatedAt
 	}
+	isFork := eventType == EventPullRequest && payload.PullRequest.Head.Repo.FullName != "" && payload.Repository.FullName != "" && !strings.EqualFold(payload.PullRequest.Head.Repo.FullName, payload.Repository.FullName)
 	return Event{
 		RepositoryURL: firstNonEmpty(payload.Repository.CloneURL, payload.Repository.HTMLURL),
 		Branch:        branch,
@@ -115,6 +124,8 @@ func parseGitHub(headers http.Header, body []byte) (Event, error) {
 		EventID:       headers.Get("X-GitHub-Delivery"),
 		Type:          eventType,
 		Action:        payload.Action,
+		IsTag:         isTag,
+		IsFork:        isFork,
 		Timestamp:     timestamp,
 		IsPush:        eventType == EventPush,
 		IsPullRequest: eventType == EventPullRequest,
@@ -141,7 +152,8 @@ func parseGitLab(headers http.Header, body []byte) (Event, error) {
 	isPush := payload.ObjectKind == "push"
 	return Event{
 		RepositoryURL: firstNonEmpty(payload.Project.GitHTTPURL, payload.Project.WebURL),
-		Branch:        branchFromRef(payload.Ref),
+		Branch:        refName(payload.Ref),
+		IsTag:         strings.HasPrefix(payload.Ref, "refs/tags/"),
 		CommitSHA:     firstNonEmpty(payload.CheckoutSHA, payload.After),
 		Actor:         firstNonEmpty(payload.UserUsername, payload.UserName),
 		EventID:       firstNonEmpty(headers.Get("X-Gitlab-Event-UUID"), headers.Get("X-Gitlab-Event")),
@@ -168,7 +180,8 @@ func parseGitea(headers http.Header, body []byte) (Event, error) {
 	isPush := headers.Get("X-Gitea-Event") == "push"
 	return Event{
 		RepositoryURL: firstNonEmpty(payload.Repository.CloneURL, payload.Repository.HTMLURL),
-		Branch:        branchFromRef(payload.Ref),
+		Branch:        refName(payload.Ref),
+		IsTag:         strings.HasPrefix(payload.Ref, "refs/tags/"),
 		CommitSHA:     payload.After,
 		Actor:         payload.Sender.Login,
 		EventID:       firstNonEmpty(headers.Get("X-Gitea-Delivery"), headers.Get("X-Gitea-Event")),
@@ -185,14 +198,21 @@ func parseGeneric(headers http.Header, body []byte) (Event, error) {
 		Actor         string `json:"actor"`
 		EventID       string `json:"eventID"`
 		EventType     string `json:"eventType"`
+		Tag           string `json:"tag"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return Event{}, fmt.Errorf("parse generic payload: %w", err)
 	}
-	isPush := payload.EventType == "" || payload.EventType == "push"
+	isTag := payload.EventType == "tag" || payload.Tag != ""
+	isPush := payload.EventType == "" || payload.EventType == "push" || isTag
+	branch := payload.Branch
+	if isTag {
+		branch = firstNonEmpty(payload.Tag, payload.Branch)
+	}
 	return Event{
 		RepositoryURL: payload.RepositoryURL,
-		Branch:        payload.Branch,
+		Branch:        branch,
+		IsTag:         isTag,
 		CommitSHA:     payload.CommitSHA,
 		Actor:         payload.Actor,
 		EventID:       firstNonEmpty(payload.EventID, headers.Get("X-Cloudivision-Event-ID")),
@@ -208,8 +228,9 @@ func eventTypeForPush(isPush bool) EventType {
 	return EventUnknown
 }
 
-func branchFromRef(ref string) string {
-	return strings.TrimPrefix(ref, "refs/heads/")
+func refName(ref string) string {
+	ref = strings.TrimPrefix(ref, "refs/heads/")
+	return strings.TrimPrefix(ref, "refs/tags/")
 }
 
 func firstNonEmpty(values ...string) string {

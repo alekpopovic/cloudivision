@@ -668,22 +668,15 @@ func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
 			return
 		}
 
-		if !event.IsPush && !event.IsPullRequest {
+		matched, filterReason, filterMessage := webhook.Filter(repository, event)
+		if !matched {
 			if err := s.recordWebhookEvent(r.Context(), provider, repository, "", event); err != nil {
 				s.writeError(w, err)
 				return
 			}
-			s.recordWebhookAudit(r.Context(), "WebhookAccepted", provider, repository, event.EventID, string(event.Type), "event_ignored", event.Actor, "")
-			writeJSON(w, http.StatusOK, WebhookResponse{Repository: repository.Name, EventID: event.EventID, Event: string(event.Type), Result: "ignored", Message: "Webhook event is not configured to create a BuildRun.", Created: false})
-			return
-		}
-		if event.IsPullRequest && event.Action != "opened" && event.Action != "reopened" && event.Action != "synchronize" {
-			if err := s.recordWebhookEvent(r.Context(), provider, repository, "", event); err != nil {
-				s.writeError(w, err)
-				return
-			}
-			s.recordWebhookAudit(r.Context(), "WebhookAccepted", provider, repository, event.EventID, string(event.Type), "pull_request_action_ignored", event.Actor, "")
-			writeJSON(w, http.StatusOK, WebhookResponse{Repository: repository.Name, EventID: event.EventID, Event: string(event.Type), Result: "ignored", Message: "Pull request action is not configured to create a BuildRun.", Created: false})
+			s.recordWebhookAudit(r.Context(), "WebhookAccepted", provider, repository, event.EventID, string(event.Type), filterReason, event.Actor, "")
+			observability.WebhookEvents.WithLabelValues(string(provider), "ignored").Inc()
+			writeJSON(w, http.StatusOK, WebhookResponse{Repository: repository.Name, EventID: event.EventID, Event: string(event.Type), Result: "ignored", Message: filterMessage, Created: false})
 			return
 		}
 		if event.CommitSHA == "" {
@@ -691,21 +684,6 @@ func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
 			s.writeError(w, badRequest("webhook commit SHA is required"))
 			return
 		}
-		filterBranch := event.Branch
-		if event.IsPullRequest {
-			filterBranch = event.BaseBranch
-		}
-		if filterBranch != repository.Spec.DefaultBranch {
-			if err := s.recordWebhookEvent(r.Context(), provider, repository, "", event); err != nil {
-				s.writeError(w, err)
-				return
-			}
-			s.recordWebhookAudit(r.Context(), "WebhookAccepted", provider, repository, event.EventID, string(event.Type), "branch_ignored", event.Actor, "")
-			observability.WebhookEvents.WithLabelValues(string(provider), "ignored").Inc()
-			writeJSON(w, http.StatusOK, WebhookResponse{Repository: repository.Name, EventID: event.EventID, Event: string(event.Type), Result: "ignored", Message: "Webhook branch does not match repository defaultBranch.", Created: false})
-			return
-		}
-
 		project := &cicdv1alpha1.Project{}
 		if err := s.Client.Get(r.Context(), client.ObjectKey{Name: repository.Spec.ProjectRef, Namespace: namespace}, project); err != nil {
 			s.writeError(w, err)

@@ -42,3 +42,27 @@ func TestParseGitHubPing(t *testing.T) {
 		t.Fatalf("event = %#v", event)
 	}
 }
+
+func TestParseGitHubTag(t *testing.T) {
+	headers := http.Header{}
+	headers.Set("X-GitHub-Event", "push")
+	event, err := Parse(ProviderGitHub, headers, []byte(`{"ref":"refs/tags/v1.2.0","after":"abcdef"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !event.IsPush || !event.IsTag || event.Branch != "v1.2.0" {
+		t.Fatalf("event = %#v", event)
+	}
+}
+
+func TestParseGitHubForkPullRequest(t *testing.T) {
+	headers := http.Header{}
+	headers.Set("X-GitHub-Event", "pull_request")
+	event, err := Parse(ProviderGitHub, headers, []byte(`{"action":"opened","pull_request":{"head":{"ref":"change","sha":"abcdef","repo":{"full_name":"contributor/repo"}},"base":{"ref":"main"}},"repository":{"full_name":"acme/repo"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !event.IsPullRequest || !event.IsFork {
+		t.Fatalf("event = %#v", event)
+	}
+}

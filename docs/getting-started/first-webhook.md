@@ -41,6 +41,13 @@ spec:
     secretRef:
       name: demo-github-webhook
       key: secret
+    branchFilters:
+      include: [main, "release/*"]
+      exclude: ["wip/*"]
+    pullRequest:
+      enabled: true
+      events: [opened, synchronize]
+      buildForks: false
 ```
 
 Apply it with `kubectl apply -f repository.yaml`. The API reads only the named
@@ -76,7 +83,10 @@ kubectl -n cloudivision get buildruns -o custom-columns=NAME:.metadata.name,EVEN
 
 Re-delivering the same GitHub delivery returns HTTP 200 with
 `"result":"duplicate"` and does not create another BuildRun. A push whose branch
-does not match `defaultBranch` returns HTTP 200 with `"result":"ignored"`.
+does not match `branchFilters`, a disabled tag, or a blocked fork PR returns HTTP
+200 with `"result":"ignored"` and an explanatory `message`. Exclude patterns take
+precedence over include patterns. To build tags, add `tagFilters.include`, for
+example `["v*"]`.
 
 For production idempotency across API replicas and restarts, configure the
 PostgreSQL audit backend and apply all migrations in `internal/audit/migrations`.

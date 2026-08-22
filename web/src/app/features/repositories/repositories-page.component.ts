@@ -33,6 +33,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
               </div>
               <p class="mt-2 break-all rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">{{ webhookUrl(repository) }}</p>
 							<p class="mt-1 text-xs text-slate-500">Webhook: {{ repository.status?.lastWebhookAt ? 'verified at ' + repository.status?.lastWebhookAt : 'not verified yet' }}</p>
+							<p class="mt-1 text-xs text-slate-500">Filters: {{ filterSummary(repository) }}</p>
             </div>
           </div>
           <ng-template #empty><app-empty-state title="No repositories" message="Create a repository to receive Git events." /></ng-template>
@@ -54,6 +55,8 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
         </label>
         <label class="mt-3 block text-sm">URL<input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" formControlName="url" /></label>
         <label class="mt-3 block text-sm">Default branch<input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" formControlName="defaultBranch" /></label>
+				<label class="mt-3 block text-sm">Included branches<input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" formControlName="branchInclude" placeholder="main, release/*" /><span class="mt-1 block text-xs text-slate-500">Comma-separated names or glob patterns.</span></label>
+				<label class="mt-3 block text-sm">Excluded branches<input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" formControlName="branchExclude" placeholder="wip/*, dependabot/*" /></label>
 				<label class="mt-3 block text-sm">Pipeline template
 					<select class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" formControlName="pipelineTemplateRef">
 						<option value="">Select a template</option><option *ngFor="let template of templates$ | async" [value]="template.name">{{ template.name }}</option>
@@ -93,12 +96,27 @@ export class RepositoriesPageComponent {
     provider: ['github' as Repository['spec']['provider'], Validators.required],
     url: ['', Validators.required],
     defaultBranch: ['main', Validators.required],
+    branchInclude: ['main'],
+    branchExclude: [''],
     pipelineTemplateRef: ['', Validators.required]
   });
 
   webhookUrl(repository: Repository): string {
     return `${this.apiBase}/${repository.spec.provider}/${repository.name}`;
   }
+
+	filterSummary(repository: Repository): string {
+		const webhook = repository.spec.webhook;
+		const include = webhook?.branchFilters?.include?.join(', ') || repository.spec.defaultBranch;
+		const exclude = webhook?.branchFilters?.exclude?.join(', ') || 'none';
+		const tags = webhook?.tagFilters?.include?.join(', ') || 'disabled';
+		const pullRequests = webhook?.pullRequest?.enabled ? `enabled (${webhook.pullRequest.events?.join(', ') || 'opened, reopened, synchronize'})` : 'disabled';
+		return `branches ${include}; excludes ${exclude}; tags ${tags}; PRs ${pullRequests}`;
+	}
+
+	private patterns(value: string): string[] {
+		return value.split(',').map((item) => item.trim()).filter(Boolean);
+	}
 
   create(): void {
     if (this.form.invalid) return;
@@ -111,7 +129,12 @@ export class RepositoriesPageComponent {
         url: value.url,
         defaultBranch: value.defaultBranch,
         pipelineTemplateRef: value.pipelineTemplateRef,
-        webhook: { enabled: true, events: ['push'] }
+				webhook: {
+					enabled: true,
+					events: ['push'],
+					branchFilters: { include: this.patterns(value.branchInclude), exclude: this.patterns(value.branchExclude) },
+					pullRequest: { enabled: false, buildForks: false, requireTrustedActor: false }
+				}
       }
 		}).subscribe({ next: (repository) => { this.createdRepository = repository; this.wizardStep = 2; this.refresh$.next(); }, error: (error: ApiError) => (this.error = error) });
   }
@@ -119,6 +142,6 @@ export class RepositoriesPageComponent {
 	resetWizard(): void {
 		this.createdRepository = null;
 		this.wizardStep = 1;
-		this.form.reset({ provider: 'github', defaultBranch: 'main' });
+		this.form.reset({ provider: 'github', defaultBranch: 'main', branchInclude: 'main', branchExclude: '' });
 	}
 }

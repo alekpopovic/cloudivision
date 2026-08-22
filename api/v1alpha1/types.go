@@ -263,10 +263,33 @@ type ProjectList struct {
 	Items           []Project `json:"items"`
 }
 
+type RepositoryRefFilters struct {
+	// +optional
+	Include []string `json:"include,omitempty"`
+	// +optional
+	Exclude []string `json:"exclude,omitempty"`
+}
+
+type RepositoryPullRequestFilters struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// +optional
+	Events []string `json:"events,omitempty"`
+	// +kubebuilder:default:=false
+	BuildForks bool `json:"buildForks,omitempty"`
+	// +kubebuilder:default:=false
+	RequireTrustedActor bool `json:"requireTrustedActor,omitempty"`
+}
+
 type RepositoryWebhook struct {
 	Enabled   bool                 `json:"enabled"`
 	SecretRef RequiredSecretKeyRef `json:"secretRef,omitempty"`
 	Events    []string             `json:"events,omitempty"`
+	// +optional
+	BranchFilters RepositoryRefFilters `json:"branchFilters,omitempty"`
+	// +optional
+	TagFilters RepositoryRefFilters `json:"tagFilters,omitempty"`
+	// +optional
+	PullRequest RepositoryPullRequestFilters `json:"pullRequest,omitempty"`
 }
 
 // +kubebuilder:validation:XValidation:rule="!has(self.webhook) || !self.webhook.enabled || has(self.webhook.secretRef)",message="webhook.secretRef is required when webhook.enabled is true"

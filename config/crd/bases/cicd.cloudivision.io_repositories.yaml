@@ -82,12 +82,38 @@ spec:
                 type: string
               webhook:
                 properties:
+                  branchFilters:
+                    properties:
+                      exclude:
+                        items:
+                          type: string
+                        type: array
+                      include:
+                        items:
+                          type: string
+                        type: array
+                    type: object
                   enabled:
                     type: boolean
                   events:
                     items:
                       type: string
                     type: array
+                  pullRequest:
+                    properties:
+                      buildForks:
+                        default: false
+                        type: boolean
+                      enabled:
+                        type: boolean
+                      events:
+                        items:
+                          type: string
+                        type: array
+                      requireTrustedActor:
+                        default: false
+                        type: boolean
+                    type: object
                   secretRef:
                     properties:
                       key:
@@ -99,6 +125,17 @@ spec:
                     required:
                     - key
                     - name
+                    type: object
+                  tagFilters:
+                    properties:
+                      exclude:
+                        items:
+                          type: string
+                        type: array
+                      include:
+                        items:
+                          type: string
+                        type: array
                     type: object
                 required:
                 - enabled
