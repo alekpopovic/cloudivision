@@ -23,9 +23,10 @@ spec:
     blockCriticalVulnerabilities: true
 ```
 
-Missing evidence moves the Release to `FailedValidation` with
-`PolicyNotSatisfied`. A non-zero critical count uses
-`CriticalVulnerabilitiesFound`. Evaluation happens before any GitOps write.
+Missing or unacceptable evidence moves the Release to `FailedValidation` with a
+`PolicyDenied` condition and structured violation such as `ImageMustBeSigned`,
+`SBOMRequired`, or `CriticalVulnerabilitiesBlocked`. Evaluation happens before
+any GitOps write.
 
 ## Adapter configuration
 

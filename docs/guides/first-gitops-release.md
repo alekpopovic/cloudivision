@@ -34,7 +34,7 @@ Production Environments can require approval. Approve only after reviewing the a
 curl -fsS -X POST \
   http://localhost:8080/api/v1/releases/cloudivision/RELEASE_NAME/approve \
   -H 'Content-Type: application/json' \
-  -d '{"approvedBy":"local-operator","reason":"validated for development"}'
+  -d '{"actor":"local-operator","comment":"validated for development"}'
 ```
 
 The current GitOps provider abstraction records Release progress and can read Argo CD state when configured. A real Git commit requires Git credentials and provider configuration appropriate to the target repository; confirm the commit and Argo CD/Flux sync independently before treating the release as deployed.

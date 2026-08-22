@@ -34,3 +34,7 @@ Create a non-production smoke BuildRun and confirm it reaches a terminal state w
 Capture `helm history cloudivision -n cloudivision` before upgrading. If workloads fail but the old binary understands the newly applied CRD schema, run `helm rollback cloudivision REVISION -n cloudivision` and verify reconciliation. Helm does not roll back CRDs. If the old binary is not schema-compatible, restore the previous cluster/CRD backup into a separate cluster rather than replacing a CRD in place.
 
 `v1alpha1` does not yet promise storage or conversion compatibility between all releases. There is one served/storage version and no conversion webhook, so destructive field changes require an explicit migration. Never remove a value from `status.storedVersions` until all stored objects have been migrated and verified.
+
+## Troubleshooting
+
+If CRDs reject existing objects, stop the workload rollout and compare old/new schemas and `storedVersions`; do not delete CRDs. If rollout health fails, inspect Events/logs and use the documented compatible Helm rollback. Restore into a separate cluster when the old binary cannot read the new schema.

@@ -31,6 +31,14 @@ CI creates artifacts. CD happens through GitOps by updating deployment repositor
 
 cloudivision is an early v0.1 platform under active hardening. The repository contains working API, controller, runner, Helm chart and Angular UI implementations; clean-cluster conformance is still being expanded. See the [v0.1 readiness audit](docs/readiness/v0.1-readiness-audit.md) for the current evidence and remaining blockers.
 
+## Documentation
+
+Start at the [documentation home](docs/index.md). New installations should follow
+the [kind quickstart](docs/getting-started/quickstart-kind.md), then the guides for a
+[first build](docs/getting-started/first-build.md),
+[webhook](docs/getting-started/first-webhook.md), and
+[GitOps release](docs/getting-started/first-release.md).
+
 ## Local kind quickstart
 
 After port-forwarding the API, the optional developer CLI can trigger and inspect builds:
@@ -140,7 +148,7 @@ The Helm chart writes the web runtime config to `/assets/config.json`. For local
 
 ## Troubleshooting
 
-The most common installation and runtime checks are also collected in the standalone [troubleshooting guide](docs/troubleshooting.md). Webhook setup is covered by [Configure your first webhook](docs/guides/first-webhook.md), and deployment promotion by [Create your first GitOps release](docs/guides/first-gitops-release.md).
+The most common installation and runtime checks are collected in the maintained [troubleshooting guide](docs/operations/troubleshooting.md). Webhook setup is covered by [Configure your first webhook](docs/getting-started/first-webhook.md), and deployment promotion by [Create your first GitOps release](docs/getting-started/first-release.md). Older guides remain available as deeper implementation notes.
 
 ### CRD not installed
 

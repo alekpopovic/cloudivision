@@ -69,3 +69,7 @@ Group failures by Kubernetes Events and runner log reason. Check registry/reposi
 Pause promotions, validate repository credentials, branch protection, rate limits, network/DNS, and remote availability. Reconciliation is designed to reuse stored commit state; verify idempotency before manually editing the GitOps repository.
 
 Thresholds in the supplied PrometheusRule are safe starting points, not universal SLOs. Tune `for` durations and thresholds using observed load and PipelineTemplate/Release timeouts.
+
+## Troubleshooting collection
+
+If panels are empty, confirm both metrics Services are scraped and query a raw `up` series before changing PromQL. Runner panels also require kube-state-metrics label metrics. If PrometheusRule is rejected, verify the Prometheus Operator CRD/version and inspect the resource status/events. Missing metrics must not be interpreted as healthy state.

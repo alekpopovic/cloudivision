@@ -25,3 +25,7 @@ If PostgreSQL audit storage is enabled, use a database-consistent snapshot or `p
 7. Reconnect webhooks, validate GitOps credentials, run a non-production build/release, and compare audit continuity.
 
 Resource `status` may be omitted for a desired-state-only recovery. Preserving status requires a backup tool that can restore status subresources; controllers will otherwise reconstruct the observable state where possible.
+
+## Troubleshooting
+
+If restored CRs are rejected, confirm CRDs were restored first and versions match. If terminal status is missing, keep external automation paused while controllers reconstruct observable state. Validate PostgreSQL ownership/extensions and Secret names/keys before enabling the API or webhooks.

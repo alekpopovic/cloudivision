@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-22T01:14:53Z`
-Last executed prompt: `37`
-Next prompt: `38`
+Updated at: `2026-08-22T01:23:31Z`
+Last executed prompt: `38`
+Next prompt: `39`
 
 ## How to update
 
@@ -66,7 +66,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 35 | done | Observability | Observability Dashboards and Alerts | `prompts/35-observability-dashboards-and-alerts.md` | Added Grafana dashboard, Prometheus alerts, bounded operational metrics, controller metrics Service, runbooks, and OpenTelemetry tracing plan. |
 | 36 | done | Scale | Performance and Scale Test Harness | `prompts/36-performance-and-scale-test-harness.md` | Added safe scale harness, BuildRun pagination/filtering, bounded Angular list rendering, controller indexes, and configurable concurrency. |
 | 37 | done | CLI | cloudivision CLI | `prompts/37-cloudivision-cli.md` | Added cloudivision CLI with config/auth precedence, resource/build/release commands, watch/logs, doctor, tests, build target, and docs. |
-| 38 | pending | Documentation | Documentation Restructure for Users and Operators | `prompts/38-documentation-restructure-for-users-and-operators.md` |  |
+| 38 | done | Documentation | Documentation Restructure for Users and Operators | `prompts/38-documentation-restructure-for-users-and-operators.md` | Restructured user, operator, security, contributor, and reference documentation; fixed outdated release approval payload. Local Markdown link and Helm render validation passed. |
 | 39 | pending | Release | Public Release Process and v0.1.0 | `prompts/39-public-release-process-and-v0-1-0.md` |  |
 | 40 | pending | Release | v0.1 Final Gate: Hardening Sprint Review | `prompts/40-v0-1-final-gate-hardening-sprint-review.md` |  |
 | 41 | pending | Roadmap | v0.2 Roadmap Planning | `prompts/41-v0-2-roadmap-planning.md` |  |

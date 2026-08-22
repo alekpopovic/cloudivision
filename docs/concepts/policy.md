@@ -16,6 +16,20 @@ The default policy forbids privileged runners, Docker socket use, hostPath use, 
 
 Policies are currently compiled into the controller and API binaries. ConfigMap policy and external engines such as OPA are intentionally outside this version; keeping a small `Evaluator` interface allows a later implementation without coupling domain logic to an external engine.
 
+```yaml
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Environment
+metadata: {name: production, namespace: ci}
+spec:
+  projectRef: storefront
+  displayName: Production
+  namespace: storefront-production
+  type: production
+  requiresApproval: true
+  gitOps: {provider: argocd, applicationName: storefront, namespace: argocd}
+  policy: {requireImageDigest: true, requireSignedImages: true, requireSBOM: true, blockCriticalVulnerabilities: true}
+```
+
 ## Decision shape
 
 Each decision includes `allowed`, `reason`, `message`, `evaluatedAt`, and `violations`. A violation identifies the stable policy name, severity, human-readable message, and the field path operators should correct. Clients should key automation on `reason` and `policy`, not message text.

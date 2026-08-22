@@ -5,6 +5,20 @@ GitOps repository. The runner never deploys directly. The Release controller
 validates policy, records a Git commit exactly once, and then observes the
 configured provider until deployment is confirmed.
 
+```yaml
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Release
+metadata: {name: storefront-production-001, namespace: ci}
+spec:
+  projectRef: storefront
+  environmentRef: production
+  buildRunRef: storefront-main-001
+  image: {repository: ghcr.io/acme/storefront, digest: sha256:0123456789abcdef}
+  approval: {required: true, approvedBy: release-manager}
+  strategy: gitops
+  promotionMode: pull-request
+```
+
 ```mermaid
 flowchart LR
   P[Pending] --> A{Approval required?}
