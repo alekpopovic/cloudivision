@@ -85,6 +85,25 @@ func TestEnsureRunRejectsPrivilegedTemplateByDefault(t *testing.T) {
 	}
 }
 
+func TestBuildJobMountsCosignKeySecretReadOnly(t *testing.T) {
+	template := testPipelineTemplate()
+	template.Spec.SupplyChain.SignImage = true
+	template.Spec.SupplyChain.SignerAdapter = "cosign"
+	template.Spec.SupplyChain.SigningKeySecretRef = &cicdv1alpha1.RequiredSecretKeyRef{Name: "cosign-key", Key: "private.key"}
+	job := buildJob(testBuildRun(), testProject(), testRepository(), template)
+	if len(job.Spec.Template.Spec.Volumes) != 1 || job.Spec.Template.Spec.Volumes[0].Secret == nil {
+		t.Fatalf("volumes = %#v", job.Spec.Template.Spec.Volumes)
+	}
+	secret := job.Spec.Template.Spec.Volumes[0].Secret
+	if secret.SecretName != "cosign-key" || len(secret.Items) != 1 || secret.Items[0].Key != "private.key" {
+		t.Fatalf("secret projection = %#v", secret)
+	}
+	mounts := job.Spec.Template.Spec.Containers[0].VolumeMounts
+	if len(mounts) != 1 || !mounts[0].ReadOnly || mounts[0].MountPath != "/var/run/secrets/cloudivision-signing" {
+		t.Fatalf("volumeMounts = %#v", mounts)
+	}
+}
+
 func newScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	scheme := runtime.NewScheme()

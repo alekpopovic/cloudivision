@@ -270,6 +270,14 @@ spec:
                 type: string
               supplyChain:
                 properties:
+                  criticalVulnerabilities:
+                    type: integer
+                  highVulnerabilities:
+                    type: integer
+                  lowVulnerabilities:
+                    type: integer
+                  mediumVulnerabilities:
+                    type: integer
                   provenanceRef:
                     type: string
                   sbomDigest:
@@ -787,15 +795,58 @@ spec:
                 type: array
               supplyChain:
                 properties:
+                  cosignKeyless:
+                    type: boolean
                   generateSBOM:
                     type: boolean
+                  provenanceAdapter:
+                    default: noop
+                    enum:
+                    - noop
+                    - json
+                    type: string
                   requireSignedBaseImages:
                     type: boolean
+                  sbomAdapter:
+                    default: noop
+                    enum:
+                    - noop
+                    - syft
+                    type: string
                   scanImage:
                     type: boolean
+                  scannerAdapter:
+                    default: noop
+                    enum:
+                    - noop
+                    - grype
+                    type: string
                   signImage:
                     type: boolean
+                  signerAdapter:
+                    default: noop
+                    enum:
+                    - noop
+                    - cosign
+                    type: string
+                  signingKeySecretRef:
+                    properties:
+                      key:
+                        minLength: 1
+                        type: string
+                      name:
+                        minLength: 1
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
                 type: object
+                x-kubernetes-validations:
+                - message: cosign keyless and key-based modes are mutually exclusive
+                  rule: '!(self.cosignKeyless && has(self.signingKeySecretRef))'
+                - message: cosign requires explicit keyless mode or signingKeySecretRef
+                  rule: self.signerAdapter != 'cosign' || self.cosignKeyless || has(self.signingKeySecretRef)
             type: object
             x-kubernetes-validations:
             - message: at least one step or an enabled image build is required

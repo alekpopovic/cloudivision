@@ -479,6 +479,42 @@ func TestReleaseReconcileAllowsSatisfiedSupplyChainPolicy(t *testing.T) {
 	}
 }
 
+func TestReleaseReconcileBlocksCriticalVulnerabilities(t *testing.T) {
+	ctx := context.Background()
+	reconciler, release, provider := newReleaseReconciler(t)
+	environment := &cicdv1alpha1.Environment{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: release.Spec.EnvironmentRef, Namespace: release.Namespace}, environment); err != nil {
+		t.Fatalf("get Environment error = %v", err)
+	}
+	environment.Spec.Policy.BlockCriticalVulnerabilities = true
+	if err := reconciler.Update(ctx, environment); err != nil {
+		t.Fatalf("update Environment error = %v", err)
+	}
+	buildRun := &cicdv1alpha1.BuildRun{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: release.Spec.BuildRunRef, Namespace: release.Namespace}, buildRun); err != nil {
+		t.Fatalf("get BuildRun error = %v", err)
+	}
+	buildRun.Status.SupplyChain.ScannerResultsRef = "grype-results.json"
+	buildRun.Status.SupplyChain.CriticalVulnerabilities = 2
+	if err := reconciler.Status().Update(ctx, buildRun); err != nil {
+		t.Fatalf("update BuildRun status error = %v", err)
+	}
+
+	if _, err := reconciler.Reconcile(ctx, releaseRequestFor(release)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	updated := &cicdv1alpha1.Release{}
+	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
+		t.Fatalf("get Release error = %v", err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailedValidation || updated.Status.Failure.Reason != "CriticalVulnerabilitiesFound" {
+		t.Fatalf("status = %#v", updated.Status)
+	}
+	if provider.updateCalls != 0 {
+		t.Fatalf("updateCalls = %d, want 0", provider.updateCalls)
+	}
+}
+
 func TestReleaseReconcileMarksDeployedFromArgoCDStatus(t *testing.T) {
 	ctx := context.Background()
 	reconciler, release, _ := newReleaseReconciler(t)

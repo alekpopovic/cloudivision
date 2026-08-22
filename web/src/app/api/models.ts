@@ -85,6 +85,12 @@ export interface PipelineTemplate {
       scanImage?: boolean;
       signImage?: boolean;
       requireSignedBaseImages?: boolean;
+			sbomAdapter?: 'noop' | 'syft';
+			scannerAdapter?: 'noop' | 'grype';
+			signerAdapter?: 'noop' | 'cosign';
+			provenanceAdapter?: 'noop' | 'json';
+			cosignKeyless?: boolean;
+			signingKeySecretRef?: { name: string; key: string };
     };
   };
   status?: { phase?: string; conditions?: Condition[] };
@@ -129,6 +135,10 @@ export interface BuildRun {
       signatureRef?: string;
       provenanceRef?: string;
       scannerResultsRef?: string;
+			criticalVulnerabilities?: number;
+			highVulnerabilities?: number;
+			mediumVulnerabilities?: number;
+			lowVulnerabilities?: number;
     };
     failure?: { reason?: string; message?: string };
   };

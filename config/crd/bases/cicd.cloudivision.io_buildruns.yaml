@@ -270,6 +270,14 @@ spec:
                 type: string
               supplyChain:
                 properties:
+                  criticalVulnerabilities:
+                    type: integer
+                  highVulnerabilities:
+                    type: integer
+                  lowVulnerabilities:
+                    type: integer
+                  mediumVulnerabilities:
+                    type: integer
                   provenanceRef:
                     type: string
                   sbomDigest:

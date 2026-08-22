@@ -344,6 +344,9 @@ func (r *ReleaseReconciler) enforceEnvironmentPolicy(ctx context.Context, releas
 	if policy.BlockCriticalVulnerabilities && buildRun.Status.SupplyChain.ScannerResultsRef == "" {
 		return true, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedValidation, "PolicyNotSatisfied", fmt.Sprintf("Environment %q blocks critical vulnerabilities, but BuildRun %q has no scanner results reference.", environment.Name, buildRun.Name))
 	}
+	if policy.BlockCriticalVulnerabilities && buildRun.Status.SupplyChain.CriticalVulnerabilities > 0 {
+		return true, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedValidation, "CriticalVulnerabilitiesFound", fmt.Sprintf("Environment %q blocks critical vulnerabilities, and BuildRun %q reported %d.", environment.Name, buildRun.Name, buildRun.Status.SupplyChain.CriticalVulnerabilities))
+	}
 	return false, nil
 }
 

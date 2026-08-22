@@ -2,16 +2,22 @@ package supplychain
 
 import (
 	"context"
+	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 )
 
 type ImageContext struct {
-	BuildRunName string
-	Namespace    string
-	ProjectName  string
-	SourceDir    string
-	Image        cicdv1alpha1.ImageRef
+	BuildRunName     string
+	Namespace        string
+	ProjectName      string
+	SourceDir        string
+	RepositoryURL    string
+	CommitSHA        string
+	PipelineTemplate string
+	StartedAt        *time.Time
+	CompletedAt      *time.Time
+	Image            cicdv1alpha1.ImageRef
 }
 
 type SBOMRequest struct {
@@ -30,6 +36,10 @@ type ScanRequest struct {
 
 type ScanResult struct {
 	ResultsRef string
+	Critical   int
+	High       int
+	Medium     int
+	Low        int
 }
 
 type SignRequest struct {

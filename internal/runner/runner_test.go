@@ -187,10 +187,45 @@ func TestRunnerRecordsSupplyChainHookResults(t *testing.T) {
 	if updated.Status.SupplyChain.ScannerResultsRef != "scanner://result" {
 		t.Fatalf("scannerResultsRef = %q, want scanner://result", updated.Status.SupplyChain.ScannerResultsRef)
 	}
+	if updated.Status.SupplyChain.CriticalVulnerabilities != 1 || updated.Status.SupplyChain.HighVulnerabilities != 2 {
+		t.Fatalf("severity summary = %#v", updated.Status.SupplyChain)
+	}
 	if updated.Status.SupplyChain.ProvenanceRef != "oci://provenance" {
 		t.Fatalf("provenanceRef = %q, want oci://provenance", updated.Status.SupplyChain.ProvenanceRef)
 	}
 	assertCondition(t, updated.Status.Conditions, ConditionSupplyChainReady)
+	assertCondition(t, updated.Status.Conditions, ConditionSBOMGenerated)
+	assertCondition(t, updated.Status.Conditions, ConditionImageScanned)
+	assertCondition(t, updated.Status.Conditions, ConditionImageSigned)
+	assertCondition(t, updated.Status.Conditions, ConditionProvenanceWritten)
+}
+
+func TestRunnerReportsMissingRequiredSBOMAdapter(t *testing.T) {
+	ctx := context.Background()
+	repo := createGitRepository(t)
+	buildRun := testBuildRun(repo)
+	template := testPipelineTemplate(nil)
+	template.Spec.Build.Enabled = true
+	template.Spec.Build.Push = true
+	template.Spec.SupplyChain.GenerateSBOM = true
+	k8sClient := newFakeRunnerClient(t, buildRun, testRepository(repo), template)
+	runner := Runner{
+		Client: k8sClient, Git: cloudivisiongit.ExecClient{}, Steps: steps.Runner{}, Builder: successBuilder{},
+		SBOM:      supplychain.SyftSBOMGenerator{Binary: "cloudivision-test-missing-syft"},
+		Workspace: filepath.Join(t.TempDir(), "workspace"),
+	}
+
+	err := runner.Run(ctx, testConfig(repo))
+	if err == nil || !strings.Contains(err.Error(), "syft binary is unavailable") {
+		t.Fatalf("Run() error = %v", err)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if getErr := k8sClient.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); getErr != nil {
+		t.Fatal(getErr)
+	}
+	if updated.Status.Failure.Reason != "SBOMGenerationFailed" {
+		t.Fatalf("failure = %#v", updated.Status.Failure)
+	}
 }
 
 type failBuilder struct{}
@@ -218,7 +253,7 @@ func (fakeSBOMGenerator) GenerateSBOM(context.Context, supplychain.SBOMRequest) 
 type fakeScanner struct{}
 
 func (fakeScanner) ScanImage(context.Context, supplychain.ScanRequest) (*supplychain.ScanResult, error) {
-	return &supplychain.ScanResult{ResultsRef: "scanner://result"}, nil
+	return &supplychain.ScanResult{ResultsRef: "scanner://result", Critical: 1, High: 2}, nil
 }
 
 type fakeSigner struct{}

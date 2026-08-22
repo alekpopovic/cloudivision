@@ -1,56 +1,18 @@
-# Supply-chain security hooks
+# Supply-chain security adapters
 
-cloudivision keeps Kubernetes CRD status as the source of truth for runtime build and release state. The v1alpha1 API now includes fields for supply-chain metadata so CI can record image digest, SBOM, scan, signature and provenance references without moving that state into a database.
+cloudivision stores artifact evidence in Kubernetes CRD status. CI records image,
+SBOM, scan, signature, and provenance references; CD remains GitOps-driven and
+evaluates Environment policy before changing desired state.
 
-## Implemented now
+## Status and policy
 
-- `BuildRun.status.image.repository`, `tag` and `digest` record the produced image.
-- `BuildRun.status.supplyChain` can record:
-  - `sbomPath`
-  - `sbomDigest`
-  - `signatureRef`
-  - `provenanceRef`
-  - `scannerResultsRef`
-- `PipelineTemplate.spec.supplyChain` declares requested hooks:
-  - `generateSBOM`
-  - `scanImage`
-  - `signImage`
-  - `requireSignedBaseImages`
-- `Environment.spec.policy` declares release requirements:
-  - `requireSignedImages`
-  - `requireSBOM`
-  - `blockCriticalVulnerabilities`
-- The runner calls supply-chain hook interfaces after a successful image build.
-- The Release controller blocks a release before any GitOps repository update when the target Environment policy is not satisfied.
+`BuildRun.status.supplyChain` records `sbomPath`, `sbomDigest`, `signatureRef`,
+`provenanceRef`, `scannerResultsRef`, and critical/high/medium/low vulnerability
+counts. Successful hooks also set `SBOMGenerated`, `ImageScanned`, `ImageSigned`,
+and `ProvenanceWritten` conditions.
 
-## Noop in the MVP
-
-The current hook implementations are intentionally noops:
-
-- `NoopSBOMGenerator`
-- `NoopScanner`
-- `NoopSigner`
-- `NoopProvenanceWriter`
-
-They preserve existing behavior and return no external references. This means an Environment that requires signed images, an SBOM or scanner evidence will block releases until real integrations populate `BuildRun.status.supplyChain`.
-
-## Future integrations
-
-The hook interfaces are designed to be backed by concrete tools later:
-
-- SBOM generation: Syft, Trivy or build-system native SBOM output.
-- Vulnerability scanning: Grype, Trivy or registry-native scanner results.
-- Image signing: Cosign keyless signing, KMS-backed keys or enterprise signing services.
-- Provenance and attestations: SLSA provenance, in-toto attestations or OCI referrers.
-- Base image verification: policy checks for signed base images before build execution.
-
-Concrete integrations should keep secrets out of logs, write durable references into `BuildRun.status.supplyChain`, and avoid deploying directly from the CI runner. CD remains GitOps-driven.
-
-## Release policy behavior
-
-Release policy is evaluated before the Release controller updates the GitOps repository. If policy is not satisfied, the Release is marked `Failed` with reason `PolicyNotSatisfied`.
-
-For example, a production Environment can require signed images and SBOM metadata:
+An Environment can require signed images and SBOM evidence or block critical
+vulnerabilities:
 
 ```yaml
 spec:
@@ -61,4 +23,55 @@ spec:
     blockCriticalVulnerabilities: true
 ```
 
-With the current noop hooks, that policy will block until a BuildRun has `status.supplyChain.signatureRef` and either `status.supplyChain.sbomPath` or `status.supplyChain.sbomDigest`. If critical vulnerability blocking is enabled, `status.supplyChain.scannerResultsRef` is also required.
+Missing evidence moves the Release to `FailedValidation` with
+`PolicyNotSatisfied`. A non-zero critical count uses
+`CriticalVulnerabilitiesFound`. Evaluation happens before any GitOps write.
+
+## Adapter configuration
+
+Noop implementations remain the default, so upgrading does not invoke external
+tools or signing identities. Select real adapters explicitly on a PipelineTemplate:
+
+```yaml
+spec:
+  supplyChain:
+    generateSBOM: true
+    sbomAdapter: syft
+    scanImage: true
+    scannerAdapter: grype
+    signImage: true
+    signerAdapter: cosign
+    cosignKeyless: false
+    signingKeySecretRef:
+      name: cosign-signing-key
+      key: cosign.key
+    provenanceAdapter: json
+```
+
+| Hook | Default | Opt-in adapter | Requirement |
+| --- | --- | --- | --- |
+| SBOM | `NoopSBOMGenerator` | `syft` | Syft generates SPDX JSON and the runner records its file SHA-256. |
+| Scan | `NoopScanner` | `grype` | Grype writes JSON; the runner records its path and severity summary. |
+| Sign | `NoopSigner` | `cosign` | Choose explicit keyless mode or a key Secret, never both. |
+| Provenance | `NoopProvenanceWriter` | `json` | Built in; records BuildRun, source URL/SHA, template, image digest, timestamps, and evidence. |
+
+The standard runner image intentionally does not bundle Syft, Grype, or Cosign.
+Use a reviewed custom runner image containing pinned versions. If an opted-in tool
+is absent, the BuildRun fails with `SBOMGenerationFailed`, `ImageScanFailed`, or
+`ImageSigningFailed` and a clear missing-binary message. Optional/noop hooks do not
+fail builds.
+
+Cosign keyless mode is disabled unless `cosignKeyless: true`. Key-based mode
+projects only the named Secret key read-only at
+`/var/run/secrets/cloudivision-signing/key`; the runner cannot enumerate Secrets.
+Tool output and key material are not logged.
+
+## Limitations
+
+SBOM, Grype, and JSON provenance paths currently refer to files in the runner
+workspace. They are available while the Pod is retained but are not durable after
+Job cleanup. Uploading them as OCI referrers or to an artifact store is future
+work. JSON provenance is initial build metadata, not yet a signed SLSA/in-toto
+attestation. Registry authentication is inherited from the runner environment and
+must be scoped outside these adapters. `requireSignedBaseImages` remains a model
+hook without a verification adapter.

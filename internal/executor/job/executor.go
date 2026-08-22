@@ -126,6 +126,19 @@ func buildJob(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, re
 	allowPrivilegeEscalation := false
 	privileged := false
 	seccompProfile := corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}
+	var volumes []corev1.Volume
+	var volumeMounts []corev1.VolumeMount
+	if ref := template.Spec.SupplyChain.SigningKeySecretRef; ref != nil {
+		mode := int32(0o400)
+		volumes = append(volumes, corev1.Volume{
+			Name: "cosign-key",
+			VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+				SecretName: ref.Name,
+				Items:      []corev1.KeyToPath{{Key: ref.Key, Path: "key", Mode: &mode}},
+			}},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "cosign-key", MountPath: "/var/run/secrets/cloudivision-signing", ReadOnly: true})
+	}
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      NameForBuildRun(buildRun.Name),
@@ -146,12 +159,14 @@ func buildJob(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, re
 						RunAsNonRoot:   &runAsNonRoot,
 						SeccompProfile: &seccompProfile,
 					},
+					Volumes: volumes,
 					Containers: []corev1.Container{
 						{
-							Name:      "runner",
-							Image:     runnerImage(),
-							Env:       runnerEnv(buildRun, project, repository),
-							Resources: resourceRequirements(template.Spec.Resources),
+							Name:         "runner",
+							Image:        runnerImage(),
+							Env:          runnerEnv(buildRun, project, repository),
+							Resources:    resourceRequirements(template.Spec.Resources),
+							VolumeMounts: volumeMounts,
 							SecurityContext: &corev1.SecurityContext{
 								RunAsNonRoot:             &runAsNonRoot,
 								AllowPrivilegeEscalation: &allowPrivilegeEscalation,

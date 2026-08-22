@@ -2,11 +2,13 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/build"
@@ -23,11 +25,15 @@ import (
 )
 
 const (
-	ConditionRepositoryCloned = "RepositoryCloned"
-	ConditionStepsCompleted   = "StepsCompleted"
-	ConditionImageBuilt       = "ImageBuilt"
-	ConditionImagePushed      = "ImagePushed"
-	ConditionSupplyChainReady = "SupplyChainReady"
+	ConditionRepositoryCloned  = "RepositoryCloned"
+	ConditionStepsCompleted    = "StepsCompleted"
+	ConditionImageBuilt        = "ImageBuilt"
+	ConditionImagePushed       = "ImagePushed"
+	ConditionSupplyChainReady  = "SupplyChainReady"
+	ConditionSBOMGenerated     = "SBOMGenerated"
+	ConditionImageScanned      = "ImageScanned"
+	ConditionImageSigned       = "ImageSigned"
+	ConditionProvenanceWritten = "ProvenanceWritten"
 )
 
 type StepRunner interface {
@@ -115,6 +121,7 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: buildRun.Spec.PipelineTemplateRef, Namespace: cfg.BuildRunNamespace}, template); err != nil {
 		return r.fail(ctx, buildRun, "PipelineTemplateLoadFailed", fmt.Sprintf("load PipelineTemplate %q: %v", buildRun.Spec.PipelineTemplateRef, err))
 	}
+	r.configureSupplyChainAdapters(template.Spec.SupplyChain)
 	redactor := redact.FromEnv(secretValues(buildRun, repository, template))
 
 	now := metav1.Now()
@@ -177,8 +184,13 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 		if err := r.updateStatus(ctx, buildRun); err != nil {
 			return err
 		}
-		if err := r.runSupplyChainHooks(ctx, buildRun, template, sourceDir, result); err != nil {
-			return r.fail(ctx, buildRun, "SupplyChainFailed", redactor.Mask(err.Error()))
+		if err := r.runSupplyChainHooks(ctx, buildRun, repository, template, sourceDir, result); err != nil {
+			reason := "SupplyChainFailed"
+			hookErr := &supplyChainHookError{}
+			if errors.As(err, &hookErr) {
+				reason = hookErr.Reason
+			}
+			return r.fail(ctx, buildRun, reason, redactor.Mask(err.Error()))
 		}
 		if err := r.updateStatus(ctx, buildRun); err != nil {
 			return err
@@ -196,7 +208,34 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 	return r.updateStatus(ctx, buildRun)
 }
 
-func (r Runner) runSupplyChainHooks(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, template *cicdv1alpha1.PipelineTemplate, sourceDir string, result *build.BuildResult) error {
+type supplyChainHookError struct {
+	Reason string
+	Err    error
+}
+
+func (e *supplyChainHookError) Error() string { return e.Err.Error() }
+func (e *supplyChainHookError) Unwrap() error { return e.Err }
+
+func (r *Runner) configureSupplyChainAdapters(spec cicdv1alpha1.PipelineSupplyChainSpec) {
+	if spec.SBOMAdapter == "syft" {
+		r.SBOM = supplychain.SyftSBOMGenerator{}
+	}
+	if spec.ScannerAdapter == "grype" {
+		r.Scanner = supplychain.GrypeScanner{}
+	}
+	if spec.SignerAdapter == "cosign" {
+		keyPath := ""
+		if spec.SigningKeySecretRef != nil {
+			keyPath = "/var/run/secrets/cloudivision-signing/key"
+		}
+		r.Signer = supplychain.CosignSigner{Keyless: spec.CosignKeyless, KeyPath: keyPath}
+	}
+	if spec.ProvenanceAdapter == "json" {
+		r.Provenance = supplychain.JSONProvenanceWriter{}
+	}
+}
+
+func (r Runner) runSupplyChainHooks(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, repository *cicdv1alpha1.Repository, template *cicdv1alpha1.PipelineTemplate, sourceDir string, result *build.BuildResult) error {
 	if result == nil {
 		result = &build.BuildResult{}
 	}
@@ -206,12 +245,24 @@ func (r Runner) runSupplyChainHooks(ctx context.Context, buildRun *cicdv1alpha1.
 		Digest:     result.Digest,
 	}
 	base := supplychain.ImageContext{
-		BuildRunName: buildRun.Name,
-		Namespace:    buildRun.Namespace,
-		ProjectName:  buildRun.Spec.ProjectRef,
-		SourceDir:    sourceDir,
-		Image:        image,
+		BuildRunName:     buildRun.Name,
+		Namespace:        buildRun.Namespace,
+		ProjectName:      buildRun.Spec.ProjectRef,
+		SourceDir:        sourceDir,
+		RepositoryURL:    repository.Spec.URL,
+		CommitSHA:        buildRun.Spec.CommitSHA,
+		PipelineTemplate: buildRun.Spec.PipelineTemplateRef,
+		Image:            image,
 	}
+	if base.CommitSHA == "" {
+		base.CommitSHA = buildRun.Spec.Revision
+	}
+	if buildRun.Status.StartedAt != nil {
+		startedAt := buildRun.Status.StartedAt.Time
+		base.StartedAt = &startedAt
+	}
+	completedAt := time.Now().UTC()
+	base.CompletedAt = &completedAt
 	status := buildRun.Status.SupplyChain
 	if result.SBOMPath != "" {
 		status.SBOMPath = result.SBOMPath
@@ -219,7 +270,8 @@ func (r Runner) runSupplyChainHooks(ctx context.Context, buildRun *cicdv1alpha1.
 	if template.Spec.SupplyChain.GenerateSBOM {
 		sbom, err := r.SBOM.GenerateSBOM(ctx, supplychain.SBOMRequest{ImageContext: base})
 		if err != nil {
-			return fmt.Errorf("generate SBOM: %w", err)
+			r.setCondition(buildRun, ConditionSBOMGenerated, metav1.ConditionFalse, "SBOMGenerationFailed", err.Error())
+			return &supplyChainHookError{Reason: "SBOMGenerationFailed", Err: fmt.Errorf("generate SBOM: %w", err)}
 		}
 		if sbom != nil {
 			if sbom.Path != "" {
@@ -229,24 +281,48 @@ func (r Runner) runSupplyChainHooks(ctx context.Context, buildRun *cicdv1alpha1.
 				status.SBOMDigest = sbom.Digest
 			}
 		}
+		if status.SBOMPath != "" || status.SBOMDigest != "" {
+			r.setCondition(buildRun, ConditionSBOMGenerated, metav1.ConditionTrue, "SBOMGenerated", "SBOM was generated and its digest recorded.")
+		} else {
+			r.setCondition(buildRun, ConditionSBOMGenerated, metav1.ConditionFalse, "NoopAdapter", "SBOM adapter returned no artifact.")
+		}
+		buildRun.Status.SupplyChain = status
 	}
 	if template.Spec.SupplyChain.ScanImage {
 		scan, err := r.Scanner.ScanImage(ctx, supplychain.ScanRequest{ImageContext: base, SBOMPath: status.SBOMPath})
 		if err != nil {
-			return fmt.Errorf("scan image: %w", err)
+			r.setCondition(buildRun, ConditionImageScanned, metav1.ConditionFalse, "ImageScanFailed", err.Error())
+			return &supplyChainHookError{Reason: "ImageScanFailed", Err: fmt.Errorf("scan image: %w", err)}
 		}
-		if scan != nil && scan.ResultsRef != "" {
+		if scan != nil {
 			status.ScannerResultsRef = scan.ResultsRef
+			status.CriticalVulnerabilities = scan.Critical
+			status.HighVulnerabilities = scan.High
+			status.MediumVulnerabilities = scan.Medium
+			status.LowVulnerabilities = scan.Low
 		}
+		if status.ScannerResultsRef != "" {
+			r.setCondition(buildRun, ConditionImageScanned, metav1.ConditionTrue, "ImageScanned", "Vulnerability scan results and severity summary were recorded.")
+		} else {
+			r.setCondition(buildRun, ConditionImageScanned, metav1.ConditionFalse, "NoopAdapter", "Scanner adapter returned no results.")
+		}
+		buildRun.Status.SupplyChain = status
 	}
 	if template.Spec.SupplyChain.SignImage {
 		signature, err := r.Signer.SignImage(ctx, supplychain.SignRequest{ImageContext: base})
 		if err != nil {
-			return fmt.Errorf("sign image: %w", err)
+			r.setCondition(buildRun, ConditionImageSigned, metav1.ConditionFalse, "ImageSigningFailed", err.Error())
+			return &supplyChainHookError{Reason: "ImageSigningFailed", Err: fmt.Errorf("sign image: %w", err)}
 		}
 		if signature != nil && signature.SignatureRef != "" {
 			status.SignatureRef = signature.SignatureRef
 		}
+		if status.SignatureRef != "" {
+			r.setCondition(buildRun, ConditionImageSigned, metav1.ConditionTrue, "ImageSigned", "Image signature reference was recorded.")
+		} else {
+			r.setCondition(buildRun, ConditionImageSigned, metav1.ConditionFalse, "NoopAdapter", "Signer adapter returned no signature.")
+		}
+		buildRun.Status.SupplyChain = status
 	}
 	if template.Spec.SupplyChain.GenerateSBOM || template.Spec.SupplyChain.ScanImage || template.Spec.SupplyChain.SignImage || result.Digest != "" {
 		provenance, err := r.Provenance.WriteProvenance(ctx, supplychain.ProvenanceRequest{
@@ -257,10 +333,16 @@ func (r Runner) runSupplyChainHooks(ctx context.Context, buildRun *cicdv1alpha1.
 			ScannerResultsRef: status.ScannerResultsRef,
 		})
 		if err != nil {
-			return fmt.Errorf("write provenance: %w", err)
+			r.setCondition(buildRun, ConditionProvenanceWritten, metav1.ConditionFalse, "ProvenanceWriteFailed", err.Error())
+			return &supplyChainHookError{Reason: "ProvenanceWriteFailed", Err: fmt.Errorf("write provenance: %w", err)}
 		}
 		if provenance != nil && provenance.Ref != "" {
 			status.ProvenanceRef = provenance.Ref
+		}
+		if status.ProvenanceRef != "" {
+			r.setCondition(buildRun, ConditionProvenanceWritten, metav1.ConditionTrue, "ProvenanceWritten", "Build provenance reference was recorded.")
+		} else {
+			r.setCondition(buildRun, ConditionProvenanceWritten, metav1.ConditionFalse, "NoopAdapter", "Provenance adapter returned no artifact.")
 		}
 	}
 	buildRun.Status.SupplyChain = status

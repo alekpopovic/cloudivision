@@ -338,11 +338,28 @@ type PipelineSecuritySpec struct {
 	ReadOnlyRootFilesystem bool `json:"readOnlyRootFilesystem,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!(self.cosignKeyless && has(self.signingKeySecretRef))",message="cosign keyless and key-based modes are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="self.signerAdapter != 'cosign' || self.cosignKeyless || has(self.signingKeySecretRef)",message="cosign requires explicit keyless mode or signingKeySecretRef"
 type PipelineSupplyChainSpec struct {
 	GenerateSBOM            bool `json:"generateSBOM,omitempty"`
 	ScanImage               bool `json:"scanImage,omitempty"`
 	SignImage               bool `json:"signImage,omitempty"`
 	RequireSignedBaseImages bool `json:"requireSignedBaseImages,omitempty"`
+	// +kubebuilder:validation:Enum=noop;syft
+	// +kubebuilder:default:=noop
+	SBOMAdapter string `json:"sbomAdapter,omitempty"`
+	// +kubebuilder:validation:Enum=noop;grype
+	// +kubebuilder:default:=noop
+	ScannerAdapter string `json:"scannerAdapter,omitempty"`
+	// +kubebuilder:validation:Enum=noop;cosign
+	// +kubebuilder:default:=noop
+	SignerAdapter string `json:"signerAdapter,omitempty"`
+	// +kubebuilder:validation:Enum=noop;json
+	// +kubebuilder:default:=noop
+	ProvenanceAdapter string `json:"provenanceAdapter,omitempty"`
+	CosignKeyless     bool   `json:"cosignKeyless,omitempty"`
+	// +optional
+	SigningKeySecretRef *RequiredSecretKeyRef `json:"signingKeySecretRef,omitempty"`
 }
 
 // +kubebuilder:validation:XValidation:rule="(has(self.steps) && size(self.steps) > 0) || (has(self.build) && self.build.enabled)",message="at least one step or an enabled image build is required"
@@ -469,11 +486,15 @@ type BuildRunLogStatus struct {
 }
 
 type BuildRunSupplyChainStatus struct {
-	SBOMPath          string `json:"sbomPath,omitempty"`
-	SBOMDigest        string `json:"sbomDigest,omitempty"`
-	SignatureRef      string `json:"signatureRef,omitempty"`
-	ProvenanceRef     string `json:"provenanceRef,omitempty"`
-	ScannerResultsRef string `json:"scannerResultsRef,omitempty"`
+	SBOMPath                string `json:"sbomPath,omitempty"`
+	SBOMDigest              string `json:"sbomDigest,omitempty"`
+	SignatureRef            string `json:"signatureRef,omitempty"`
+	ProvenanceRef           string `json:"provenanceRef,omitempty"`
+	ScannerResultsRef       string `json:"scannerResultsRef,omitempty"`
+	CriticalVulnerabilities int    `json:"criticalVulnerabilities,omitempty"`
+	HighVulnerabilities     int    `json:"highVulnerabilities,omitempty"`
+	MediumVulnerabilities   int    `json:"mediumVulnerabilities,omitempty"`
+	LowVulnerabilities      int    `json:"lowVulnerabilities,omitempty"`
 }
 
 type BuildRunStatus struct {
