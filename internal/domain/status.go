@@ -60,7 +60,7 @@ func MarkBuildRunSucceeded(buildRun *cicdv1alpha1.BuildRun, now metav1.Time, ima
 	buildRun.Status.Phase = cicdv1alpha1.BuildRunPhaseSucceeded
 	buildRun.Status.ObservedGeneration = buildRun.Generation
 	buildRun.Status.CompletedAt = &now
-	buildRun.Status.Image = image
+	buildRun.Status.Image = &image
 	buildRun.Status.Failure = cicdv1alpha1.FailureStatus{}
 	SetCondition(&buildRun.Status.Conditions, metav1.Condition{
 		Type:               ConditionSucceeded,

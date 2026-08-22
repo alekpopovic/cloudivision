@@ -38,7 +38,7 @@ spec:
     - name: verify-checkout
       image: alpine:3.22
       command: [sh]
-      args: [-c, "test -f go.mod"]
+      args: [-c, "test -f client/package.json && test -f Dockerfile"]
       timeoutSeconds: 120
   build:
     enabled: false

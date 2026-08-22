@@ -32,6 +32,8 @@ kubectl -n cloudivision port-forward svc/cloudivision-cloudivision-web 4200:80
 curl -fsS http://localhost:8080/readyz
 ```
 
-Open `http://localhost:4200`. The sample verifies a checked-out Node.js demo without building/pushing an image, so it does not require BuildKit or registry credentials.
+Open `http://localhost:4200`. The sample clones Docker's public getting-started
+Node.js application and verifies its Dockerfile and client package without
+building/pushing an image, so it does not require BuildKit or registry credentials.
 
 If a pod does not start, run `kubectl -n cloudivision describe pod POD` and check image loading, Pod Security, quota, and runner ServiceAccount. Continue with [first build](first-build.md) or the [troubleshooting guide](../operations/troubleshooting.md).

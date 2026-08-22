@@ -415,8 +415,8 @@ func releaseNameForBuildRun(buildRunName, environment string) string {
 }
 
 func releaseImage(buildRun *cicdv1alpha1.BuildRun) cicdv1alpha1.ImageRef {
-	if buildRun.Status.Image.Repository != "" {
-		return buildRun.Status.Image
+	if buildRun.Status.Image != nil && buildRun.Status.Image.Repository != "" {
+		return *buildRun.Status.Image
 	}
 	return buildRun.Spec.Image
 }

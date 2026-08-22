@@ -24,6 +24,7 @@ import (
 const (
 	defaultRunnerServiceAccount = "cloudivision-runner"
 	runnerRoleName              = "cloudivision-runner"
+	apiProjectRoleName          = "cloudivision-api-access"
 	defaultDenyNetworkPolicy    = "cloudivision-default-deny"
 	egressAllowListPolicy       = "cloudivision-egress-allow-list"
 	projectDriftRequeue         = 5 * time.Minute
@@ -32,7 +33,10 @@ const (
 // ProjectReconciler reconciles Project resources.
 type ProjectReconciler struct {
 	client.Client
-	MaxConcurrentReconciles int
+	MaxConcurrentReconciles    int
+	APIServiceAccountName      string
+	APIServiceAccountNamespace string
+	APIProjectRoleName         string
 }
 
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=projects,verbs=get;list;watch;create;update;patch;delete
@@ -73,6 +77,9 @@ func (r *ProjectReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 	if err := r.ensureRunnerRBAC(ctx, project); err != nil {
+		return ctrl.Result{}, r.markProjectError(ctx, project, err)
+	}
+	if err := r.ensureAPIRBAC(ctx, project); err != nil {
 		return ctrl.Result{}, r.markProjectError(ctx, project, err)
 	}
 	if err := r.ensureNetworkPolicy(ctx, project); err != nil {
@@ -152,6 +159,27 @@ func (r *ProjectReconciler) ensureRunnerRBAC(ctx context.Context, project *cicdv
 		return nil
 	}); err != nil {
 		return fmt.Errorf("ensure runner RoleBinding %s/%s: %w", namespace, runnerRoleName, err)
+	}
+	return nil
+}
+
+func (r *ProjectReconciler) ensureAPIRBAC(ctx context.Context, project *cicdv1alpha1.Project) error {
+	if r.APIServiceAccountName == "" || r.APIServiceAccountNamespace == "" || r.APIProjectRoleName == "" {
+		return nil
+	}
+	namespace := project.Spec.Namespace
+	binding := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: apiProjectRoleName, Namespace: namespace}}
+	if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, binding, func() error {
+		binding.Labels = mergeLabels(binding.Labels, managedLabels(project))
+		binding.Subjects = []rbacv1.Subject{{
+			Kind:      rbacv1.ServiceAccountKind,
+			Name:      r.APIServiceAccountName,
+			Namespace: r.APIServiceAccountNamespace,
+		}}
+		binding.RoleRef = rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: r.APIProjectRoleName}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("ensure API RoleBinding %s/%s: %w", namespace, apiProjectRoleName, err)
 	}
 	return nil
 }

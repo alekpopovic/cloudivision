@@ -46,7 +46,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&cloudivisioncontroller.ProjectReconciler{Client: mgr.GetClient(), MaxConcurrentReconciles: envInt("CLOUDIVISION_PROJECT_CONCURRENCY", 2)}).SetupWithManager(mgr); err != nil {
+	if err := (&cloudivisioncontroller.ProjectReconciler{
+		Client:                     mgr.GetClient(),
+		MaxConcurrentReconciles:    envInt("CLOUDIVISION_PROJECT_CONCURRENCY", 2),
+		APIServiceAccountName:      os.Getenv("CLOU_DIVISION_API_SERVICE_ACCOUNT_NAME"),
+		APIServiceAccountNamespace: os.Getenv("CLOU_DIVISION_API_SERVICE_ACCOUNT_NAMESPACE"),
+		APIProjectRoleName:         os.Getenv("CLOU_DIVISION_API_PROJECT_ROLE_NAME"),
+	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create Project controller")
 		os.Exit(1)
 	}

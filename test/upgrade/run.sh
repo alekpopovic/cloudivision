@@ -8,7 +8,7 @@ LIVE="${UPGRADE_TEST_LIVE:-false}"
 RELEASE="${UPGRADE_TEST_RELEASE:-cloudivision-upgrade}"
 NAMESPACE="${UPGRADE_TEST_NAMESPACE:-cloudivision-upgrade-test}"
 CONTEXT="${UPGRADE_TEST_CONTEXT:-}"
-REPOSITORY_URL="${UPGRADE_TEST_REPOSITORY_URL:-https://github.com/cloudivision/cloudivision.git}"
+REPOSITORY_URL="${UPGRADE_TEST_REPOSITORY_URL:-https://github.com/docker/getting-started-todo-app.git}"
 REVISION="${UPGRADE_TEST_REVISION:-main}"
 IMAGE_REGISTRY="${UPGRADE_TEST_IMAGE_REGISTRY:-ghcr.io/cloudivision}"
 BASE_TAG="${UPGRADE_TEST_BASE_TAG:-dev}"
@@ -82,7 +82,7 @@ helm --kube-context "${CONTEXT}" upgrade --install "${RELEASE}" "${CHART}" \
   --namespace "${NAMESPACE}" --create-namespace \
   --set global.imageRegistry="${IMAGE_REGISTRY}" \
   --set controller.image.tag="${BASE_TAG}" --set api.image.tag="${BASE_TAG}" --set web.image.tag="${BASE_TAG}" --set runner.image.tag="${BASE_TAG}"
-kubectl --context "${CONTEXT}" -n "${NAMESPACE}" rollout status deployment --all --timeout=5m
+kubectl --context "${CONTEXT}" -n "${NAMESPACE}" wait --for=condition=Available deployment --all --timeout=5m
 kubectl --context "${CONTEXT}" apply -f "${fixture_render}"
 wait_for_phase upgrade-before
 
@@ -95,7 +95,7 @@ helm --kube-context "${CONTEXT}" upgrade "${RELEASE}" "${CHART}" \
   --namespace "${NAMESPACE}" \
   --set global.imageRegistry="${IMAGE_REGISTRY}" \
   --set controller.image.tag="${TARGET_TAG}" --set api.image.tag="${TARGET_TAG}" --set web.image.tag="${TARGET_TAG}" --set runner.image.tag="${TARGET_TAG}"
-kubectl --context "${CONTEXT}" -n "${NAMESPACE}" rollout status deployment --all --timeout=5m
+kubectl --context "${CONTEXT}" -n "${NAMESPACE}" wait --for=condition=Available deployment --all --timeout=5m
 
 test "$(kubectl --context "${CONTEXT}" -n "${NAMESPACE}" get project upgrade-test -o jsonpath='{.metadata.uid}')" = "${project_uid}"
 test "$(kubectl --context "${CONTEXT}" -n "${NAMESPACE}" get buildrun upgrade-before -o jsonpath='{.metadata.uid}')" = "${build_uid}"

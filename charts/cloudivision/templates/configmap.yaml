@@ -24,6 +24,9 @@ data:
   CLOU_DIVISION_AUDIT_BACKEND: {{ .Values.audit.backend | quote }}
   CLOU_DIVISION_ENABLE_TEKTON: {{ .Values.tekton.enabled | quote }}
   CLOU_DIVISION_RUNNER_IMAGE: {{ include "cloudivision.image" (list . .Values.runner.image) | quote }}
+  CLOU_DIVISION_API_SERVICE_ACCOUNT_NAME: {{ printf "%s-api" (include "cloudivision.fullname" .) | quote }}
+  CLOU_DIVISION_API_SERVICE_ACCOUNT_NAMESPACE: {{ .Release.Namespace | quote }}
+  CLOU_DIVISION_API_PROJECT_ROLE_NAME: {{ printf "%s-api-project" (include "cloudivision.fullname" .) | quote }}
   groups.yaml: |
     mappings:
 {{- range .Values.api.auth.groupMappings }}

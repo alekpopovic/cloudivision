@@ -107,7 +107,9 @@ kubectl apply -f deploy/examples/environment-dev.yaml
 kubectl apply -f deploy/examples/buildrun-manual.yaml
 ```
 
-The default sample repository points at this public repository and verifies the checked-in `deploy/demo-app` files. For a real app test, push or fork `deploy/demo-app` to a Git repository, then update `deploy/examples/repository.yaml` to use that URL.
+The default sample repository points at Docker's public getting-started Node.js
+application and verifies its root Dockerfile and client package. For your own app,
+update `deploy/examples/repository.yaml`, the pipeline paths, and image repository.
 
 For an explanation of every resource and command, see [Create your first BuildRun](docs/guides/first-buildrun.md).
 

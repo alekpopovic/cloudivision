@@ -363,7 +363,6 @@ type PipelineSupplyChainSpec struct {
 }
 
 // +kubebuilder:validation:XValidation:rule="(has(self.steps) && size(self.steps) > 0) || (has(self.build) && self.build.enabled)",message="at least one step or an enabled image build is required"
-// +kubebuilder:validation:XValidation:rule="!has(self.steps) || self.steps.all(step, self.steps.exists_one(candidate, candidate.name == step.name))",message="pipeline step names must be unique"
 type PipelineTemplateSpec struct {
 	// +optional
 	ProjectRef string `json:"projectRef,omitempty"`
@@ -372,6 +371,8 @@ type PipelineTemplateSpec struct {
 	Params      []ParamSpec `json:"params,omitempty"`
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
+	// +listType=map
+	// +listMapKey=name
 	Steps       []PipelineStep          `json:"steps,omitempty"`
 	Build       PipelineBuildSpec       `json:"build,omitempty"`
 	Resources   PipelineResourceSpec    `json:"resources,omitempty"`
@@ -520,14 +521,15 @@ type BuildRunStatus struct {
 	// +optional
 	StartedAt *metav1.Time `json:"startedAt,omitempty"`
 	// +optional
-	CompletedAt    *metav1.Time              `json:"completedAt,omitempty"`
-	JobRef         ObjectRef                 `json:"jobRef,omitempty"`
-	PipelineRunRef ObjectRef                 `json:"pipelineRunRef,omitempty"`
-	Image          ImageRef                  `json:"image,omitempty"`
-	SupplyChain    BuildRunSupplyChainStatus `json:"supplyChain,omitempty"`
-	Policy         PolicyDecisionStatus      `json:"policy,omitempty"`
-	Failure        FailureStatus             `json:"failure,omitempty"`
-	Log            BuildRunLogStatus         `json:"log,omitempty"`
+	CompletedAt    *metav1.Time `json:"completedAt,omitempty"`
+	JobRef         ObjectRef    `json:"jobRef,omitempty"`
+	PipelineRunRef ObjectRef    `json:"pipelineRunRef,omitempty"`
+	// +optional
+	Image       *ImageRef                 `json:"image,omitempty"`
+	SupplyChain BuildRunSupplyChainStatus `json:"supplyChain,omitempty"`
+	Policy      PolicyDecisionStatus      `json:"policy,omitempty"`
+	Failure     FailureStatus             `json:"failure,omitempty"`
+	Log         BuildRunLogStatus         `json:"log,omitempty"`
 }
 
 // +kubebuilder:object:root=true

@@ -1,11 +1,22 @@
 package v1alpha1
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestPendingBuildRunStatusOmitsArtifactImage(t *testing.T) {
+	data, err := json.Marshal(BuildRunStatus{Phase: BuildRunPhasePending})
+	if err != nil {
+		t.Fatalf("marshal pending BuildRun status: %v", err)
+	}
+	if strings.Contains(string(data), `"image"`) {
+		t.Fatalf("pending status contains an empty validated image: %s", data)
+	}
+}
 
 func TestGeneratedCRDValidationContract(t *testing.T) {
 	t.Parallel()
@@ -22,7 +33,8 @@ func TestGeneratedCRDValidationContract(t *testing.T) {
 		},
 		"cicd.cloudivision.io_pipelinetemplates.yaml": {
 			"at least one step or an enabled image build is required",
-			"pipeline step names must be unique",
+			"x-kubernetes-list-type: map",
+			"x-kubernetes-list-map-keys:",
 			"minItems: 1",
 			"default: Dockerfile",
 		},

@@ -58,6 +58,17 @@ func TestProjectReconcileCreatesIsolationResources(t *testing.T) {
 		t.Fatalf("subjects = %#v, want sample-runner ServiceAccount", binding.Subjects)
 	}
 
+	apiBinding := &rbacv1.RoleBinding{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: apiProjectRoleName, Namespace: project.Spec.Namespace}, apiBinding); err != nil {
+		t.Fatalf("get API RoleBinding error = %v", err)
+	}
+	if len(apiBinding.Subjects) != 1 || apiBinding.Subjects[0].Name != "cloudivision-api" || apiBinding.Subjects[0].Namespace != "cloudivision-system" {
+		t.Fatalf("API subjects = %#v, want cloudivision-system/cloudivision-api ServiceAccount", apiBinding.Subjects)
+	}
+	if apiBinding.RoleRef.Kind != "ClusterRole" || apiBinding.RoleRef.Name != "cloudivision-api-project" {
+		t.Fatalf("API roleRef = %#v, want cloudivision-api-project ClusterRole", apiBinding.RoleRef)
+	}
+
 	policy := &networkingv1.NetworkPolicy{}
 	if err := reconciler.Get(ctx, types.NamespacedName{Name: defaultDenyNetworkPolicy, Namespace: project.Spec.Namespace}, policy); err != nil {
 		t.Fatalf("get NetworkPolicy error = %v", err)
@@ -148,7 +159,12 @@ func newProjectReconciler(t *testing.T, project *cicdv1alpha1.Project, existing 
 		WithStatusSubresource(&cicdv1alpha1.Project{}).
 		WithObjects(objects...).
 		Build()
-	return &ProjectReconciler{Client: fakeClient}, project
+	return &ProjectReconciler{
+		Client:                     fakeClient,
+		APIServiceAccountName:      "cloudivision-api",
+		APIServiceAccountNamespace: "cloudivision-system",
+		APIProjectRoleName:         "cloudivision-api-project",
+	}, project
 }
 
 func testIsolatedProject() *cicdv1alpha1.Project {

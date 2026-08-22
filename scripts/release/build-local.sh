@@ -33,6 +33,7 @@ if [[ "${RELEASE_SKIP_CHECKS:-false}" != "true" ]]; then
   test -z "$(gofmt -l "${ROOT_DIR}/api" "${ROOT_DIR}/cmd" "${ROOT_DIR}/internal")" || fail "gofmt check failed"
   (cd "${ROOT_DIR}" && go test ./... && go vet ./...)
   npm --prefix "${ROOT_DIR}/web" ci
+  npm --prefix "${ROOT_DIR}/web" audit --omit=dev --audit-level=high
   npm --prefix "${ROOT_DIR}/web" run build
   npm --prefix "${ROOT_DIR}/web" test -- --watch=false --browsers=ChromeHeadless
   (cd "${ROOT_DIR}" && make security-check && make upgrade-test && make scale-test)

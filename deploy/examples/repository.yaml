@@ -6,7 +6,7 @@ metadata:
 spec:
   projectRef: demo-project
   provider: generic
-  url: https://github.com/cloudivision/cloudivision.git
+  url: https://github.com/docker/getting-started-todo-app.git
   defaultBranch: main
   webhook:
     enabled: false

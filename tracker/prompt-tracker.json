@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-22T01:29:40Z",
-  "last_executed_prompt": 39,
-  "next_prompt": 40,
+  "updated_at": "2026-08-22T02:10:46Z",
+  "last_executed_prompt": 40,
+  "next_prompt": 41,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -377,9 +377,9 @@
       "title": "v0.1 Final Gate: Hardening Sprint Review",
       "phase": "Release",
       "file": "prompts/40-v0-1-final-gate-hardening-sprint-review.md",
-      "status": "pending",
-      "executed_at": null,
-      "notes": ""
+      "status": "done",
+      "executed_at": "2026-08-22T02:10:46Z",
+      "notes": "Final gate passed on a clean kind cluster after safe CRD, Helm, web, status-schema, fixture, API RBAC, upgrade-harness, and Angular dependency fixes. Go/vet/web/Helm/security passed; conformance 5/5 with one external GitOps skip, live upgrade passed, limited scale 10/10; recommendation is ship v0.1.0 alpha with known issues."
     },
     {
       "id": 41,

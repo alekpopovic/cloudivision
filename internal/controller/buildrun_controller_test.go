@@ -173,7 +173,7 @@ func TestBuildRunReconcileMarksSucceeded(t *testing.T) {
 	if updated.Status.CompletedAt == nil {
 		t.Fatal("completedAt = nil, want timestamp")
 	}
-	if updated.Status.Image.Repository != buildRun.Spec.Image.Repository {
+	if updated.Status.Image == nil || updated.Status.Image.Repository != buildRun.Spec.Image.Repository {
 		t.Fatalf("status image repository = %q", updated.Status.Image.Repository)
 	}
 }
@@ -224,7 +224,7 @@ func TestTerminalBuildRunRecreatesDeletedRelease(t *testing.T) {
 	ctx := context.Background()
 	reconciler, buildRun := newBuildRunReconciler(t)
 	buildRun.Status.Phase = cicdv1alpha1.BuildRunPhaseSucceeded
-	buildRun.Status.Image = buildRun.Spec.Image
+	buildRun.Status.Image = &buildRun.Spec.Image
 	if err := reconciler.Status().Update(ctx, buildRun); err != nil {
 		t.Fatalf("update BuildRun status error = %v", err)
 	}

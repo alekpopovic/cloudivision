@@ -165,7 +165,11 @@ func (in *BuildRunStatus) DeepCopyInto(out *BuildRunStatus) {
 	}
 	out.JobRef = in.JobRef
 	out.PipelineRunRef = in.PipelineRunRef
-	out.Image = in.Image
+	if in.Image != nil {
+		in, out := &in.Image, &out.Image
+		*out = new(ImageRef)
+		**out = **in
+	}
 	out.SupplyChain = in.SupplyChain
 	in.Policy.DeepCopyInto(&out.Policy)
 	out.Failure = in.Failure

@@ -68,10 +68,11 @@ def main():
         else:
             should_update = p['id'] <= args.prompt_id if args.status == 'done' else p['id'] == args.prompt_id
         if should_update:
+            previous_status = p['status']
             p['status'] = args.status
-            if args.status == 'done':
+            if args.status == 'done' and previous_status != 'done':
                 p['executed_at'] = now
-            if args.note:
+            if args.note and p['id'] == args.prompt_id:
                 existing = p.get('notes') or ''
                 p['notes'] = (existing + ' ' + args.note).strip()
 

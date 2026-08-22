@@ -14,7 +14,7 @@ func main() {
 	projects := flag.Int("projects", 1, "number of Project/Repository/PipelineTemplate sets")
 	namespace := flag.String("namespace", "cloudivision-scale", "target namespace")
 	runID := flag.String("run-id", "local", "cleanup label and name suffix")
-	repositoryURL := flag.String("repository-url", "https://github.com/cloudivision/cloudivision.git", "source repository URL")
+	repositoryURL := flag.String("repository-url", "https://github.com/docker/getting-started-todo-app.git", "source repository URL")
 	gitOps := flag.Bool("gitops", false, "generate GitOps-enabled BuildRuns and Environments")
 	flag.Parse()
 	if *count < 1 || *count > 10000 || *projects < 1 || *projects > 100 || *projects > *count {
@@ -37,7 +37,7 @@ func main() {
 			}),
 			resource("PipelineTemplate", *namespace, name, labels, map[string]any{
 				"projectRef": name,
-				"steps":      []any{map[string]any{"name": "verify", "image": "alpine:3.22", "command": []string{"sh"}, "args": []string{"-c", "test -f go.mod"}, "timeoutSeconds": 120}},
+				"steps":      []any{map[string]any{"name": "verify", "image": "alpine:3.22", "command": []string{"sh"}, "args": []string{"-c", "test -f client/package.json && test -f Dockerfile"}, "timeoutSeconds": 120}},
 				"build":      map[string]any{"enabled": false, "builder": "none", "push": false},
 				"resources":  map[string]any{"cpuRequest": "25m", "cpuLimit": "250m", "memoryRequest": "32Mi", "memoryLimit": "256Mi", "timeoutSeconds": 300},
 				"security":   map[string]any{"allowPrivileged": false, "runAsNonRoot": true, "readOnlyRootFilesystem": false},

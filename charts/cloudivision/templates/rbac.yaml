@@ -24,6 +24,10 @@ rules:
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles", "rolebindings"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles"]
+    resourceNames: [{{ printf "%s-api-project" (include "cloudivision.fullname" .) | quote }}]
+    verbs: ["get", "bind"]
   - apiGroups: ["networking.k8s.io"]
     resources: ["networkpolicies"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
@@ -51,6 +55,30 @@ subjects:
   - kind: ServiceAccount
     name: {{ include "cloudivision.fullname" . }}-controller
     namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "cloudivision.fullname" . }}-api-project
+  labels:
+    {{- include "cloudivision.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+rules:
+  - apiGroups: ["cicd.cloudivision.io"]
+    resources: ["projects", "repositories", "pipelinetemplates", "buildruns", "environments"]
+    verbs: ["get", "list", "watch", "create"]
+  - apiGroups: ["cicd.cloudivision.io"]
+    resources: ["releases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: ["cicd.cloudivision.io"]
+    resources: ["releases/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

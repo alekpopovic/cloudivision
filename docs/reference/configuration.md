@@ -14,6 +14,9 @@ use environment variables for direct local execution.
 | `CLOUDIVISION_BUILDRUN_CONCURRENCY` | BuildRun worker count |
 | `CLOUDIVISION_RELEASE_CONCURRENCY` | Release worker count |
 | `CLOU_DIVISION_RUNNER_IMAGE` | Runner image used by Jobs |
+| `CLOU_DIVISION_API_SERVICE_ACCOUNT_NAME` | Central API ServiceAccount bound into project namespaces |
+| `CLOU_DIVISION_API_SERVICE_ACCOUNT_NAMESPACE` | Namespace of the central API ServiceAccount |
+| `CLOU_DIVISION_API_PROJECT_ROLE_NAME` | Unbound ClusterRole template that the controller binds only in reconciled project namespaces |
 | `CLOU_DIVISION_ENABLE_TEKTON` | Enable optional Tekton execution |
 | `CLOU_DIVISION_ALLOW_PRIVILEGED_BUILDS` | Exceptional privileged-build opt-in; avoid in production |
 

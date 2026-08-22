@@ -16,6 +16,17 @@ if grep -Ein 'cluster-admin' "$manifest"; then
 fi
 
 if awk '
+  /^---[[:space:]]*$/ { kind = ""; in_role_ref = 0; next }
+  /^kind:[[:space:]]*/ { kind = $2; next }
+  kind == "ClusterRoleBinding" && /^roleRef:[[:space:]]*$/ { in_role_ref = 1; next }
+  kind == "ClusterRoleBinding" && in_role_ref && /^  name:[[:space:]].*-api-project[[:space:]]*$/ { found = 1 }
+  END { exit found ? 0 : 1 }
+' "$manifest"; then
+  echo "SECURITY VIOLATION: API project permission template must not have a ClusterRoleBinding" >&2
+  exit 1
+fi
+
+if awk '
   function check_rule() {
     if (has_secrets && has_broad_verb) violation = 1
   }
@@ -43,4 +54,4 @@ else
   exit 1
 fi
 
-echo "PASS: no cluster-admin binding or broad Secret enumeration"
+echo "PASS: no cluster-admin/API-project cluster binding or broad Secret enumeration"

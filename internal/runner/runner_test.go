@@ -172,7 +172,7 @@ func TestRunnerRecordsSupplyChainHookResults(t *testing.T) {
 	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
 		t.Fatalf("get BuildRun error = %v", err)
 	}
-	if updated.Status.Image.Digest != "sha256:abc123" {
+	if updated.Status.Image == nil || updated.Status.Image.Digest != "sha256:abc123" {
 		t.Fatalf("image digest = %q, want sha256:abc123", updated.Status.Image.Digest)
 	}
 	if updated.Status.SupplyChain.SBOMPath != "sbom.spdx.json" {

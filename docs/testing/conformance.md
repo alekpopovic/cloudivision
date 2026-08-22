@@ -32,7 +32,7 @@ The suite runs these scenarios:
 |---|---|---|
 | `CONFORMANCE_TIMEOUT` | `300` | Maximum seconds for each explicit wait. |
 | `CONFORMANCE_NAMESPACE_PREFIX` | `cloudivision-conformance` | Prefix for disposable scenario namespaces. |
-| `CONFORMANCE_REPOSITORY_URL` | public cloudivision GitHub URL | Repository cloned by runner Jobs. |
+| `CONFORMANCE_REPOSITORY_URL` | Docker's public getting-started todo app | Repository cloned by runner Jobs; override with another credential-free fixture. |
 | `CONFORMANCE_REVISION` | `main` | Branch, tag or commit checked out by runner Jobs. |
 | `CONFORMANCE_API_BASE_URL` | empty | Reachable API URL; enables API log and webhook assertions. |
 | `CONFORMANCE_KEEP_NAMESPACES` | `false` | Keep scenario namespaces for manual inspection. |

@@ -52,6 +52,7 @@ jobs:
       - name: Web dependencies, build and tests
         run: |
           npm ci
+          npm audit --omit=dev --audit-level=high
           npm run build
           npm test -- --watch=false --browsers=ChromeHeadless
         working-directory: web

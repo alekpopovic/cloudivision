@@ -105,7 +105,7 @@ func TestMarkBuildRunLifecycle(t *testing.T) {
 	if buildRun.Status.Phase != cicdv1alpha1.BuildRunPhaseSucceeded {
 		t.Fatalf("phase after success = %q, want Succeeded", buildRun.Status.Phase)
 	}
-	if buildRun.Status.Image != image {
+	if buildRun.Status.Image == nil || *buildRun.Status.Image != image {
 		t.Fatalf("image = %#v, want %#v", buildRun.Status.Image, image)
 	}
 	if buildRun.Status.CompletedAt == nil || !buildRun.Status.CompletedAt.Equal(&completed) {

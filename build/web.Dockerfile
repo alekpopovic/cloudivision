@@ -9,6 +9,7 @@ FROM nginx:1.29-alpine
 COPY --from=build /app/dist/cloudivision-web/browser /usr/share/nginx/html
 COPY build/web-nginx.conf /etc/nginx/conf.d/default.conf
 COPY build/web-entrypoint.sh /docker-entrypoint.d/99-cloudivision-config.sh
-RUN chmod +x /docker-entrypoint.d/99-cloudivision-config.sh \
+RUN sed -i 's#^pid .*#pid /tmp/nginx.pid;#' /etc/nginx/nginx.conf \
+  && chmod +x /docker-entrypoint.d/99-cloudivision-config.sh \
   && chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /var/run /var/log/nginx
-USER nginx
+USER 101:101
