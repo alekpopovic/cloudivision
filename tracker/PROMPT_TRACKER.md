@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-22T02:10:46Z`
-Last executed prompt: `40`
-Next prompt: `41`
+Updated at: `2026-08-22T02:13:33Z`
+Last executed prompt: `41`
+Next prompt: `None`
 
 ## How to update
 
@@ -69,4 +69,4 @@ Replace `21` with the last prompt that was successfully executed.
 | 38 | done | Documentation | Documentation Restructure for Users and Operators | `prompts/38-documentation-restructure-for-users-and-operators.md` | Restructured user, operator, security, contributor, and reference documentation; fixed outdated release approval payload. Local Markdown link and Helm render validation passed. |
 | 39 | done | Release | Public Release Process and v0.1.0 | `prompts/39-public-release-process-and-v0-1-0.md` | Added semver release metadata, changelog/checklist, local artifact builder, GHCR image/signing workflow, checksums, Helm/CRD packaging, and public registry defaults. Local 0.1.0 artifact and checksum smoke test passed; Syft/Cosign were unavailable locally and explicitly skipped. |
 | 40 | done | Release | v0.1 Final Gate: Hardening Sprint Review | `prompts/40-v0-1-final-gate-hardening-sprint-review.md` | Final gate passed on a clean kind cluster after safe CRD, Helm, web, status-schema, fixture, API RBAC, upgrade-harness, and Angular dependency fixes. Go/vet/web/Helm/security passed; conformance 5/5 with one external GitOps skip, live upgrade passed, limited scale 10/10; recommendation is ship v0.1.0 alpha with known issues. |
-| 41 | pending | Roadmap | v0.2 Roadmap Planning | `prompts/41-v0-2-roadmap-planning.md` |  |
+| 41 | done | Roadmap | v0.2 Roadmap Planning | `prompts/41-v0-2-roadmap-planning.md` | Created a focused v0.2 roadmap and ordered backlog tied to the v0.1 final-gate gaps: authenticated immutable image builds, durable GitHub webhooks, real GitOps/Argo convergence, stage-oriented Angular UX, security closure, cross-version upgrade, dependency triage, and measured scale. Deferred v0.3 and enterprise scope is explicit. |

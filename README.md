@@ -29,7 +29,11 @@ CI creates artifacts. CD happens through GitOps by updating deployment repositor
 
 ## Status
 
-cloudivision is an early v0.1 platform under active hardening. The repository contains working API, controller, runner, Helm chart and Angular UI implementations; clean-cluster conformance is still being expanded. See the [v0.1 readiness audit](docs/readiness/v0.1-readiness-audit.md) for the current evidence and remaining blockers.
+cloudivision v0.1 is ready to publish as an alpha with documented limitations.
+The clean-cluster gate covers installation, the quickstart BuildRun, API/UI health,
+conformance, same-version upgrade, security checks, and limited scale. See the
+[v0.1 final gate](docs/readiness/v0.1-final-gate.md) for the evidence and the
+[v0.2 roadmap](docs/roadmap/v0.2.md) for the next production-readiness increment.
 
 ## Documentation
 

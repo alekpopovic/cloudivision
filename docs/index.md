@@ -20,5 +20,6 @@ cloudivision is a Kubernetes-native CI/CD platform: BuildRuns execute as Kuberne
 - Security reviewers: [threat model](security/threat-model.md), [runner security](security/runner-security.md), [supply chain](security/supply-chain.md), [auth/RBAC](security/auth-rbac.md), and [webhooks](security/webhook-security.md).
 - Contributors: [architecture](development/architecture.md), [controllers](development/controllers.md), [runner](development/runner.md), [API](development/api.md), [frontend](development/frontend.md), [testing](development/testing.md), [contributing](development/contributing.md), and [release process](development/release-process.md).
 - Reference: [HTTP API](reference/api.md), [CRDs](reference/crds.md), [Helm values](reference/helm-values.md), and [configuration](reference/configuration.md).
+- Planning: [v0.1 final gate](readiness/v0.1-final-gate.md), [v0.2 roadmap](roadmap/v0.2.md), and [prioritized backlog](roadmap/backlog.md).
 
 Older detailed notes under `docs/guides`, `docs/api`, `docs/controllers`, `docs/install`, and ADRs remain linked as deeper implementation/history references. The pages above are the maintained user-facing entry points.
