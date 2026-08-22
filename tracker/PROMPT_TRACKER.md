@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-22T18:41:49Z`
-Last executed prompt: `41`
-Next prompt: `42`
+Updated at: `2026-08-22T18:57:18Z`
+Last executed prompt: `42`
+Next prompt: `43`
 
 ## How to update
 
@@ -70,7 +70,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 39 | done | Release | Public Release Process and v0.1.0 | `prompts/39-public-release-process-and-v0-1-0.md` | Added semver release metadata, changelog/checklist, local artifact builder, GHCR image/signing workflow, checksums, Helm/CRD packaging, and public registry defaults. Local 0.1.0 artifact and checksum smoke test passed; Syft/Cosign were unavailable locally and explicitly skipped. |
 | 40 | done | Release | v0.1 Final Gate: Hardening Sprint Review | `prompts/40-v0-1-final-gate-hardening-sprint-review.md` | Final gate passed on a clean kind cluster after safe CRD, Helm, web, status-schema, fixture, API RBAC, upgrade-harness, and Angular dependency fixes. Go/vet/web/Helm/security passed; conformance 5/5 with one external GitOps skip, live upgrade passed, limited scale 10/10; recommendation is ship v0.1.0 alpha with known issues. |
 | 41 | done | Roadmap | v0.2 Roadmap Planning | `prompts/41-v0-2-roadmap-planning.md` | Created a focused v0.2 roadmap and ordered backlog tied to the v0.1 final-gate gaps: authenticated immutable image builds, durable GitHub webhooks, real GitOps/Argo convergence, stage-oriented Angular UX, security closure, cross-version upgrade, dependency triage, and measured scale. Deferred v0.3 and enterprise scope is explicit. |
-| 42 | pending | Roadmap | v0.2 Implementation Plan | `prompts/42-v0-2-implementation-plan.md` |  |
+| 42 | done | Roadmap | v0.2 Implementation Plan | `prompts/42-v0-2-implementation-plan.md` | Created the executable v0.2 implementation plan with seven epics, work items, CRD/API impacts, tests, acceptance criteria, risks, dependencies, milestone ordering, and explicit exclusions. |
 | 43 | pending | Build Execution | BuildKit Builder Hardening | `prompts/43-buildkit-builder-hardening.md` |  |
 | 44 | pending | Providers | Registry Provider and Credentials | `prompts/44-registry-provider-and-credentials.md` |  |
 | 45 | pending | Supply Chain | Image Tagging, Digest and Immutability | `prompts/45-image-tagging-digest-and-immutability.md` |  |
