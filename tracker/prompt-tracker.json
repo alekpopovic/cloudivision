@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-22T19:31:35Z",
-  "last_executed_prompt": 45,
-  "next_prompt": 46,
+  "updated_at": "2026-08-22T19:42:04Z",
+  "last_executed_prompt": 46,
+  "next_prompt": 47,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -431,8 +431,9 @@
       "title": "GitHub Webhook Production Readiness",
       "phase": "API",
       "file": "prompts/46-github-webhook-production-readiness.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Hardened GitHub webhooks with HMAC verification, 1 MiB limit, push/PR/ping parsing, replay and delivery-ID idempotency, stable responses, bounded audit events, PostgreSQL migrations, tests and setup/security docs.",
+      "executed_at": "2026-08-22T19:42:04Z"
     },
     {
       "id": 47,

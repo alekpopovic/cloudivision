@@ -96,10 +96,13 @@ type LogsResponse struct {
 }
 
 type WebhookResponse struct {
-	Repository string           `json:"repository"`
-	EventID    string           `json:"eventID"`
-	BuildRun   BuildRunResponse `json:"buildRun"`
-	Created    bool             `json:"created"`
+	Repository string            `json:"repository"`
+	EventID    string            `json:"eventID"`
+	Event      string            `json:"event"`
+	Result     string            `json:"result"`
+	Message    string            `json:"message"`
+	BuildRun   *BuildRunResponse `json:"buildRun,omitempty"`
+	Created    bool              `json:"created"`
 }
 
 type AuditEventResponse struct {
@@ -110,6 +113,7 @@ type AuditEventResponse struct {
 	Repository string          `json:"repository,omitempty"`
 	BuildRun   string          `json:"buildRun,omitempty"`
 	Release    string          `json:"release,omitempty"`
+	EventID    string          `json:"eventID,omitempty"`
 	Message    string          `json:"message,omitempty"`
 	Metadata   json.RawMessage `json:"metadata,omitempty"`
 	CreatedAt  metav1.Time     `json:"createdAt,omitempty"`
@@ -162,6 +166,7 @@ func auditEventDTO(event audit.Event) AuditEventResponse {
 		Repository: event.Repository,
 		BuildRun:   event.BuildRun,
 		Release:    event.Release,
+		EventID:    event.EventID,
 		Message:    event.Message,
 		Metadata:   event.Metadata,
 		CreatedAt:  createdAt,

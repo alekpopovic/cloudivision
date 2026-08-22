@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-22T19:31:35Z`
-Last executed prompt: `45`
-Next prompt: `46`
+Updated at: `2026-08-22T19:42:04Z`
+Last executed prompt: `46`
+Next prompt: `47`
 
 ## How to update
 
@@ -74,7 +74,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 43 | done | Build Execution | BuildKit Builder Hardening | `prompts/43-buildkit-builder-hardening.md` | Hardened rootless BuildKit input/path validation, deterministic command options, cache settings, bounded failures, metadata digest capture, runner image-stage conditions/status, CRDs, docs, and tests. Go test/vet and Helm security checks passed. |
 | 44 | done | Providers | Registry Provider and Credentials | `prompts/44-registry-provider-and-credentials.md` | Added registry provider interface and generic/GHCR/GitLab/Harbor implementations, cloud skeletons, image/digest resolution, credential parsing/redaction, scoped Secret validation/projection, runner Docker config handling, CRDs/API models, docs, and tests. Go, Angular, Helm, and security gates passed. |
 | 45 | done | Supply Chain | Image Tagging, Digest and Immutability | `prompts/45-image-tagging-digest-and-immutability.md` | Implemented deterministic safe image tag templates, digest-first GitOps updates, production latest/digest policy, separate UI tag/digest fields, tests and documentation. |
-| 46 | pending | API | GitHub Webhook Production Readiness | `prompts/46-github-webhook-production-readiness.md` |  |
+| 46 | done | API | GitHub Webhook Production Readiness | `prompts/46-github-webhook-production-readiness.md` | Hardened GitHub webhooks with HMAC verification, 1 MiB limit, push/PR/ping parsing, replay and delivery-ID idempotency, stable responses, bounded audit events, PostgreSQL migrations, tests and setup/security docs. |
 | 47 | pending | API | Branch, Tag and Pull Request Event Filters | `prompts/47-branch-tag-and-pull-request-event-filters.md` |  |
 | 48 | pending | Build Execution | BuildRun Retry, Cancel and Rerun | `prompts/48-buildrun-retry-cancel-and-rerun.md` |  |
 | 49 | pending | Storage | Log Storage Abstraction | `prompts/49-log-storage-abstraction.md` |  |
