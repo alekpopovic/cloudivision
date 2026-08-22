@@ -63,10 +63,11 @@ type BuildRunRequest struct {
 }
 
 type BuildRunResponse struct {
-	Name      string                      `json:"name"`
-	Namespace string                      `json:"namespace"`
-	Spec      cicdv1alpha1.BuildRunSpec   `json:"spec"`
-	Status    cicdv1alpha1.BuildRunStatus `json:"status"`
+	Name        string                      `json:"name"`
+	Namespace   string                      `json:"namespace"`
+	Annotations map[string]string           `json:"annotations,omitempty"`
+	Spec        cicdv1alpha1.BuildRunSpec   `json:"spec"`
+	Status      cicdv1alpha1.BuildRunStatus `json:"status"`
 }
 
 type EnvironmentResponse struct {
@@ -145,7 +146,7 @@ func pipelineTemplateDTO(template cicdv1alpha1.PipelineTemplate) PipelineTemplat
 }
 
 func buildRunDTO(buildRun cicdv1alpha1.BuildRun) BuildRunResponse {
-	return BuildRunResponse{Name: buildRun.Name, Namespace: buildRun.Namespace, Spec: buildRun.Spec, Status: buildRun.Status}
+	return BuildRunResponse{Name: buildRun.Name, Namespace: buildRun.Namespace, Annotations: buildRun.Annotations, Spec: buildRun.Spec, Status: buildRun.Status}
 }
 
 func environmentDTO(environment cicdv1alpha1.Environment) EnvironmentResponse {

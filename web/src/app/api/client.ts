@@ -69,6 +69,10 @@ export class ApiClient {
     return this.get<LogsResponse>(`/api/v1/build-runs/${namespace}/${name}/logs`, { tailLines: String(tailLines) });
   }
 
+  buildRunAction(namespace: string, name: string, action: 'cancel' | 'retry' | 'rerun'): Observable<BuildRun> {
+    return this.post<BuildRun>(`/api/v1/build-runs/${namespace}/${name}/${action}`, undefined);
+  }
+
   environments(): Observable<Environment[]> {
     return this.get<Environment[]>('/api/v1/environments');
   }

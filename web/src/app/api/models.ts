@@ -136,6 +136,7 @@ export interface PipelineStep {
 export interface BuildRun {
   name: string;
   namespace: string;
+  annotations?: Record<string, string>;
   spec: {
     projectRef: string;
     repositoryRef: string;

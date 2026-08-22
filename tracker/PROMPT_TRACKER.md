@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-22T23:52:10Z`
-Last executed prompt: `47`
-Next prompt: `48`
+Updated at: `2026-08-22T23:55:53Z`
+Last executed prompt: `48`
+Next prompt: `49`
 
 ## How to update
 
@@ -76,7 +76,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 45 | done | Supply Chain | Image Tagging, Digest and Immutability | `prompts/45-image-tagging-digest-and-immutability.md` | Implemented deterministic safe image tag templates, digest-first GitOps updates, production latest/digest policy, separate UI tag/digest fields, tests and documentation. |
 | 46 | done | API | GitHub Webhook Production Readiness | `prompts/46-github-webhook-production-readiness.md` | Hardened GitHub webhooks with HMAC verification, 1 MiB limit, push/PR/ping parsing, replay and delivery-ID idempotency, stable responses, bounded audit events, PostgreSQL migrations, tests and setup/security docs. |
 | 47 | done | API | Branch, Tag and Pull Request Event Filters | `prompts/47-branch-tag-and-pull-request-event-filters.md` | Added auditable branch/tag/PR webhook filters, safe fork/trusted-actor defaults, Angular configuration/summary, CRD schemas, tests and docs. go test ./... and Angular build passed. |
-| 48 | pending | Build Execution | BuildRun Retry, Cancel and Rerun | `prompts/48-buildrun-retry-cancel-and-rerun.md` |  |
+| 48 | done | Build Execution | BuildRun Retry, Cancel and Rerun | `prompts/48-buildrun-retry-cancel-and-rerun.md` | Added idempotent BuildRun cancel plus immutable retry/rerun API actions, audit events, API RBAC, CLI commands, safe Angular actions/relations, tests and docs. Go tests, Angular build and Helm render passed. |
 | 49 | pending | Storage | Log Storage Abstraction | `prompts/49-log-storage-abstraction.md` |  |
 | 50 | pending | Storage | Artifact Storage | `prompts/50-artifact-storage.md` |  |
 | 51 | pending | Scale | Project Quotas and Runner Concurrency | `prompts/51-project-quotas-and-runner-concurrency.md` |  |

@@ -62,6 +62,23 @@ func TestBuildTriggerGeneratesAPIRequest(t *testing.T) {
 	}
 }
 
+func TestBuildLifecycleActionCallsAPI(t *testing.T) {
+	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/build-runs/ci/build-1/retry" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		return jsonResponse(http.StatusCreated, `{"name":"build-1-retry","namespace":"ci","spec":{},"status":{}}`), nil
+	})
+	app, stdout, stderr := testApp(t)
+	app.HTTP.Transport = transport
+	if code := app.Run([]string{"--api-url", "https://api.test", "--namespace", "ci", "build", "retry", "build-1"}); code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "build-1-retry") {
+		t.Fatalf("stdout = %q", stdout.String())
+	}
+}
+
 func TestBuildWatchExitsForSuccessAndFailure(t *testing.T) {
 	for _, test := range []struct {
 		name  string

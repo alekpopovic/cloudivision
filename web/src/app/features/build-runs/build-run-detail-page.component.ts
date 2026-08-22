@@ -24,9 +24,11 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
       <div class="mb-4 flex flex-wrap items-center gap-3">
         <app-status-badge [status]="vm.run.status?.phase || 'Pending'" />
         <span class="text-xs text-slate-500">Total duration: {{ duration(vm.run) }}</span>
-        <button type="button" class="rounded-md border border-rose-300 px-3 py-1.5 text-xs font-medium text-rose-700 disabled:opacity-40" [disabled]="vm.run.status?.phase !== 'Failed' || actionInFlight" (click)="rerun(vm.run, 'retry')">Retry failed build</button>
-        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium disabled:opacity-40" [disabled]="actionInFlight" (click)="rerun(vm.run, 'rerun')">Rerun same params</button>
+        <button type="button" class="rounded-md border border-rose-300 px-3 py-1.5 text-xs font-medium text-rose-700 disabled:opacity-40" [disabled]="!canCancel(vm.run) || actionInFlight" (click)="runAction(vm.run, 'cancel')">Cancel build</button>
+        <button type="button" class="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-800 disabled:opacity-40" [disabled]="!canRetry(vm.run) || actionInFlight" (click)="runAction(vm.run, 'retry')">Retry failed build</button>
+        <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium disabled:opacity-40" [disabled]="!isTerminal(vm.run) || actionInFlight" (click)="runAction(vm.run, 'rerun')">Rerun same params</button>
       </div>
+			<p *ngIf="relation(vm.run) as related" class="mb-4 text-xs text-slate-500">Created as {{ related.action }} of <a [routerLink]="['/build-runs', vm.run.namespace, related.name]" class="font-medium text-blue-700 hover:underline">{{ related.name }}</a>.</p>
 
       <section *ngIf="vm.run.status?.failure as failure" class="mb-5 rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
         <p class="font-semibold">{{ failure.reason || 'Build failed' }}</p>
@@ -156,12 +158,29 @@ export class BuildRunDetailPageComponent {
     return `${seconds}s`;
   }
 
-  rerun(run: BuildRun, action: 'retry' | 'rerun'): void {
+  canCancel(run: BuildRun): boolean {
+		return !run.status?.phase || ['Pending', 'Queued', 'Running'].includes(run.status.phase);
+	}
+
+	canRetry(run: BuildRun): boolean {
+		return ['Failed', 'Cancelled'].includes(run.status?.phase || '');
+	}
+
+	isTerminal(run: BuildRun): boolean {
+		return ['Succeeded', 'Failed', 'Cancelled'].includes(run.status?.phase || '');
+	}
+
+	relation(run: BuildRun): { action: string; name: string } | null {
+		if (run.annotations?.['cloudivision.io/retry-of']) return { action: 'retry', name: run.annotations['cloudivision.io/retry-of'] };
+		if (run.annotations?.['cloudivision.io/rerun-of']) return { action: 'rerun', name: run.annotations['cloudivision.io/rerun-of'] };
+		return null;
+	}
+
+  runAction(run: BuildRun, action: 'cancel' | 'retry' | 'rerun'): void {
+		if (typeof window !== 'undefined' && !window.confirm(`${action} BuildRun ${run.name}?`)) return;
     this.actionInFlight = true;
     this.error = null;
-    const suffix = Date.now().toString(36);
-    const name = `${run.name}-${action}-${suffix}`.slice(0, 63).replace(/-$/, '');
-    this.api.createBuildRun({ name, namespace: run.namespace, spec: { ...run.spec, triggeredBy: { type: 'manual', actor: 'web-rerun' } } }).subscribe({
+		this.api.buildRunAction(run.namespace, run.name, action).subscribe({
       next: () => { this.actionInFlight = false; },
       error: (error: ApiError) => { this.actionInFlight = false; this.error = error; }
     });

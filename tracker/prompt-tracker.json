@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-22T23:52:10Z",
-  "last_executed_prompt": 47,
-  "next_prompt": 48,
+  "updated_at": "2026-08-22T23:55:53Z",
+  "last_executed_prompt": 48,
+  "next_prompt": 49,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -449,8 +449,9 @@
       "title": "BuildRun Retry, Cancel and Rerun",
       "phase": "Build Execution",
       "file": "prompts/48-buildrun-retry-cancel-and-rerun.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Added idempotent BuildRun cancel plus immutable retry/rerun API actions, audit events, API RBAC, CLI commands, safe Angular actions/relations, tests and docs. Go tests, Angular build and Helm render passed.",
+      "executed_at": "2026-08-22T23:55:53Z"
     },
     {
       "id": 49,

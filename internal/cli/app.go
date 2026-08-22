@@ -207,7 +207,7 @@ func (m *stringMapFlag) Set(value string) error {
 
 func (a *App) build(ctx context.Context, client apiClient, config Config, output string, args []string) int {
 	if len(args) == 0 {
-		return a.fail(fmt.Errorf("build requires trigger, list, get, logs, or watch"))
+		return a.fail(fmt.Errorf("build requires trigger, list, get, logs, watch, cancel, retry, or rerun"))
 	}
 	switch args[0] {
 	case "trigger":
@@ -310,6 +310,16 @@ func (a *App) build(ctx context.Context, client apiClient, config Config, output
 		return a.watchBuild(ctx, client, config.Namespace, name, *timeout, *interval, output)
 	case "logs":
 		return a.buildLogs(ctx, client, config, args[1:])
+	case "cancel", "retry", "rerun":
+		if len(args) != 2 {
+			return a.fail(fmt.Errorf("usage: cloudivision build %s NAME", args[0]))
+		}
+		var item buildRun
+		path := fmt.Sprintf("/api/v1/build-runs/%s/%s/%s", url.PathEscape(config.Namespace), url.PathEscape(args[1]), args[0])
+		if err := client.do(ctx, http.MethodPost, path, nil, &item); err != nil {
+			return a.fail(err)
+		}
+		return a.printValue(item, item.Name+" "+args[0]+" requested", output)
 	default:
 		return a.fail(fmt.Errorf("unknown build command %q", args[0]))
 	}

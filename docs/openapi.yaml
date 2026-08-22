@@ -114,6 +114,36 @@ paths:
       responses:
         "200":
           description: Return runner pod logs for a BuildRun.
+  /api/v1/build-runs/{namespace}/{name}/cancel:
+    post:
+      parameters:
+        - {name: namespace, in: path, required: true, schema: {type: string}}
+        - {name: name, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Cancel an active BuildRun; repeated cancellation is idempotent.
+        "409":
+          description: BuildRun is terminal and cannot be cancelled.
+  /api/v1/build-runs/{namespace}/{name}/retry:
+    post:
+      parameters:
+        - {name: namespace, in: path, required: true, schema: {type: string}}
+        - {name: name, in: path, required: true, schema: {type: string}}
+      responses:
+        "201":
+          description: Create a related BuildRun from a Failed or Cancelled BuildRun.
+        "409":
+          description: Source BuildRun is not Failed or Cancelled.
+  /api/v1/build-runs/{namespace}/{name}/rerun:
+    post:
+      parameters:
+        - {name: namespace, in: path, required: true, schema: {type: string}}
+        - {name: name, in: path, required: true, schema: {type: string}}
+      responses:
+        "201":
+          description: Create a related BuildRun from a terminal BuildRun.
+        "409":
+          description: Source BuildRun is not terminal.
   /api/v1/environments:
     get:
       responses:

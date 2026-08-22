@@ -18,7 +18,9 @@ import (
 	"github.com/cloudivision/cloudivision/internal/policy"
 	"github.com/cloudivision/cloudivision/internal/provider"
 	"github.com/cloudivision/cloudivision/internal/webhook"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -476,6 +478,85 @@ func TestBuildRunLogsReadsPodLogs(t *testing.T) {
 	}
 }
 
+func TestCancelRunningBuildRunIsIdempotent(t *testing.T) {
+	buildRun := testActionBuildRun("build-running", cicdv1alpha1.BuildRunPhaseRunning)
+	buildRun.Status.JobRef = cicdv1alpha1.ObjectRef{Name: "build-running-job", Namespace: "ci"}
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "build-running-job", Namespace: "ci"}}
+	server, k8sClient := newTestServer(t, buildRun, job)
+	for attempt := 0; attempt < 2; attempt++ {
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/build-runs/ci/build-running/cancel", nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("attempt %d status = %d body = %s", attempt+1, recorder.Code, recorder.Body.String())
+		}
+	}
+	var updated cicdv1alpha1.BuildRun
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: buildRun.Name, Namespace: buildRun.Namespace}, &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.BuildRunPhaseCancelled || updated.Status.CompletedAt == nil {
+		t.Fatalf("status = %#v", updated.Status)
+	}
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: job.Name, Namespace: job.Namespace}, &batchv1.Job{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("Job get error = %v, want NotFound", err)
+	}
+}
+
+func TestRetryFailedBuildRunCreatesRelatedRun(t *testing.T) {
+	server, k8sClient := newTestServer(t, testActionBuildRun("build-failed", cicdv1alpha1.BuildRunPhaseFailed))
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/build-runs/ci/build-failed/retry", nil))
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	assertRelatedBuildRun(t, k8sClient, retryOfAnnotation, "build-failed")
+}
+
+func TestRerunSucceededBuildRunCreatesRelatedRun(t *testing.T) {
+	server, k8sClient := newTestServer(t, testActionBuildRun("build-succeeded", cicdv1alpha1.BuildRunPhaseSucceeded))
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/build-runs/ci/build-succeeded/rerun", nil))
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	assertRelatedBuildRun(t, k8sClient, rerunOfAnnotation, "build-succeeded")
+}
+
+func TestRetryRunningBuildRunIsDenied(t *testing.T) {
+	server, k8sClient := newTestServer(t, testActionBuildRun("build-running", cicdv1alpha1.BuildRunPhaseRunning))
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/build-runs/ci/build-running/retry", nil))
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	assertBuildRunCount(t, k8sClient, 1)
+}
+
+func testActionBuildRun(name string, phase cicdv1alpha1.BuildRunPhase) *cicdv1alpha1.BuildRun {
+	return &cicdv1alpha1.BuildRun{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ci"},
+		Spec:       cicdv1alpha1.BuildRunSpec{ProjectRef: "project", RepositoryRef: "repository", PipelineTemplateRef: "pipeline", Revision: "main", TriggeredBy: cicdv1alpha1.TriggeredBy{Type: cicdv1alpha1.TriggerTypeManual}, Image: cicdv1alpha1.ImageRef{Repository: "example.invalid/app"}},
+		Status:     cicdv1alpha1.BuildRunStatus{Phase: phase},
+	}
+}
+
+func assertRelatedBuildRun(t *testing.T, k8sClient client.Client, annotation, source string) {
+	t.Helper()
+	var list cicdv1alpha1.BuildRunList
+	if err := k8sClient.List(context.Background(), &list, client.InNamespace("ci")); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Items) != 2 {
+		t.Fatalf("BuildRun count = %d, want 2", len(list.Items))
+	}
+	for _, item := range list.Items {
+		if item.Name != source && item.Annotations[annotation] == source {
+			return
+		}
+	}
+	t.Fatalf("related BuildRun with %s=%s not found", annotation, source)
+}
+
 func TestBuildRunLogsPodNotFound(t *testing.T) {
 	server, _ := newTestServer(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/build-runs/ci/missing/logs", nil)
@@ -766,6 +847,7 @@ func newTestServer(t *testing.T, objects ...client.Object) (Server, client.Clien
 	}
 	k8sClient := fake.NewClientBuilder().
 		WithScheme(scheme).
+		WithStatusSubresource(&cicdv1alpha1.BuildRun{}).
 		WithStatusSubresource(&cicdv1alpha1.Release{}).
 		WithObjects(objects...).
 		Build()

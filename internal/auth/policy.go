@@ -25,7 +25,7 @@ func RequiredPermission(method, path string) (Permission, bool) {
 	if method == http.MethodGet {
 		return PermissionRead, true
 	}
-	if method == http.MethodPost && path == "/api/v1/build-runs" {
+	if method == http.MethodPost && (path == "/api/v1/build-runs" || strings.HasPrefix(path, "/api/v1/build-runs/") && (strings.HasSuffix(path, "/cancel") || strings.HasSuffix(path, "/retry") || strings.HasSuffix(path, "/rerun"))) {
 		return PermissionTriggerBuild, true
 	}
 	if method == http.MethodPost && strings.HasPrefix(path, "/api/v1/releases/") && (strings.HasSuffix(path, "/approve") || strings.HasSuffix(path, "/reject")) {
