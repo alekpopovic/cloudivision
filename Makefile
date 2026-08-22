@@ -1,4 +1,4 @@
-.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all conformance vet lint build run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate sync-chart-crds install uninstall helm-template
+.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all conformance security-check vet lint build run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate sync-chart-crds install uninstall helm-template
 
 IMAGE_REGISTRY ?= ghcr.io/cloudivision
 IMAGE_TAG ?= dev
@@ -29,6 +29,7 @@ help:
 	@echo "  make uninstall     Remove manifests from the current kubectl context"
 	@echo "  make test-e2e      Run the kind smoke-test entrypoint"
 	@echo "  make conformance   Run clean-cluster platform conformance scenarios"
+	@echo "  make security-check Check the rendered chart runner security baseline"
 
 fmt:
 	gofmt -w ./api ./cmd ./internal
@@ -60,6 +61,14 @@ test-e2e:
 
 conformance:
 	./test/conformance/run.sh
+
+security-check:
+	@rendered="$$(mktemp)"; trap 'rm -f "$$rendered"' EXIT; \
+		helm template cloudivision charts/cloudivision --include-crds > "$$rendered"; \
+		./test/security/no-privileged.sh "$$rendered"; \
+		./test/security/no-docker-sock.sh "$$rendered"; \
+		./test/security/no-hostpath.sh "$$rendered"; \
+		./test/security/rbac-minimal.sh "$$rendered"
 
 test-all: fmt test-unit test-controller test-api test-web vet build helm-template
 

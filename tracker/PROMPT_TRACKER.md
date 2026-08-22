@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-21T23:57:35Z`
-Last executed prompt: `26`
-Next prompt: `27`
+Updated at: `2026-08-22T00:01:52Z`
+Last executed prompt: `27`
+Next prompt: `28`
 
 ## How to update
 
@@ -55,7 +55,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 24 | done | API Evolution | CRD Compatibility and Versioning Plan | `prompts/24-crd-compatibility-and-versioning-plan.md` | Compatibility policy, v1alpha1 reference, v1beta1 plan, non-installing conversion topology and upgrade test skeleton added. |
 | 25 | done | API Evolution | CRD Validation Hardening With Defaults and CEL | `prompts/25-crd-validation-hardening-with-defaults-and-cel.md` | CRD required/default/enum/CEL validation hardened; generated bases and Helm bundle synchronized; invalid admission fixtures and schema drift tests added. |
 | 26 | done | Reliability | Controller Reliability and Conflict Handling | `prompts/26-controller-reliability-and-conflict-handling.md` | Controllers hardened for idempotency, conflict-safe conditions, child recreation, retryable external state and GitOps commit checkpointing; finalizer decisions documented and tests expanded. |
-| 27 | pending | Security | Runner Threat Model and Security Conformance | `prompts/27-runner-threat-model-and-security-conformance.md` |  |
+| 27 | done | Security | Runner Threat Model and Security Conformance | `prompts/27-runner-threat-model-and-security-conformance.md` | Added runner threat model and rendered Helm security conformance checks for privileged containers, docker.sock, hostPath, and broad RBAC. |
 | 28 | pending | Release / GitOps | Release State Machine Hardening | `prompts/28-release-state-machine-hardening.md` |  |
 | 29 | pending | Release / GitOps | PR-Based GitOps Promotion | `prompts/29-pr-based-gitops-promotion.md` |  |
 | 30 | pending | Supply Chain | Real Supply Chain Adapters | `prompts/30-real-supply-chain-adapters.md` |  |
