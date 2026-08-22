@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { Subject, catchError, of, startWith, switchMap } from 'rxjs';
 
 import { ApiClient } from '../../api/client';
@@ -14,7 +15,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
 @Component({
   selector: 'app-releases-page',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, PageHeaderComponent, StatusBadgeComponent, EmptyStateComponent, ErrorMessageComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, PageHeaderComponent, StatusBadgeComponent, EmptyStateComponent, ErrorMessageComponent],
   template: `
     <app-page-header title="Releases" description="GitOps release requests, approvals and deployment status." />
     <app-error-message [error]="error" />
@@ -24,7 +25,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
         <div *ngFor="let release of releases" class="px-4 py-3">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-sm font-medium">{{ release.name }}</p>
+              <a [routerLink]="['/releases', release.namespace, release.name]" class="text-sm font-medium text-blue-700 hover:underline">{{ release.name }}</a>
               <p class="text-xs text-slate-500">{{ release.spec.projectRef }} / {{ release.spec.environmentRef || '-' }} / {{ release.spec.buildRunRef }}</p>
             </div>
             <app-status-badge [status]="release.status?.phase || 'Pending'" />

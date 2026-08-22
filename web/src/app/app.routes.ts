@@ -7,11 +7,14 @@ import { PipelineTemplatesPageComponent } from './features/pipeline-templates/pi
 import { ProjectDetailPageComponent } from './features/projects/project-detail-page.component';
 import { ProjectsPageComponent } from './features/projects/projects-page.component';
 import { ReleasesPageComponent } from './features/releases/releases-page.component';
+import { ReleaseDetailPageComponent } from './features/releases/release-detail-page.component';
 import { RepositoriesPageComponent } from './features/repositories/repositories-page.component';
+import { FirstRunWizardComponent } from './features/first-run/first-run-wizard.component';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
   { path: 'dashboard', component: DashboardPageComponent },
+  { path: 'first-run', component: FirstRunWizardComponent },
   { path: 'projects', component: ProjectsPageComponent },
   { path: 'projects/:namespace/:name', component: ProjectDetailPageComponent },
   { path: 'repositories', component: RepositoriesPageComponent },
@@ -20,5 +23,6 @@ export const routes: Routes = [
   { path: 'build-runs/:namespace/:name', component: BuildRunDetailPageComponent },
   { path: 'environments', component: EnvironmentsPageComponent },
   { path: 'releases', component: ReleasesPageComponent },
+  { path: 'releases/:namespace/:name', component: ReleaseDetailPageComponent },
   { path: '**', redirectTo: 'dashboard' }
 ];

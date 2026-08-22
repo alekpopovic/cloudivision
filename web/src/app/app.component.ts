@@ -17,6 +17,7 @@ export class AppComponent {
 
   readonly nav = [
     { label: 'Dashboard', path: '/dashboard' },
+		{ label: 'First Run', path: '/first-run' },
     { label: 'Projects', path: '/projects' },
     { label: 'Repositories', path: '/repositories' },
     { label: 'Pipeline Templates', path: '/pipeline-templates' },

@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-22T00:23:26Z`
-Last executed prompt: `30`
-Next prompt: `31`
+Updated at: `2026-08-22T00:30:46Z`
+Last executed prompt: `31`
+Next prompt: `32`
 
 ## How to update
 
@@ -59,7 +59,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 28 | done | Release / GitOps | Release State Machine Hardening | `prompts/28-release-state-machine-hardening.md` | Hardened Release phases, idempotent Git checkpointing, explicit Git/provider failures, deployment timeout, approval metadata, events, CRDs, tests, and lifecycle docs. |
 | 29 | done | Release / GitOps | PR-Based GitOps Promotion | `prompts/29-pr-based-gitops-promotion.md` | Added optional PR-based GitOps promotion, deterministic branches, GitHub/GitLab provider skeletons, idempotent PR reconciliation, CRD/status metadata, UI link, docs, and tests. |
 | 30 | done | Supply Chain | Real Supply Chain Adapters | `prompts/30-real-supply-chain-adapters.md` | Added opt-in Syft, Grype, Cosign and JSON provenance adapters, adapter CRD config, severity policy enforcement, secure key projection, BuildRun conditions/status, supply-chain UI tab, docs, and tests. |
-| 31 | pending | Frontend | Angular UX Upgrade for Real CI/CD Debugging | `prompts/31-angular-ux-upgrade-for-real-ci-cd-debugging.md` |  |
+| 31 | done | Frontend | Angular UX Upgrade for Real CI/CD Debugging | `prompts/31-angular-ux-upgrade-for-real-ci-cd-debugging.md` | Upgraded Angular debugging UX with BuildRun timelines/failures/reruns, advanced logs, repository onboarding, pipeline editor, Release detail, first-run workflow, routes, and tests. |
 | 32 | pending | Providers | Provider Adapter Registry | `prompts/32-provider-adapter-registry.md` |  |
 | 33 | pending | Policy | Policy Engine Layer | `prompts/33-policy-engine-layer.md` |  |
 | 34 | pending | Operations | Upgrade, Backup, Restore and Uninstall | `prompts/34-upgrade-backup-restore-and-uninstall.md` |  |

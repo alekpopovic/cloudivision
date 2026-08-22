@@ -23,4 +23,16 @@ describe('StatusBadgeComponent', () => {
     expect(badge.className).toContain('bg-emerald-50');
     expect(badge.className).toContain('text-emerald-700');
   });
+
+	it('uses failure classes for specific Release failures', () => {
+		fixture.componentRef.setInput('status', 'FailedGitPush');
+		fixture.detectChanges();
+		expect((fixture.nativeElement.querySelector('span') as HTMLElement).className).toContain('bg-rose-50');
+	});
+
+	it('uses in-progress classes while waiting for sync', () => {
+		fixture.componentRef.setInput('status', 'WaitingForSync');
+		fixture.detectChanges();
+		expect((fixture.nativeElement.querySelector('span') as HTMLElement).className).toContain('bg-amber-50');
+	});
 });

@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 
 import { ApiClient } from '../../api/client';
@@ -51,7 +52,7 @@ describe('ReleasesPageComponent', () => {
     api = new FakeApiClient();
     await TestBed.configureTestingModule({
       imports: [ReleasesPageComponent],
-      providers: [{ provide: ApiClient, useValue: api }]
+			providers: [provideRouter([]), { provide: ApiClient, useValue: api }]
     }).compileComponents();
     fixture = TestBed.createComponent(ReleasesPageComponent);
   });
@@ -90,6 +91,6 @@ describe('ReleasesPageComponent', () => {
 
 		expect(fixture.nativeElement.textContent).toContain('Promotion: pull-request');
 		expect(fixture.nativeElement.textContent).toContain('Merge: open');
-		expect(fixture.nativeElement.querySelector('a').href).toContain('/pull/7');
+		expect(fixture.nativeElement.querySelector('a[target="_blank"]').href).toContain('/pull/7');
 	}));
 });

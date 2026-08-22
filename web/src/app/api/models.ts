@@ -192,6 +192,7 @@ export interface Release {
   status?: {
     phase?: string;
     gitCommit?: string;
+		failure?: { reason?: string; message?: string };
     deployment?: { provider?: string; applicationName?: string; syncStatus?: string; healthStatus?: string };
 		pullRequest?: {
 			provider?: string;
