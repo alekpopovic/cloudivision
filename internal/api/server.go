@@ -589,11 +589,13 @@ func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
 			return
 		}
 		if err := webhook.Verify(provider, r.Header, body, secret); err != nil {
+			observability.WebhookEvents.WithLabelValues(string(provider), "invalid_signature").Inc()
 			s.writeError(w, unauthorized(err.Error()))
 			return
 		}
 		event, err := webhook.Parse(provider, r.Header, body)
 		if err != nil {
+			observability.WebhookEvents.WithLabelValues(string(provider), "invalid_payload").Inc()
 			s.writeError(w, badRequest(err.Error()))
 			return
 		}
@@ -618,6 +620,7 @@ func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
 			s.writeError(w, err)
 			return
 		} else if ok {
+			observability.WebhookEvents.WithLabelValues(string(provider), "replayed").Inc()
 			writeJSON(w, http.StatusOK, WebhookResponse{
 				Repository: repository.Name,
 				EventID:    event.EventID,
@@ -656,6 +659,7 @@ func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
 			return
 		}
 		if err := s.recordWebhookEvent(r.Context(), provider, repository, buildRun, event); err != nil {
+			observability.AuditWriteFailures.Inc()
 			s.writeError(w, err)
 			return
 		}
@@ -668,6 +672,7 @@ func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
 			EventID:    event.EventID,
 			Message:    "Created BuildRun from webhook push event.",
 		})
+		observability.WebhookEvents.WithLabelValues(string(provider), "accepted").Inc()
 		writeJSON(w, http.StatusCreated, WebhookResponse{
 			Repository: repository.Name,
 			EventID:    event.EventID,
@@ -737,8 +742,11 @@ func (s Server) recordAudit(ctx context.Context, event audit.Event) {
 	if recorder == nil {
 		recorder = audit.LoggerRecorder{Logger: s.Logger}
 	}
-	if err := recorder.Record(ctx, event); err != nil && s.Logger != nil {
-		s.Logger.Warn("record audit event failed", "error", err)
+	if err := recorder.Record(ctx, event); err != nil {
+		observability.AuditWriteFailures.Inc()
+		if s.Logger != nil {
+			s.Logger.Warn("record audit event failed", "error", err)
+		}
 	}
 }
 

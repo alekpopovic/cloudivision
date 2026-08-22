@@ -58,6 +58,7 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 	release := &cicdv1alpha1.Release{}
 	if err := r.Get(ctx, req.NamespacedName, release); err != nil {
 		if apierrors.IsNotFound(err) {
+			observability.ClearReleaseInProgress(req.Namespace, req.Name)
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, fmt.Errorf("get Release %s: %w", req.NamespacedName, err)
@@ -445,6 +446,7 @@ func (r *ReleaseReconciler) markDeployed(ctx context.Context, release *cicdv1alp
 		Message:            message,
 		LastTransitionTime: now,
 	})
+	observeReleaseDuration(release, now.Time)
 	return r.updateReleaseStatus(ctx, release)
 }
 
@@ -470,6 +472,8 @@ func (r *ReleaseReconciler) markFailed(ctx context.Context, release *cicdv1alpha
 	if r.Recorder != nil {
 		r.Recorder.Event(release, "Warning", reason, message)
 	}
+	observeGitOpsFailure(reason)
+	observeReleaseDuration(release, now.Time)
 	return r.updateReleaseStatus(ctx, release)
 }
 
@@ -579,7 +583,41 @@ func (r *ReleaseReconciler) updateReleaseStatus(ctx context.Context, release *ci
 	if err := kube.UpdateStatusWithRetry(ctx, r.Client, release); err != nil {
 		return fmt.Errorf("update Release status: %w", err)
 	}
+	if release.Status.Phase != "" {
+		observability.ReleaseTotal.WithLabelValues(string(release.Status.Phase)).Inc()
+	}
+	var startedAt *time.Time
+	if release.Status.StartedAt != nil {
+		started := release.Status.StartedAt.Time
+		startedAt = &started
+	}
+	observability.ObserveReleaseInProgress(release.Namespace, release.Name, string(release.Status.Phase), startedAt)
 	return nil
+}
+
+func observeReleaseDuration(release *cicdv1alpha1.Release, completed time.Time) {
+	if release.Status.StartedAt != nil {
+		observability.ReleaseDeploymentDuration.Observe(completed.Sub(release.Status.StartedAt.Time).Seconds())
+	}
+}
+
+func observeGitOpsFailure(reason string) {
+	operation := ""
+	switch reason {
+	case "GitCloneFailed":
+		operation = "clone"
+	case "GitCommitFailed", "EmptyGitCommit":
+		operation = "commit"
+	case "GitPushFailed":
+		operation = "push"
+	case "PullRequestCreateFailed", "PullRequestStatusFailed":
+		operation = "pull_request"
+	case "ProviderStatusFailed", "DeploymentStatusFailed":
+		operation = "status"
+	}
+	if operation != "" {
+		observability.GitOpsFailures.WithLabelValues(operation).Inc()
+	}
 }
 
 func hasConditionReason(conditions []metav1.Condition, conditionType, reason string) bool {

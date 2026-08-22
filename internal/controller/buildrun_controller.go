@@ -266,6 +266,9 @@ func (r *BuildRunReconciler) syncStatusFromRun(ctx context.Context, buildRun *ci
 			return err
 		}
 		r.record(buildRun, corev1.EventTypeWarning, "BuildFailed", status.Failure.Message)
+		if ref.Kind == "Job" {
+			observability.RunnerJobFailures.Inc()
+		}
 		return r.updateBuildRunStatus(ctx, buildRun)
 	case executor.RunPhaseRunning:
 		wasRunning := buildRun.Status.Phase == cicdv1alpha1.BuildRunPhaseRunning
@@ -273,6 +276,9 @@ func (r *BuildRunReconciler) syncStatusFromRun(ctx context.Context, buildRun *ci
 			return err
 		}
 		if !wasRunning {
+			if !buildRun.CreationTimestamp.IsZero() {
+				observability.BuildQueueDuration.Observe(now.Sub(buildRun.CreationTimestamp.Time).Seconds())
+			}
 			r.record(buildRun, corev1.EventTypeNormal, "BuildStarted", "Pipeline run is running")
 		}
 		return r.updateBuildRunStatus(ctx, buildRun)

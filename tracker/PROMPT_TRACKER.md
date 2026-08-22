@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-22T00:51:13Z`
-Last executed prompt: `34`
-Next prompt: `35`
+Updated at: `2026-08-22T00:56:57Z`
+Last executed prompt: `35`
+Next prompt: `36`
 
 ## How to update
 
@@ -63,7 +63,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 32 | done | Providers | Provider Adapter Registry | `prompts/32-provider-adapter-registry.md` | Added thread-safe provider registry and category packages, initial provider catalog, provider list/health APIs, Providers UI, OpenAPI/docs, and tests. |
 | 33 | done | Policy | Policy Engine Layer | `prompts/33-policy-engine-layer.md` | Added centralized code-based policy evaluator, structured API denials, controller PolicyDenied status, CRD policy decisions, Angular violation UI, tests, and docs. |
 | 34 | done | Operations | Upgrade, Backup, Restore and Uninstall | `prompts/34-upgrade-backup-restore-and-uninstall.md` | Added lifecycle operations runbooks plus offline/live Helm upgrade test, fixtures, CRD retention assertions, and Make target. |
-| 35 | pending | Observability | Observability Dashboards and Alerts | `prompts/35-observability-dashboards-and-alerts.md` |  |
+| 35 | done | Observability | Observability Dashboards and Alerts | `prompts/35-observability-dashboards-and-alerts.md` | Added Grafana dashboard, Prometheus alerts, bounded operational metrics, controller metrics Service, runbooks, and OpenTelemetry tracing plan. |
 | 36 | pending | Scale | Performance and Scale Test Harness | `prompts/36-performance-and-scale-test-harness.md` |  |
 | 37 | pending | CLI | cloudivision CLI | `prompts/37-cloudivision-cli.md` |  |
 | 38 | pending | Documentation | Documentation Restructure for Users and Operators | `prompts/38-documentation-restructure-for-users-and-operators.md` |  |

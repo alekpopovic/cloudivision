@@ -1,0 +1,84 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: cloudivision
+  labels:
+    app.kubernetes.io/name: cloudivision
+spec:
+  groups:
+    - name: cloudivision.control-plane
+      rules:
+        - alert: CloudivisionControllerReconcileErrorsHigh
+          expr: sum(rate(cloudivision_reconcile_errors_total[5m])) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: cloudivision controller reconcile errors are elevated
+            description: Controllers have produced more than 0.1 reconcile errors per second for 10 minutes.
+            runbook_url: docs/operations/observability.md#controller-reconcile-errors
+        - alert: CloudivisionAPI5xxRateHigh
+          expr: sum(rate(cloudivision_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(cloudivision_http_requests_total[5m])), 0.001) > 0.05
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: cloudivision API 5xx ratio exceeds 5 percent
+            description: More than 5 percent of API requests have returned 5xx for 10 minutes.
+            runbook_url: docs/operations/observability.md#api-5xx-rate
+        - alert: CloudivisionWebhookInvalidSignatureSpike
+          expr: sum(increase(cloudivision_webhook_events_total{outcome="invalid_signature"}[5m])) > 5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: webhook invalid signatures spiked
+            description: More than five invalid webhook signatures were observed in five minutes.
+            runbook_url: docs/operations/observability.md#invalid-webhook-signatures
+        - alert: CloudivisionAuditDatabaseErrors
+          expr: increase(cloudivision_audit_write_failures_total[10m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: cloudivision audit persistence is failing
+            description: At least one audit or webhook-index write failed in the last ten minutes.
+            runbook_url: docs/operations/observability.md#audit-database-errors
+    - name: cloudivision.workloads
+      rules:
+        - alert: CloudivisionBuildRunStuckRunning
+          expr: (time() - kube_job_status_start_time) * on(namespace, job_name) kube_job_status_active * on(namespace, job_name) group_left(label_cloudivision_io_buildrun) kube_job_labels{label_cloudivision_io_buildrun!=""} > 3600
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: BuildRun has remained Running for over one hour
+            description: BuildRun {{ $labels.namespace }}/{{ $labels.label_cloudivision_io_buildrun }} is past the default stuck threshold; compare its template timeout.
+            runbook_url: docs/operations/observability.md#stuck-buildrun
+        - alert: CloudivisionReleaseStuckDeploying
+          expr: time() - cloudivision_release_in_progress_started_timestamp_seconds > 1800
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Release deployment has not progressed for over 30 minutes
+            description: Release {{ $labels.namespace }}/{{ $labels.name }} is still in {{ $labels.phase }}.
+            runbook_url: docs/operations/observability.md#stuck-release
+        - alert: CloudivisionRunnerJobFailuresHigh
+          expr: increase(cloudivision_runner_job_failures_total[15m]) > 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: runner Job failures are elevated
+            description: More than three Job-executor failures occurred in 15 minutes.
+            runbook_url: docs/operations/observability.md#runner-job-failures
+        - alert: CloudivisionGitOpsPushFailures
+          expr: increase(cloudivision_gitops_failures_total{operation="push"}[10m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: GitOps pushes are failing
+            description: At least one GitOps push failed in the last ten minutes.
+            runbook_url: docs/operations/observability.md#gitops-push-failures
