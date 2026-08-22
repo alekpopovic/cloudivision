@@ -1,0 +1,51 @@
+title: cloudivision docs
+product_name: cloudivision
+tagline: Kubernetes-native CI/CD control plane
+description: Build in isolated Kubernetes Jobs and deliver immutable artifacts through GitOps.
+version: 0.1.0
+url: https://alekpopovic.github.io
+baseurl: /cloudivision
+repository_url: https://github.com/alekpopovic/cloudivision
+
+markdown: kramdown
+highlighter: rouge
+strict_front_matter: true
+encoding: utf-8
+
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+plugins:
+  - jekyll-optional-front-matter
+  - jekyll-relative-links
+  - jekyll-sitemap
+  - jekyll-titles-from-headings
+
+optional_front_matter:
+  remove_originals: true
+
+relative_links:
+  enabled: true
+  collections: true
+
+titles_from_headings:
+  enabled: true
+  strip_title: true
+  collections: true
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor
+  - .bundle
+  - README.md
+
+keep_files:
+  - .gitkeep

@@ -1,0 +1,101 @@
+- title: Start
+  items:
+    - title: Overview
+      url: /
+      icon: platform
+    - title: kind quickstart
+      url: /getting-started/quickstart-kind.html
+      icon: pipeline
+    - title: First build
+      url: /getting-started/first-build.html
+      icon: build
+    - title: First webhook
+      url: /getting-started/first-webhook.html
+      icon: source
+    - title: First GitOps release
+      url: /getting-started/first-release.html
+      icon: deploy
+
+- title: Concepts
+  items:
+    - title: Project
+      url: /concepts/project.html
+    - title: Repository
+      url: /concepts/repository.html
+    - title: PipelineTemplate
+      url: /concepts/pipeline-template.html
+    - title: BuildRun
+      url: /concepts/buildrun.html
+    - title: Environment
+      url: /concepts/environment.html
+    - title: Release
+      url: /concepts/release.html
+    - title: Providers
+      url: /concepts/providers.html
+    - title: Policy
+      url: /concepts/policy.html
+
+- title: Operate
+  items:
+    - title: Install with Helm
+      url: /operations/install-helm.html
+      icon: platform
+    - title: Configuration
+      url: /reference/configuration.html
+    - title: Upgrade
+      url: /operations/upgrade.html
+    - title: Backup and restore
+      url: /operations/backup-restore.html
+    - title: Observability
+      url: /operations/observability.html
+      icon: observe
+    - title: Troubleshooting
+      url: /operations/troubleshooting.html
+    - title: Security hardening
+      url: /operations/security-hardening.html
+      icon: security
+
+- title: Reference
+  items:
+    - title: HTTP API
+      url: /reference/api.html
+    - title: CLI
+      url: /reference/cli.html
+    - title: CRDs
+      url: /reference/crds.html
+    - title: Helm values
+      url: /reference/helm-values.html
+    - title: API compatibility
+      url: /api/compatibility-policy.html
+    - title: OpenAPI YAML
+      url: /openapi.yaml
+
+- title: Develop
+  items:
+    - title: Architecture
+      url: /development/architecture.html
+    - title: Controllers
+      url: /development/controllers.html
+    - title: Runner
+      url: /development/runner.html
+    - title: Frontend
+      url: /development/frontend.html
+    - title: Testing
+      url: /development/testing.html
+    - title: Add a provider
+      url: /development/adding-provider.html
+    - title: Contributing
+      url: /development/contributing.html
+    - title: Docs site development
+      url: /development/docs-site.html
+
+- title: Project
+  items:
+    - title: v0.1 final gate
+      url: /readiness/v0.1-final-gate.html
+    - title: v0.2 roadmap
+      url: /roadmap/v0.2.html
+    - title: Backlog
+      url: /roadmap/backlog.html
+    - title: Brand system
+      url: /brand.html

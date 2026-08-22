@@ -1,6 +1,6 @@
 # Helm values reference
 
-This page is maintained with [`charts/cloudivision/values.yaml`](../../charts/cloudivision/values.yaml).
+This page is maintained with [`charts/cloudivision/values.yaml`](https://github.com/alekpopovic/cloudivision/blob/main/charts/cloudivision/values.yaml).
 When adding or renaming a value, update both files in the same commit.
 
 | Value | Default | Meaning |

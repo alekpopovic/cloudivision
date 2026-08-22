@@ -15,6 +15,7 @@
 
 <p align="center">
   <a href="https://github.com/alekpopovic/cloudivision/actions/workflows/ci.yaml"><img src="https://github.com/alekpopovic/cloudivision/actions/workflows/ci.yaml/badge.svg" alt="CI status"></a>
+  <a href="https://github.com/alekpopovic/cloudivision/actions/workflows/docs-pages.yaml"><img src="https://github.com/alekpopovic/cloudivision/actions/workflows/docs-pages.yaml/badge.svg" alt="Documentation build status"></a>
   <img src="https://img.shields.io/badge/release-v0.1.0-4F7CFF" alt="Release v0.1.0">
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26">
   <img src="https://img.shields.io/badge/Angular-20-DD0031?logo=angular&logoColor=white" alt="Angular 20">
@@ -145,6 +146,8 @@ Start with the [threat model](docs/security/threat-model.md),
 [operator hardening guide](docs/operations/security-hardening.md).
 
 ## Documentation
+
+Browse the modern, searchable [cloudivision documentation site](https://alekpopovic.github.io/cloudivision/) or use the source links below.
 
 | Start | Build and release | Operate | Extend |
 | --- | --- | --- | --- |

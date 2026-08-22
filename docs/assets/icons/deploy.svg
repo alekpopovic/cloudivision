@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Deploy</title>
+  <rect width="64" height="64" rx="16" fill="#081426"/>
+  <path d="M18 43V21h18" fill="none" stroke="#4F7CFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m32 14 9 7-9 7M26 43h20" fill="none" stroke="#2DD4BF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="18" cy="43" r="6" fill="#DCE7FF"/>
+  <circle cx="46" cy="43" r="6" fill="#2DD4BF"/>
+</svg>
