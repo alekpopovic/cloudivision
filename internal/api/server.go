@@ -17,6 +17,7 @@ import (
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
+	buildlogic "github.com/cloudivision/cloudivision/internal/build"
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/observability"
@@ -652,7 +653,11 @@ func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
 			return
 		}
 
-		buildRun := buildRunFromWebhook(namespace, repository, project, template, event)
+		buildRun, err := buildRunFromWebhook(namespace, repository, project, template, event)
+		if err != nil {
+			s.writeError(w, badRequest(err.Error()))
+			return
+		}
 		policyEvaluator := s.PolicyEvaluator
 		if policyEvaluator == nil {
 			policyEvaluator = policy.NewDefaultEvaluator()
@@ -1135,17 +1140,25 @@ func splitLogLines(logs string) []string {
 	return strings.Split(trimmed, "\n")
 }
 
-func buildRunFromWebhook(namespace string, repository *cicdv1alpha1.Repository, project *cicdv1alpha1.Project, template *cicdv1alpha1.PipelineTemplate, event webhook.Event) cicdv1alpha1.BuildRun {
+func buildRunFromWebhook(namespace string, repository *cicdv1alpha1.Repository, project *cicdv1alpha1.Project, template *cicdv1alpha1.PipelineTemplate, event webhook.Event) (cicdv1alpha1.BuildRun, error) {
 	imageRepository := template.Spec.Build.Image
 	if imageRepository == "" {
 		imageRepository = strings.TrimRight(project.Spec.DefaultRegistry, "/") + "/" + repository.Name
 	}
-	tag := shortSHA(event.CommitSHA)
-	if tag == "" {
-		tag = event.Branch
+	name := buildRunNameForWebhook(repository.Name, event.EventID)
+	tagTemplate := ""
+	if project.Spec.ImageTagPolicy != nil {
+		tagTemplate = project.Spec.ImageTagPolicy.DefaultTagTemplate
+	}
+	tag, _, err := buildlogic.ResolveImageTag("", tagTemplate, buildlogic.TagInput{
+		Branch: event.Branch, CommitSHA: event.CommitSHA, Revision: event.CommitSHA,
+		BuildRunName: name, Timestamp: time.Now().UTC(),
+	})
+	if err != nil {
+		return cicdv1alpha1.BuildRun{}, err
 	}
 	return cicdv1alpha1.BuildRun{
-		ObjectMeta: objectMeta(buildRunNameForWebhook(repository.Name, event.EventID), namespace),
+		ObjectMeta: objectMeta(name, namespace),
 		Spec: cicdv1alpha1.BuildRunSpec{
 			ProjectRef:          repository.Spec.ProjectRef,
 			RepositoryRef:       repository.Name,
@@ -1164,7 +1177,7 @@ func buildRunFromWebhook(namespace string, repository *cicdv1alpha1.Repository, 
 			},
 			Executor: cicdv1alpha1.ExecutorTypeJob,
 		},
-	}
+	}, nil
 }
 
 func buildRunNameForWebhook(repositoryName, eventID string) string {

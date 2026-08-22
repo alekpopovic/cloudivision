@@ -203,6 +203,11 @@ type ProjectRegistrySpec struct {
 	CredentialSecretRef *SecretKeyRef `json:"credentialSecretRef,omitempty"`
 }
 
+type ProjectImageTagPolicySpec struct {
+	// +optional
+	DefaultTagTemplate string `json:"defaultTagTemplate,omitempty"`
+}
+
 type ProjectSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	DisplayName string `json:"displayName"`
@@ -221,6 +226,8 @@ type ProjectSpec struct {
 	Isolation          ProjectIsolation `json:"isolation"`
 	// +optional
 	Registry *ProjectRegistrySpec `json:"registry,omitempty"`
+	// +optional
+	ImageTagPolicy *ProjectImageTagPolicySpec `json:"imageTagPolicy,omitempty"`
 }
 
 type ProjectStatus struct {
@@ -621,6 +628,7 @@ type EnvironmentGitOpsSpec struct {
 
 type EnvironmentPolicySpec struct {
 	RequireImageDigest           bool `json:"requireImageDigest,omitempty"`
+	AllowLatest                  bool `json:"allowLatest,omitempty"`
 	RequireSignedImages          bool `json:"requireSignedImages,omitempty"`
 	RequireSBOM                  bool `json:"requireSBOM,omitempty"`
 	BlockCriticalVulnerabilities bool `json:"blockCriticalVulnerabilities,omitempty"`

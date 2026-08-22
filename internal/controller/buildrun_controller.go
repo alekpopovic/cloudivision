@@ -9,6 +9,7 @@ import (
 	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	buildlogic "github.com/cloudivision/cloudivision/internal/build"
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/executor"
 	jobexecutor "github.com/cloudivision/cloudivision/internal/executor/job"
@@ -93,6 +94,13 @@ func (r *BuildRunReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil {
 		return ctrl.Result{}, r.markReferenceError(ctx, buildRun, err)
 	}
+	if err := r.ensureImageTag(ctx, buildRun, project); err != nil {
+		var tagErr *imageTagError
+		if errors.As(err, &tagErr) {
+			return ctrl.Result{}, r.markImageTagError(ctx, buildRun, tagErr)
+		}
+		return ctrl.Result{}, err
+	}
 
 	if isTerminalBuildRunPhase(buildRun.Status.Phase) {
 		if buildRun.Status.Phase == cicdv1alpha1.BuildRunPhaseSucceeded {
@@ -136,6 +144,59 @@ func (r *BuildRunReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, r.markExecutorError(ctx, buildRun, err)
 	}
 	return ctrl.Result{}, r.syncStatusFromRun(ctx, buildRun, *runRef, runStatus)
+}
+
+type imageTagError struct{ err error }
+
+func (e *imageTagError) Error() string { return e.err.Error() }
+func (e *imageTagError) Unwrap() error { return e.err }
+
+func (r *BuildRunReconciler) ensureImageTag(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project) error {
+	tagTemplate := ""
+	if project.Spec.ImageTagPolicy != nil {
+		tagTemplate = project.Spec.ImageTagPolicy.DefaultTagTemplate
+	}
+	tag, _, err := buildlogic.ResolveImageTag(buildRun.Spec.Image.Tag, tagTemplate, buildlogic.TagInput{
+		Branch:       buildRun.Spec.Branch,
+		CommitSHA:    buildRun.Spec.CommitSHA,
+		Revision:     buildRun.Spec.Revision,
+		BuildRunName: buildRun.Name,
+		Timestamp:    buildRun.CreationTimestamp.Time,
+	})
+	if err != nil {
+		return &imageTagError{err: err}
+	}
+	specChanged := tag != buildRun.Spec.Image.Tag
+	if specChanged {
+		buildRun.Spec.Image.Tag = tag
+		if err := r.Update(ctx, buildRun); err != nil {
+			return fmt.Errorf("persist resolved BuildRun image tag: %w", err)
+		}
+	}
+	statusChanged := buildRun.Status.Image == nil || buildRun.Status.Image.Repository != buildRun.Spec.Image.Repository || buildRun.Status.Image.Tag != tag
+	if statusChanged {
+		if buildRun.Status.Image == nil {
+			buildRun.Status.Image = &cicdv1alpha1.ImageRef{}
+		}
+		buildRun.Status.Image.Repository = buildRun.Spec.Image.Repository
+		buildRun.Status.Image.Tag = tag
+		if err := r.Status().Update(ctx, buildRun); err != nil {
+			return fmt.Errorf("persist resolved BuildRun image status: %w", err)
+		}
+	}
+	if specChanged || statusChanged {
+		r.record(buildRun, corev1.EventTypeNormal, "ImageTagResolved", fmt.Sprintf("Resolved image tag %q.", tag))
+	}
+	return nil
+}
+
+func (r *BuildRunReconciler) markImageTagError(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, err error) error {
+	now := metav1.Now()
+	if markErr := domain.MarkBuildRunFailed(buildRun, now, "ImageTagInvalid", err.Error()); markErr != nil {
+		return markErr
+	}
+	r.record(buildRun, corev1.EventTypeWarning, "BuildFailed", err.Error())
+	return r.updateBuildRunStatus(ctx, buildRun)
 }
 
 func (r *BuildRunReconciler) SetupWithManager(mgr ctrl.Manager) error {

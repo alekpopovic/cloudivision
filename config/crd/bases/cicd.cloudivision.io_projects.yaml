@@ -82,6 +82,11 @@ spec:
                 - networkPolicyMode
                 - podSecurityLevel
                 type: object
+              imageTagPolicy:
+                properties:
+                  defaultTagTemplate:
+                    type: string
+                type: object
               namespace:
                 minLength: 1
                 type: string

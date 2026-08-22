@@ -16,6 +16,7 @@ const (
 	CanDeployToEnvironment         = "CanDeployToEnvironment"
 	CanPromoteRelease              = "CanPromoteRelease"
 	ImageMustHaveDigest            = "ImageMustHaveDigest"
+	LatestImageForbidden           = "LatestImageForbidden"
 	ImageMustBeSigned              = "ImageMustBeSigned"
 	SBOMRequired                   = "SBOMRequired"
 	CriticalVulnerabilitiesBlocked = "CriticalVulnerabilitiesBlocked"
@@ -159,6 +160,9 @@ func (e *DefaultEvaluator) EvaluateRelease(_ context.Context, input ReleasePolic
 	policy := environment.Spec.Policy
 	if policy.RequireImageDigest && release.Spec.Image.Digest == "" {
 		violations = append(violations, violation(ImageMustHaveDigest, "this environment requires an immutable image digest", "spec.image.digest"))
+	}
+	if environment.Spec.Type == cicdv1alpha1.EnvironmentTypeProduction && !policy.AllowLatest && strings.EqualFold(release.Spec.Image.Tag, "latest") {
+		violations = append(violations, violation(LatestImageForbidden, "production releases forbid the latest image tag unless explicitly allowed", "spec.image.tag"))
 	}
 	if policy.RequireSignedImages && buildRun.Status.SupplyChain.SignatureRef == "" {
 		violations = append(violations, violation(ImageMustBeSigned, "this environment requires a signed image", "buildRun.status.supplyChain.signatureRef"))

@@ -402,6 +402,8 @@ spec:
                 type: string
               policy:
                 properties:
+                  allowLatest:
+                    type: boolean
                   blockCriticalVulnerabilities:
                     type: boolean
                   requireImageDigest:
@@ -1076,6 +1078,11 @@ spec:
                 - createNamespace
                 - networkPolicyMode
                 - podSecurityLevel
+                type: object
+              imageTagPolicy:
+                properties:
+                  defaultTagTemplate:
+                    type: string
                 type: object
               namespace:
                 minLength: 1

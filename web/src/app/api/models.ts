@@ -53,6 +53,7 @@ export interface Project {
       imagePrefix?: string;
       credentialSecretRef?: { name: string; key?: string };
     };
+    imageTagPolicy?: { defaultTagTemplate?: string };
     isolation?: {
       createNamespace: boolean;
       podSecurityLevel: 'baseline' | 'restricted';
@@ -175,7 +176,8 @@ export interface Environment {
     requiresApproval: boolean;
     gitOps?: { provider?: 'argocd' | 'flux' | 'generic'; applicationName?: string; namespace?: string };
     policy?: {
-		requireImageDigest?: boolean;
+      requireImageDigest?: boolean;
+      allowLatest?: boolean;
       requireSignedImages?: boolean;
       requireSBOM?: boolean;
       blockCriticalVulnerabilities?: boolean;

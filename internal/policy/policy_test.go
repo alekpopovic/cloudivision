@@ -19,6 +19,19 @@ func TestProductionReleaseRequiresDigestWhenConfigured(t *testing.T) {
 	assertViolation(t, NewDefaultEvaluator().EvaluateRelease(context.Background(), input), ImageMustHaveDigest)
 }
 
+func TestProductionReleaseBlocksLatestByDefault(t *testing.T) {
+	input := safeReleaseInput()
+	input.Environment.Spec.Type = cicdv1alpha1.EnvironmentTypeProduction
+	input.Release.Spec.Approval.ApprovedBy = "release-manager"
+	input.Release.Spec.Image.Tag = "latest"
+	assertViolation(t, NewDefaultEvaluator().EvaluateRelease(context.Background(), input), LatestImageForbidden)
+	input.Environment.Spec.Policy.AllowLatest = true
+	decision := NewDefaultEvaluator().EvaluateRelease(context.Background(), input)
+	if !decision.Allowed {
+		t.Fatalf("allowLatest decision = %#v, want allowed", decision)
+	}
+}
+
 func TestUnsignedImageDeniedWhenConfigured(t *testing.T) {
 	input := safeReleaseInput()
 	input.Environment.Spec.Policy.RequireSignedImages = true
