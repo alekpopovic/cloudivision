@@ -3,7 +3,7 @@ set -euo pipefail
 
 NAMESPACE="${NAMESPACE:-cloudivision}"
 RELEASE_NAME="${RELEASE_NAME:-cloudivision}"
-IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io/cloudivision}"
+IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io/alekpopovic/cloudivision}"
 IMAGE_TAG="${IMAGE_TAG:-dev}"
 
 if ! command -v helm >/dev/null 2>&1; then

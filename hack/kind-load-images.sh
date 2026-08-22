@@ -2,7 +2,7 @@
 set -euo pipefail
 
 CLUSTER_NAME="${CLUSTER_NAME:-cloudivision-dev}"
-IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io/cloudivision}"
+IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io/alekpopovic/cloudivision}"
 IMAGE_TAG="${IMAGE_TAG:-dev}"
 
 if ! command -v docker >/dev/null 2>&1; then

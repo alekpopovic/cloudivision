@@ -1,6 +1,6 @@
-.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all conformance upgrade-test scale-test security-check vet lint build run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate sync-chart-crds install uninstall helm-template
+.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all conformance upgrade-test scale-test security-check release-local vet lint build run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate sync-chart-crds install uninstall helm-template
 
-IMAGE_REGISTRY ?= ghcr.io/cloudivision
+IMAGE_REGISTRY ?= ghcr.io/alekpopovic/cloudivision
 IMAGE_TAG ?= dev
 GOCACHE ?= $(CURDIR)/.cache/go-build
 GOMODCACHE ?= $(CURDIR)/.cache/go-mod
@@ -32,6 +32,7 @@ help:
 	@echo "  make upgrade-test  Validate upgrade assets (set UPGRADE_TEST_LIVE=true for a disposable cluster)"
 	@echo "  make scale-test    Generate a limited scale fixture (set SCALE_TEST_LIVE=true to apply)"
 	@echo "  make security-check Check the rendered chart runner security baseline"
+	@echo "  make release-local  Build local versioned release artifacts"
 
 fmt:
 	gofmt -w ./api ./cmd ./internal
@@ -77,6 +78,9 @@ security-check:
 		./test/security/no-docker-sock.sh "$$rendered"; \
 		./test/security/no-hostpath.sh "$$rendered"; \
 		./test/security/rbac-minimal.sh "$$rendered"
+
+release-local:
+	./scripts/release/build-local.sh
 
 test-all: fmt test-unit test-controller test-api test-web vet build helm-template
 

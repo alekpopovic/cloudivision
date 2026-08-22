@@ -1,5 +1,5 @@
 global:
-  imageRegistry: ghcr.io/cloudivision
+  imageRegistry: ghcr.io/alekpopovic/cloudivision
 
 namespace:
   create: false

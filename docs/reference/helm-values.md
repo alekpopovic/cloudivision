@@ -5,7 +5,7 @@ When adding or renaming a value, update both files in the same commit.
 
 | Value | Default | Meaning |
 | --- | --- | --- |
-| `global.imageRegistry` | `ghcr.io/cloudivision` | Registry prepended to component repositories |
+| `global.imageRegistry` | `ghcr.io/alekpopovic/cloudivision` | Registry prepended to component repositories |
 | `namespace.create` | `false` | Create the release namespace |
 | `namespace.podSecurity.enabled` | `true` | Add Pod Security labels |
 | `namespace.podSecurity.level` | `restricted` | Enforced Pod Security level |

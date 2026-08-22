@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-22T01:23:31Z",
-  "last_executed_prompt": 38,
-  "next_prompt": 39,
+  "updated_at": "2026-08-22T01:29:40Z",
+  "last_executed_prompt": 39,
+  "next_prompt": 40,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -368,9 +368,9 @@
       "title": "Public Release Process and v0.1.0",
       "phase": "Release",
       "file": "prompts/39-public-release-process-and-v0-1-0.md",
-      "status": "pending",
-      "executed_at": null,
-      "notes": ""
+      "status": "done",
+      "executed_at": "2026-08-22T01:29:40Z",
+      "notes": "Added semver release metadata, changelog/checklist, local artifact builder, GHCR image/signing workflow, checksums, Helm/CRD packaging, and public registry defaults. Local 0.1.0 artifact and checksum smoke test passed; Syft/Cosign were unavailable locally and explicitly skipped."
     },
     {
       "id": 40,

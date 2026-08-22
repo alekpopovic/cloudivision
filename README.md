@@ -77,10 +77,10 @@ The script creates a `cloudivision-dev` kind cluster and starts a local registry
 
 This builds:
 
-- `ghcr.io/cloudivision/controller:dev`
-- `ghcr.io/cloudivision/api:dev`
-- `ghcr.io/cloudivision/runner:dev`
-- `ghcr.io/cloudivision/web:dev`
+- `ghcr.io/alekpopovic/cloudivision/controller:dev`
+- `ghcr.io/alekpopovic/cloudivision/api:dev`
+- `ghcr.io/alekpopovic/cloudivision/runner:dev`
+- `ghcr.io/alekpopovic/cloudivision/web:dev`
 
 and loads them into the kind cluster.
 
