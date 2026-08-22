@@ -46,16 +46,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&cloudivisioncontroller.ProjectReconciler{Client: mgr.GetClient()}).SetupWithManager(mgr); err != nil {
+	if err := (&cloudivisioncontroller.ProjectReconciler{Client: mgr.GetClient(), MaxConcurrentReconciles: envInt("CLOUDIVISION_PROJECT_CONCURRENCY", 2)}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create Project controller")
 		os.Exit(1)
 	}
 	policyEvaluator := policy.NewDefaultEvaluator()
-	if err := (&cloudivisioncontroller.BuildRunReconciler{Client: mgr.GetClient(), PolicyEvaluator: policyEvaluator}).SetupWithManager(mgr); err != nil {
+	if err := (&cloudivisioncontroller.BuildRunReconciler{Client: mgr.GetClient(), PolicyEvaluator: policyEvaluator, MaxConcurrentReconciles: envInt("CLOUDIVISION_BUILDRUN_CONCURRENCY", 10)}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create BuildRun controller")
 		os.Exit(1)
 	}
-	if err := (&cloudivisioncontroller.ReleaseReconciler{Client: mgr.GetClient(), PolicyEvaluator: policyEvaluator}).SetupWithManager(mgr); err != nil {
+	if err := (&cloudivisioncontroller.ReleaseReconciler{Client: mgr.GetClient(), PolicyEvaluator: policyEvaluator, MaxConcurrentReconciles: envInt("CLOUDIVISION_RELEASE_CONCURRENCY", 5)}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create Release controller")
 		os.Exit(1)
 	}
@@ -90,6 +90,18 @@ func envBool(name string, fallback bool) bool {
 	}
 	parsed, err := strconv.ParseBool(value)
 	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func envInt(name string, fallback int) int {
+	value := os.Getenv(name)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 1 {
 		return fallback
 	}
 	return parsed

@@ -2,10 +2,10 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { catchError, combineLatest, map, of, startWith, switchMap, timer } from 'rxjs';
+import { catchError, debounceTime, of, startWith, switchMap, timer } from 'rxjs';
 
 import { ApiClient } from '../../api/client';
-import { ApiError, BuildRun } from '../../api/models';
+import { ApiError } from '../../api/models';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { ErrorMessageComponent } from '../../shared/error-message.component';
 import { PageHeaderComponent } from '../../shared/page-header.component';
@@ -26,7 +26,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
           <input class="rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="repository" formControlName="repository" />
         </form>
         <div class="rounded-md border border-slate-200 bg-white">
-          <div class="border-b border-slate-200 px-4 py-3 font-medium">BuildRun List</div>
+          <div class="flex justify-between border-b border-slate-200 px-4 py-3"><span class="font-medium">BuildRun List</span><span class="text-xs text-slate-500">Newest 100 maximum</span></div>
           <div *ngIf="filteredRuns$ | async as runs">
             <div *ngIf="runs.length; else empty" class="divide-y divide-slate-100">
               <a *ngFor="let run of runs" [routerLink]="['/build-runs', run.namespace, run.name]" class="flex items-center justify-between px-4 py-3 hover:bg-slate-50">
@@ -61,11 +61,17 @@ export class BuildRunsPageComponent {
   private readonly fb = inject(FormBuilder);
   error: ApiError | null = null;
   readonly filters = this.fb.nonNullable.group({ phase: [''], project: [''], repository: [''] });
-  readonly runs$ = timer(0, 5000).pipe(
-    switchMap(() => this.api.buildRuns().pipe(catchError((error: ApiError) => { this.error = error; return of([]); })))
-  );
-  readonly filteredRuns$ = combineLatest([this.runs$, this.filters.valueChanges.pipe(startWith(this.filters.getRawValue()))]).pipe(
-    map(([runs, filters]) => runs.filter((run) => this.matches(run, filters)))
+  readonly filteredRuns$ = this.filters.valueChanges.pipe(
+    startWith(this.filters.getRawValue()),
+    debounceTime(200),
+    switchMap((filters) => timer(0, 5000).pipe(
+      switchMap(() => this.api.buildRuns({
+        limit: '100',
+        ...(filters.phase ? { phase: filters.phase } : {}),
+        ...(filters.project ? { project: filters.project } : {}),
+        ...(filters.repository ? { repository: filters.repository } : {})
+      }).pipe(catchError((error: ApiError) => { this.error = error; return of([]); })))
+    ))
   );
   readonly triggerForm = this.fb.nonNullable.group({
     name: ['', Validators.required],
@@ -94,11 +100,5 @@ export class BuildRunsPageComponent {
         executor: 'job'
       }
     }).subscribe({ next: () => this.triggerForm.reset({ namespace: 'default', revision: 'main', imageTag: 'manual' }), error: (error: ApiError) => (this.error = error) });
-  }
-
-  private matches(run: BuildRun, filters: Partial<{ phase: string; project: string; repository: string }>): boolean {
-    return (!filters.phase || (run.status?.phase || '').toLowerCase().includes(filters.phase.toLowerCase()))
-      && (!filters.project || run.spec.projectRef.toLowerCase().includes(filters.project.toLowerCase()))
-      && (!filters.repository || run.spec.repositoryRef.toLowerCase().includes(filters.repository.toLowerCase()));
   }
 }

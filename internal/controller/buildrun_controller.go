@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	controllerconfig "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -36,10 +37,11 @@ const (
 // BuildRunReconciler reconciles BuildRun resources.
 type BuildRunReconciler struct {
 	client.Client
-	Scheme          *runtime.Scheme
-	Recorder        EventRecorder
-	Executors       map[cicdv1alpha1.ExecutorType]executor.PipelineExecutor
-	PolicyEvaluator policy.Evaluator
+	Scheme                  *runtime.Scheme
+	Recorder                EventRecorder
+	Executors               map[cicdv1alpha1.ExecutorType]executor.PipelineExecutor
+	PolicyEvaluator         policy.Evaluator
+	MaxConcurrentReconciles int
 }
 
 // EventRecorder is the subset of Kubernetes event recording used by the reconciler.
@@ -136,6 +138,26 @@ func (r *BuildRunReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 }
 
 func (r *BuildRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	indexer := mgr.GetFieldIndexer()
+	if err := indexer.IndexField(context.Background(), &cicdv1alpha1.BuildRun{}, BuildRunProjectIndex, func(obj client.Object) []string {
+		return []string{obj.(*cicdv1alpha1.BuildRun).Spec.ProjectRef}
+	}); err != nil {
+		return fmt.Errorf("index BuildRuns by project: %w", err)
+	}
+	if err := indexer.IndexField(context.Background(), &cicdv1alpha1.BuildRun{}, BuildRunRepositoryIndex, func(obj client.Object) []string {
+		return []string{obj.(*cicdv1alpha1.BuildRun).Spec.RepositoryRef}
+	}); err != nil {
+		return fmt.Errorf("index BuildRuns by repository: %w", err)
+	}
+	if err := indexer.IndexField(context.Background(), &cicdv1alpha1.BuildRun{}, BuildRunEventIDIndex, func(obj client.Object) []string {
+		value := obj.(*cicdv1alpha1.BuildRun).Spec.TriggeredBy.EventID
+		if value == "" {
+			return nil
+		}
+		return []string{value}
+	}); err != nil {
+		return fmt.Errorf("index BuildRuns by event ID: %w", err)
+	}
 	r.Scheme = mgr.GetScheme()
 	r.Recorder = mgr.GetEventRecorderFor("buildrun-controller")
 	r.ensureDefaultExecutors()
@@ -143,6 +165,7 @@ func (r *BuildRunReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&cicdv1alpha1.BuildRun{}).
 		Owns(&batchv1.Job{}).
 		Owns(&cicdv1alpha1.Release{}).
+		WithOptions(controllerconfig.Options{MaxConcurrentReconciles: normalizedConcurrency(r.MaxConcurrentReconciles)}).
 		Complete(r)
 }
 

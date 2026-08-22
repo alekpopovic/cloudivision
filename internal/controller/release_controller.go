@@ -18,6 +18,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	controllerconfig "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -30,11 +31,12 @@ const (
 // ReleaseReconciler reconciles Release resources.
 type ReleaseReconciler struct {
 	client.Client
-	GitOpsProvider      gitops.Provider
-	StatusReader        gitops.StatusReader
-	PullRequestProvider gitops.PullRequestProvider
-	Recorder            EventRecorder
-	PolicyEvaluator     policy.Evaluator
+	GitOpsProvider          gitops.Provider
+	StatusReader            gitops.StatusReader
+	PullRequestProvider     gitops.PullRequestProvider
+	Recorder                EventRecorder
+	PolicyEvaluator         policy.Evaluator
+	MaxConcurrentReconciles int
 }
 
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=releases,verbs=get;list;watch;create;update;patch;delete
@@ -306,6 +308,11 @@ func renderPromotionTemplate(template, fallback string, release *cicdv1alpha1.Re
 }
 
 func (r *ReleaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &cicdv1alpha1.Release{}, ReleaseBuildRunIndex, func(obj client.Object) []string {
+		return []string{obj.(*cicdv1alpha1.Release).Spec.BuildRunRef}
+	}); err != nil {
+		return fmt.Errorf("index Releases by BuildRun: %w", err)
+	}
 	if r.GitOpsProvider == nil {
 		r.GitOpsProvider = gitops.GitRepositoryProvider{}
 	}
@@ -315,6 +322,7 @@ func (r *ReleaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Recorder = mgr.GetEventRecorderFor("release-controller")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cicdv1alpha1.Release{}).
+		WithOptions(controllerconfig.Options{MaxConcurrentReconciles: normalizedConcurrency(r.MaxConcurrentReconciles)}).
 		Complete(r)
 }
 

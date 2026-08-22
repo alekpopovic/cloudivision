@@ -7,6 +7,9 @@ metadata:
     {{- include "cloudivision.labels" . | nindent 4 }}
 data:
   CLOUDIVISION_METRICS_BIND_ADDRESS: {{ .Values.controller.metricsBindAddress | quote }}
+  CLOUDIVISION_PROJECT_CONCURRENCY: {{ .Values.controller.concurrency.project | quote }}
+  CLOUDIVISION_BUILDRUN_CONCURRENCY: {{ .Values.controller.concurrency.buildRun | quote }}
+  CLOUDIVISION_RELEASE_CONCURRENCY: {{ .Values.controller.concurrency.release | quote }}
   CLOUDIVISION_HEALTH_PROBE_BIND_ADDRESS: {{ .Values.controller.healthProbeBindAddress | quote }}
   CLOUDIVISION_LEADER_ELECTION: {{ .Values.controller.leaderElection | quote }}
   CLOU_DIVISION_DEFAULT_NAMESPACE: {{ .Values.api.defaultNamespace | quote }}

@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	controllerconfig "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -31,6 +32,7 @@ const (
 // ProjectReconciler reconciles Project resources.
 type ProjectReconciler struct {
 	client.Client
+	MaxConcurrentReconciles int
 }
 
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=projects,verbs=get;list;watch;create;update;patch;delete
@@ -85,6 +87,7 @@ func (r *ProjectReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 func (r *ProjectReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cicdv1alpha1.Project{}).
+		WithOptions(controllerconfig.Options{MaxConcurrentReconciles: normalizedConcurrency(r.MaxConcurrentReconciles)}).
 		Complete(r)
 }
 

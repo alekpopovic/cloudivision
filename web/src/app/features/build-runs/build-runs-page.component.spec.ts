@@ -38,7 +38,7 @@ describe('BuildRunsPageComponent', () => {
 
   it('calls API service for BuildRuns', fakeAsync(() => {
     fixture.detectChanges();
-    tick(0);
+    tick(201);
     expect(api.buildRunsCalls).toBeGreaterThan(0);
   }));
 

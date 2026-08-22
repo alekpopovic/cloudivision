@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -133,6 +134,52 @@ func TestListBuildRuns(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].Name != "build-1" {
 		t.Fatalf("items = %#v, want build-1", items)
+	}
+}
+
+func TestListBuildRunsPaginatesAndFilters(t *testing.T) {
+	objects := make([]client.Object, 0, 125)
+	for i := 0; i < 125; i++ {
+		phase := cicdv1alpha1.BuildRunPhaseSucceeded
+		project := "project-a"
+		if i%2 == 0 {
+			phase = cicdv1alpha1.BuildRunPhaseFailed
+			project = "project-b"
+		}
+		objects = append(objects, &cicdv1alpha1.BuildRun{
+			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("build-%03d", i), Namespace: "ci", CreationTimestamp: metav1.NewTime(time.Unix(int64(i), 0))},
+			Spec:       cicdv1alpha1.BuildRunSpec{ProjectRef: project, RepositoryRef: "repo", PipelineTemplateRef: "template", Revision: "main", TriggeredBy: cicdv1alpha1.TriggeredBy{Type: cicdv1alpha1.TriggerTypeManual}, Image: cicdv1alpha1.ImageRef{Repository: "example.invalid/app"}},
+			Status:     cicdv1alpha1.BuildRunStatus{Phase: phase},
+		})
+	}
+	server, _ := newTestServer(t, objects...)
+
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/build-runs?namespace=ci", nil))
+	var firstPage []BuildRunResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &firstPage); err != nil {
+		t.Fatal(err)
+	}
+	if len(firstPage) != 100 || recorder.Header().Get("X-Total-Count") != "125" || recorder.Header().Get("X-Next-Offset") != "100" {
+		t.Fatalf("page len=%d total=%q next=%q", len(firstPage), recorder.Header().Get("X-Total-Count"), recorder.Header().Get("X-Next-Offset"))
+	}
+	if firstPage[0].Name != "build-124" {
+		t.Fatalf("first item = %q, want newest build-124", firstPage[0].Name)
+	}
+
+	recorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/build-runs?namespace=ci&phase=Succeeded&project=project-a&limit=10&offset=10", nil))
+	var filtered []BuildRunResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &filtered); err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered) != 10 || recorder.Header().Get("X-Total-Count") != "62" {
+		t.Fatalf("filtered len=%d total=%q", len(filtered), recorder.Header().Get("X-Total-Count"))
+	}
+	for _, item := range filtered {
+		if item.Spec.ProjectRef != "project-a" || item.Status.Phase != cicdv1alpha1.BuildRunPhaseSucceeded {
+			t.Fatalf("unexpected filtered item %#v", item)
+		}
 	}
 }
 

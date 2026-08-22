@@ -9,6 +9,10 @@ namespace:
 
 controller:
   replicaCount: 1
+  concurrency:
+    project: 2
+    buildRun: 10
+    release: 5
   image:
     repository: controller
     tag: dev

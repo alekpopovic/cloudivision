@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -233,12 +234,22 @@ func (s Server) buildRuns(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		var list cicdv1alpha1.BuildRunList
-		if err := s.list(r.Context(), r, &list); err != nil {
+		if err := s.listBuildRuns(r.Context(), r, &list); err != nil {
 			s.writeError(w, err)
 			return
 		}
-		items := make([]BuildRunResponse, 0, len(list.Items))
-		for _, item := range list.Items {
+		filtered, total, limit, offset, err := filterAndPageBuildRuns(r, list.Items)
+		if err != nil {
+			s.writeError(w, badRequest(err.Error()))
+			return
+		}
+		w.Header().Set("X-Total-Count", strconv.Itoa(total))
+		w.Header().Set("X-Limit", strconv.Itoa(limit))
+		if offset+len(filtered) < total {
+			w.Header().Set("X-Next-Offset", strconv.Itoa(offset+len(filtered)))
+		}
+		items := make([]BuildRunResponse, 0, len(filtered))
+		for _, item := range filtered {
 			items = append(items, buildRunDTO(item))
 		}
 		writeJSON(w, http.StatusOK, items)
@@ -776,6 +787,88 @@ func (s Server) list(ctx context.Context, r *http.Request, list client.ObjectLis
 	return s.Client.List(ctx, list, client.InNamespace(s.namespace(r.URL.Query().Get("namespace"))))
 }
 
+func (s Server) listBuildRuns(ctx context.Context, r *http.Request, list *cicdv1alpha1.BuildRunList) error {
+	namespace := r.URL.Query().Get("namespace")
+	if r.URL.Query().Get("allNamespaces") == "true" && namespace == "" {
+		return s.Client.List(ctx, list)
+	}
+	return s.Client.List(ctx, list, client.InNamespace(s.namespace(namespace)))
+}
+
+func filterAndPageBuildRuns(r *http.Request, source []cicdv1alpha1.BuildRun) ([]cicdv1alpha1.BuildRun, int, int, int, error) {
+	query := r.URL.Query()
+	limit, err := boundedInt(query.Get("limit"), 100, 1, 500)
+	if err != nil {
+		return nil, 0, 0, 0, fmt.Errorf("limit: %w", err)
+	}
+	offset, err := boundedInt(query.Get("offset"), 0, 0, 1_000_000_000)
+	if err != nil {
+		return nil, 0, 0, 0, fmt.Errorf("offset: %w", err)
+	}
+	after, err := optionalTime(query.Get("createdAfter"))
+	if err != nil {
+		return nil, 0, 0, 0, fmt.Errorf("createdAfter: %w", err)
+	}
+	before, err := optionalTime(query.Get("createdBefore"))
+	if err != nil {
+		return nil, 0, 0, 0, fmt.Errorf("createdBefore: %w", err)
+	}
+	filtered := make([]cicdv1alpha1.BuildRun, 0, len(source))
+	for _, item := range source {
+		if phase := query.Get("phase"); phase != "" && !strings.EqualFold(string(item.Status.Phase), phase) {
+			continue
+		}
+		if project := query.Get("project"); project != "" && item.Spec.ProjectRef != project {
+			continue
+		}
+		if repository := query.Get("repository"); repository != "" && item.Spec.RepositoryRef != repository {
+			continue
+		}
+		created := item.CreationTimestamp.Time
+		if after != nil && created.Before(*after) {
+			continue
+		}
+		if before != nil && created.After(*before) {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	sort.SliceStable(filtered, func(i, j int) bool {
+		return filtered[i].CreationTimestamp.After(filtered[j].CreationTimestamp.Time)
+	})
+	total := len(filtered)
+	if offset >= total {
+		return []cicdv1alpha1.BuildRun{}, total, limit, offset, nil
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return filtered[offset:end], total, limit, offset, nil
+}
+
+func boundedInt(value string, fallback, minimum, maximum int) (int, error) {
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < minimum || parsed > maximum {
+		return 0, fmt.Errorf("must be an integer from %d to %d", minimum, maximum)
+	}
+	return parsed, nil
+}
+
+func optionalTime(value string) (*time.Time, error) {
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil, fmt.Errorf("must be RFC3339")
+	}
+	return &parsed, nil
+}
+
 func (s Server) decode(w http.ResponseWriter, r *http.Request, out any) bool {
 	defer r.Body.Close()
 	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
@@ -860,6 +953,7 @@ func (s Server) cors(next http.Handler) http.Handler {
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization")
+			w.Header().Set("Access-Control-Expose-Headers", "X-Total-Count,X-Limit,X-Next-Offset,X-Request-ID")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
