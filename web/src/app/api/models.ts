@@ -212,3 +212,18 @@ export interface LogsResponse {
   podName?: string;
   lines: string[];
 }
+
+export interface ProviderCapability {
+  name: string;
+  description: string;
+}
+
+export interface ProviderSummary {
+  name: string;
+  type: string;
+  capabilities: ProviderCapability[];
+}
+
+export interface ProviderHealthResult extends ProviderSummary {
+  health: { healthy: boolean; message: string; checkedAt: string };
+}

@@ -19,6 +19,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/observability"
+	"github.com/cloudivision/cloudivision/internal/provider"
 	"github.com/cloudivision/cloudivision/internal/redact"
 	"github.com/cloudivision/cloudivision/internal/webhook"
 	corev1 "k8s.io/api/core/v1"
@@ -40,6 +41,7 @@ type Server struct {
 	AuthMode         string
 	CORSOrigins      []string
 	MetricsEnabled   bool
+	Providers        *provider.Registry
 }
 
 func (s Server) Handler() http.Handler {
@@ -66,6 +68,8 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/releases/{namespace}/{name}/approve", s.approveRelease)
 	mux.HandleFunc("POST /api/v1/releases/{namespace}/{name}/reject", s.rejectRelease)
 	mux.HandleFunc("GET /api/v1/audit/events", s.auditEvents)
+	mux.HandleFunc("GET /api/v1/providers", s.providers)
+	mux.HandleFunc("GET /api/v1/providers/health", s.providerHealth)
 	mux.HandleFunc("POST /api/v1/webhooks/github/{repositoryName}", s.webhook(webhook.ProviderGitHub))
 	mux.HandleFunc("POST /api/v1/webhooks/gitlab/{repositoryName}", s.webhook(webhook.ProviderGitLab))
 	mux.HandleFunc("POST /api/v1/webhooks/gitea/{repositoryName}", s.webhook(webhook.ProviderGitea))
@@ -80,6 +84,22 @@ func (s Server) health(w http.ResponseWriter, _ *http.Request) {
 func (s Server) currentUser(w http.ResponseWriter, r *http.Request) {
 	principal, _ := auth.PrincipalFromContext(r.Context())
 	writeJSON(w, http.StatusOK, principalDTO(principal))
+}
+
+func (s Server) providers(w http.ResponseWriter, _ *http.Request) {
+	if s.Providers == nil {
+		writeJSON(w, http.StatusOK, []provider.Summary{})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.Providers.Summaries())
+}
+
+func (s Server) providerHealth(w http.ResponseWriter, r *http.Request) {
+	if s.Providers == nil {
+		writeJSON(w, http.StatusOK, []provider.HealthResult{})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.Providers.HealthCheckAll(r.Context()))
 }
 
 func (s Server) projects(w http.ResponseWriter, r *http.Request) {

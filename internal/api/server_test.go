@@ -14,6 +14,7 @@ import (
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
+	"github.com/cloudivision/cloudivision/internal/provider"
 	"github.com/cloudivision/cloudivision/internal/webhook"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,6 +23,37 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
+
+func TestProviderEndpointsExposeCapabilitiesAndHealth(t *testing.T) {
+	server, _ := newTestServer(t)
+	server.Providers = provider.NewRegistry()
+	if err := server.Providers.Register(provider.Static{ProviderName: "generic", ProviderType: "git", Healthy: true, Message: "ready", Features: []provider.Capability{{Name: "clone", Description: "clone repositories"}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	providersRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(providersRecorder, httptest.NewRequest(http.MethodGet, "/api/v1/providers", nil))
+	if providersRecorder.Code != http.StatusOK {
+		t.Fatalf("providers status = %d", providersRecorder.Code)
+	}
+	var summaries []provider.Summary
+	if err := json.Unmarshal(providersRecorder.Body.Bytes(), &summaries); err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 1 || summaries[0].Type != "git" || len(summaries[0].Capabilities) != 1 {
+		t.Fatalf("providers = %#v", summaries)
+	}
+
+	healthRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(healthRecorder, httptest.NewRequest(http.MethodGet, "/api/v1/providers/health", nil))
+	var health []provider.HealthResult
+	if err := json.Unmarshal(healthRecorder.Body.Bytes(), &health); err != nil {
+		t.Fatal(err)
+	}
+	if len(health) != 1 || !health[0].Health.Healthy || health[0].Health.CheckedAt.IsZero() {
+		t.Fatalf("health = %#v", health)
+	}
+}
 
 func TestPostBuildRunCreatesCR(t *testing.T) {
 	server, k8sClient := newTestServer(t)

@@ -21,6 +21,7 @@ export class AppComponent {
     { label: 'Projects', path: '/projects' },
     { label: 'Repositories', path: '/repositories' },
     { label: 'Pipeline Templates', path: '/pipeline-templates' },
+		{ label: 'Providers', path: '/providers' },
     { label: 'Build Runs', path: '/build-runs' },
     { label: 'Environments', path: '/environments' },
     { label: 'Releases', path: '/releases' }

@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, map, of, shareReplay, switchMap, throwError } from 'rxjs';
 
 import { environment } from '../../environments/environment';
-import { ApiError, ApprovalActionRequest, BuildRun, Environment, LogsResponse, PipelineTemplate, Principal, Project, Release, Repository } from './models';
+import { ApiError, ApprovalActionRequest, BuildRun, Environment, LogsResponse, PipelineTemplate, Principal, Project, ProviderHealthResult, ProviderSummary, Release, Repository } from './models';
 
 interface RuntimeConfig {
   apiBaseUrl?: string;
@@ -76,6 +76,14 @@ export class ApiClient {
   releases(): Observable<Release[]> {
     return this.get<Release[]>('/api/v1/releases');
   }
+
+	providers(): Observable<ProviderSummary[]> {
+		return this.get<ProviderSummary[]>('/api/v1/providers');
+	}
+
+	providerHealth(): Observable<ProviderHealthResult[]> {
+		return this.get<ProviderHealthResult[]>('/api/v1/providers/health');
+	}
 
   approveRelease(namespace: string, name: string, body: ApprovalActionRequest): Observable<Release> {
     return this.post<Release>(`/api/v1/releases/${namespace}/${name}/approve`, body);

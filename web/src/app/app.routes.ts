@@ -10,6 +10,7 @@ import { ReleasesPageComponent } from './features/releases/releases-page.compone
 import { ReleaseDetailPageComponent } from './features/releases/release-detail-page.component';
 import { RepositoriesPageComponent } from './features/repositories/repositories-page.component';
 import { FirstRunWizardComponent } from './features/first-run/first-run-wizard.component';
+import { ProvidersPageComponent } from './features/providers/providers-page.component';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
@@ -19,6 +20,7 @@ export const routes: Routes = [
   { path: 'projects/:namespace/:name', component: ProjectDetailPageComponent },
   { path: 'repositories', component: RepositoriesPageComponent },
   { path: 'pipeline-templates', component: PipelineTemplatesPageComponent },
+	{ path: 'providers', component: ProvidersPageComponent },
   { path: 'build-runs', component: BuildRunsPageComponent },
   { path: 'build-runs/:namespace/:name', component: BuildRunDetailPageComponent },
   { path: 'environments', component: EnvironmentsPageComponent },

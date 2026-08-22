@@ -19,6 +19,14 @@ import (
 	cloudivisionapi "github.com/cloudivision/cloudivision/internal/api"
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
+	"github.com/cloudivision/cloudivision/internal/provider"
+	providerbuild "github.com/cloudivision/cloudivision/internal/provider/build"
+	providergit "github.com/cloudivision/cloudivision/internal/provider/git"
+	providergitops "github.com/cloudivision/cloudivision/internal/provider/gitops"
+	providernotifications "github.com/cloudivision/cloudivision/internal/provider/notifications"
+	providerregistry "github.com/cloudivision/cloudivision/internal/provider/registry"
+	providersecrets "github.com/cloudivision/cloudivision/internal/provider/secrets"
+	providersupplychain "github.com/cloudivision/cloudivision/internal/provider/supplychain"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -68,6 +76,11 @@ func main() {
 		logger.Error("configure auth", "error", err)
 		os.Exit(1)
 	}
+	providerRegistry, err := configureProviderRegistry()
+	if err != nil {
+		logger.Error("configure provider registry", "error", err)
+		os.Exit(1)
+	}
 
 	apiServer := cloudivisionapi.Server{
 		Client:           k8sClient,
@@ -81,6 +94,7 @@ func main() {
 		AuthMode:         authMode,
 		CORSOrigins:      csvEnv("CLOU_DIVISION_CORS_ALLOWED_ORIGINS", "http://localhost:4200,http://localhost:4201"),
 		MetricsEnabled:   envBool("CLOU_DIVISION_METRICS_ENABLED", true),
+		Providers:        providerRegistry,
 	}
 
 	addr := envOrDefault("CLOU_DIVISION_API_ADDR", envOrDefault("CLOUDIVISION_API_ADDR", ":8080"))
@@ -111,6 +125,23 @@ func main() {
 	}
 
 	logger.Info("api server stopped")
+}
+
+func configureProviderRegistry() (*provider.Registry, error) {
+	registry := provider.NewRegistry()
+	providers := []provider.Provider{
+		providergit.Generic(), providergit.GitHub(), providergit.GitLab(),
+		providerregistry.Generic(), providersecrets.Kubernetes(),
+		providergitops.Generic(), providergitops.ArgoCD(), providerbuild.BuildKit(),
+		providernotifications.Noop(), providersupplychain.Noop(), providersupplychain.Syft(),
+		providersupplychain.Grype(), providersupplychain.Cosign(),
+	}
+	for _, current := range providers {
+		if err := registry.Register(current); err != nil {
+			return nil, err
+		}
+	}
+	return registry, nil
 }
 
 func configureAuthenticator(mode string) (auth.Authenticator, error) {

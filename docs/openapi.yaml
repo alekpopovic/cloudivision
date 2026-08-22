@@ -198,6 +198,16 @@ paths:
       responses:
         "200":
           description: List audit events from the configured audit event store. Returns an empty list when no event lister is configured.
+  /api/v1/providers:
+    get:
+      responses:
+        "200":
+          description: List registered provider types, names, and capabilities.
+  /api/v1/providers/health:
+    get:
+      responses:
+        "200":
+          description: Run provider health checks and return messages and timestamps.
   /api/v1/webhooks/github/{repositoryName}:
     post:
       parameters:
