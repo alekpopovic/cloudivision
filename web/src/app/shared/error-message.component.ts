@@ -11,6 +11,9 @@ import { ApiError } from '../api/models';
       <span class="font-semibold">{{ error.code }}</span>
       <span class="ml-2">{{ error.message }}</span>
       <div *ngIf="error.requestId" class="mt-1 font-mono text-xs text-rose-700">request ID: {{ error.requestId }}</div>
+      <ul *ngIf="error.violations?.length" class="mt-2 list-disc space-y-1 pl-5">
+        <li *ngFor="let violation of error.violations"><strong>{{ violation.policy }}</strong>: {{ violation.message }}<code *ngIf="violation.fieldPath" class="ml-1 text-xs">({{ violation.fieldPath }})</code></li>
+      </ul>
     </div>
   `
 })

@@ -409,6 +409,11 @@ func TestReleaseReconcileBlocksWhenSupplyChainPolicyIsNotSatisfied(t *testing.T)
 		t.Fatalf("get Environment error = %v", err)
 	}
 	environment.Spec.Type = cicdv1alpha1.EnvironmentTypeProduction
+	environment.Spec.RequiresApproval = true
+	release.Spec.Approval.ApprovedBy = "release-manager"
+	if err := reconciler.Update(ctx, release); err != nil {
+		t.Fatalf("update Release error = %v", err)
+	}
 	environment.Spec.Policy = cicdv1alpha1.EnvironmentPolicySpec{
 		RequireSignedImages: true,
 		RequireSBOM:         true,
@@ -428,8 +433,8 @@ func TestReleaseReconcileBlocksWhenSupplyChainPolicyIsNotSatisfied(t *testing.T)
 	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailedValidation {
 		t.Fatalf("phase = %q, want FailedValidation", updated.Status.Phase)
 	}
-	if !hasConditionReason(updated.Status.Conditions, "Failed", "PolicyNotSatisfied") {
-		t.Fatalf("conditions = %#v, want PolicyNotSatisfied failure", updated.Status.Conditions)
+	if !hasConditionReason(updated.Status.Conditions, "PolicyDenied", "PolicyDenied") {
+		t.Fatalf("conditions = %#v, want PolicyDenied", updated.Status.Conditions)
 	}
 	if provider.updateCalls != 0 {
 		t.Fatalf("updateCalls = %d, want 0", provider.updateCalls)
@@ -444,6 +449,11 @@ func TestReleaseReconcileAllowsSatisfiedSupplyChainPolicy(t *testing.T) {
 		t.Fatalf("get Environment error = %v", err)
 	}
 	environment.Spec.Type = cicdv1alpha1.EnvironmentTypeProduction
+	environment.Spec.RequiresApproval = true
+	release.Spec.Approval.ApprovedBy = "release-manager"
+	if err := reconciler.Update(ctx, release); err != nil {
+		t.Fatalf("update Release error = %v", err)
+	}
 	environment.Spec.Policy = cicdv1alpha1.EnvironmentPolicySpec{
 		RequireSignedImages: true,
 		RequireSBOM:         true,
@@ -507,7 +517,7 @@ func TestReleaseReconcileBlocksCriticalVulnerabilities(t *testing.T) {
 	if err := reconciler.Get(ctx, releaseObjectKey(release), updated); err != nil {
 		t.Fatalf("get Release error = %v", err)
 	}
-	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailedValidation || updated.Status.Failure.Reason != "CriticalVulnerabilitiesFound" {
+	if updated.Status.Phase != cicdv1alpha1.ReleasePhaseFailedValidation || updated.Status.Failure.Reason != "PolicyDenied" {
 		t.Fatalf("status = %#v", updated.Status)
 	}
 	if provider.updateCalls != 0 {

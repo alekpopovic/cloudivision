@@ -15,6 +15,7 @@ import (
 	tektonexecutor "github.com/cloudivision/cloudivision/internal/executor/tekton"
 	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/observability"
+	"github.com/cloudivision/cloudivision/internal/policy"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,9 +36,10 @@ const (
 // BuildRunReconciler reconciles BuildRun resources.
 type BuildRunReconciler struct {
 	client.Client
-	Scheme    *runtime.Scheme
-	Recorder  EventRecorder
-	Executors map[cicdv1alpha1.ExecutorType]executor.PipelineExecutor
+	Scheme          *runtime.Scheme
+	Recorder        EventRecorder
+	Executors       map[cicdv1alpha1.ExecutorType]executor.PipelineExecutor
+	PolicyEvaluator policy.Evaluator
 }
 
 // EventRecorder is the subset of Kubernetes event recording used by the reconciler.
@@ -94,6 +96,18 @@ func (r *BuildRunReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, r.ensureRelease(ctx, buildRun)
 		}
 		return ctrl.Result{}, nil
+	}
+
+	policyEvaluator := r.PolicyEvaluator
+	if policyEvaluator == nil {
+		policyEvaluator = policy.NewDefaultEvaluator()
+	}
+	decision := policyEvaluator.EvaluateBuildRun(ctx, policy.BuildRunPolicyInput{
+		BuildRun: buildRun, Project: project, Repository: repository, PipelineTemplate: template,
+	})
+	buildRun.Status.Policy = policy.ToStatus(decision)
+	if !decision.Allowed {
+		return ctrl.Result{}, r.markPolicyDenied(ctx, buildRun, decision)
 	}
 
 	pipelineExecutor, executorType, err := r.executorFor(buildRun)
@@ -202,6 +216,20 @@ func (r *BuildRunReconciler) markExecutorError(ctx context.Context, buildRun *ci
 		return markErr
 	}
 	r.record(buildRun, corev1.EventTypeWarning, "BuildFailed", err.Error())
+	return r.updateBuildRunStatus(ctx, buildRun)
+}
+
+func (r *BuildRunReconciler) markPolicyDenied(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, decision policy.Decision) error {
+	now := metav1.Now()
+	buildRun.Status.Phase = cicdv1alpha1.BuildRunPhaseFailed
+	buildRun.Status.ObservedGeneration = buildRun.Generation
+	buildRun.Status.CompletedAt = &now
+	buildRun.Status.Failure = cicdv1alpha1.FailureStatus{Reason: decision.Reason, Message: decision.Message}
+	domain.SetCondition(&buildRun.Status.Conditions, metav1.Condition{
+		Type: "PolicyDenied", Status: metav1.ConditionTrue, ObservedGeneration: buildRun.Generation,
+		Reason: decision.Reason, Message: decision.Message, LastTransitionTime: now,
+	})
+	r.record(buildRun, corev1.EventTypeWarning, "PolicyDenied", decision.Message)
 	return r.updateBuildRunStatus(ctx, buildRun)
 }
 

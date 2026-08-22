@@ -497,6 +497,21 @@ type BuildRunSupplyChainStatus struct {
 	LowVulnerabilities      int    `json:"lowVulnerabilities,omitempty"`
 }
 
+type PolicyViolationStatus struct {
+	Policy    string `json:"policy"`
+	Severity  string `json:"severity"`
+	Message   string `json:"message"`
+	FieldPath string `json:"fieldPath,omitempty"`
+}
+
+type PolicyDecisionStatus struct {
+	Allowed     bool                    `json:"allowed"`
+	Reason      string                  `json:"reason,omitempty"`
+	Message     string                  `json:"message,omitempty"`
+	EvaluatedAt *metav1.Time            `json:"evaluatedAt,omitempty"`
+	Violations  []PolicyViolationStatus `json:"violations,omitempty"`
+}
+
 type BuildRunStatus struct {
 	// +kubebuilder:validation:Enum=Pending;Queued;Running;Succeeded;Failed;Cancelled
 	Phase              BuildRunPhase      `json:"phase,omitempty"`
@@ -510,6 +525,7 @@ type BuildRunStatus struct {
 	PipelineRunRef ObjectRef                 `json:"pipelineRunRef,omitempty"`
 	Image          ImageRef                  `json:"image,omitempty"`
 	SupplyChain    BuildRunSupplyChainStatus `json:"supplyChain,omitempty"`
+	Policy         PolicyDecisionStatus      `json:"policy,omitempty"`
 	Failure        FailureStatus             `json:"failure,omitempty"`
 	Log            BuildRunLogStatus         `json:"log,omitempty"`
 }
@@ -550,6 +566,7 @@ type EnvironmentGitOpsSpec struct {
 }
 
 type EnvironmentPolicySpec struct {
+	RequireImageDigest           bool `json:"requireImageDigest,omitempty"`
 	RequireSignedImages          bool `json:"requireSignedImages,omitempty"`
 	RequireSBOM                  bool `json:"requireSBOM,omitempty"`
 	BlockCriticalVulnerabilities bool `json:"blockCriticalVulnerabilities,omitempty"`
@@ -684,6 +701,7 @@ type ReleaseStatus struct {
 	Deployment  ReleaseDeploymentStatus `json:"deployment,omitempty"`
 	Approval    ReleaseApprovalStatus   `json:"approval,omitempty"`
 	PullRequest PullRequestStatus       `json:"pullRequest,omitempty"`
+	Policy      PolicyDecisionStatus    `json:"policy,omitempty"`
 	Failure     FailureStatus           `json:"failure,omitempty"`
 }
 

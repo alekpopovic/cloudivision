@@ -2,6 +2,7 @@ export interface ApiError {
   code: string;
   message: string;
   requestId?: string;
+  violations?: Array<{ policy: string; severity: string; message: string; fieldPath?: string }>;
 }
 
 export interface ApprovalActionRequest {
@@ -26,6 +27,14 @@ export interface Condition {
   reason?: string;
   message?: string;
   lastTransitionTime?: string;
+}
+
+export interface PolicyDecision {
+  allowed: boolean;
+  reason?: string;
+  message?: string;
+  evaluatedAt?: string;
+  violations?: Array<{ policy: string; severity: string; message: string; fieldPath?: string }>;
 }
 
 export interface Project {
@@ -140,6 +149,7 @@ export interface BuildRun {
 			mediumVulnerabilities?: number;
 			lowVulnerabilities?: number;
     };
+    policy?: PolicyDecision;
     failure?: { reason?: string; message?: string };
   };
 }
@@ -155,6 +165,7 @@ export interface Environment {
     requiresApproval: boolean;
     gitOps?: { provider?: 'argocd' | 'flux' | 'generic'; applicationName?: string; namespace?: string };
     policy?: {
+		requireImageDigest?: boolean;
       requireSignedImages?: boolean;
       requireSBOM?: boolean;
       blockCriticalVulnerabilities?: boolean;
@@ -202,6 +213,7 @@ export interface Release {
 			targetBranch?: string;
 			mergeStatus?: string;
 		};
+    policy?: PolicyDecision;
     conditions?: Condition[];
   };
 }

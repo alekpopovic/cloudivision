@@ -7,6 +7,7 @@ import (
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	cloudivisioncontroller "github.com/cloudivision/cloudivision/internal/controller"
 	"github.com/cloudivision/cloudivision/internal/observability"
+	"github.com/cloudivision/cloudivision/internal/policy"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -49,11 +50,12 @@ func main() {
 		setupLog.Error(err, "unable to create Project controller")
 		os.Exit(1)
 	}
-	if err := (&cloudivisioncontroller.BuildRunReconciler{Client: mgr.GetClient()}).SetupWithManager(mgr); err != nil {
+	policyEvaluator := policy.NewDefaultEvaluator()
+	if err := (&cloudivisioncontroller.BuildRunReconciler{Client: mgr.GetClient(), PolicyEvaluator: policyEvaluator}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create BuildRun controller")
 		os.Exit(1)
 	}
-	if err := (&cloudivisioncontroller.ReleaseReconciler{Client: mgr.GetClient()}).SetupWithManager(mgr); err != nil {
+	if err := (&cloudivisioncontroller.ReleaseReconciler{Client: mgr.GetClient(), PolicyEvaluator: policyEvaluator}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create Release controller")
 		os.Exit(1)
 	}

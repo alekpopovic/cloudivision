@@ -12,6 +12,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/gitops"
 	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/observability"
+	"github.com/cloudivision/cloudivision/internal/policy"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
@@ -33,6 +34,7 @@ type ReleaseReconciler struct {
 	StatusReader        gitops.StatusReader
 	PullRequestProvider gitops.PullRequestProvider
 	Recorder            EventRecorder
+	PolicyEvaluator     policy.Evaluator
 }
 
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=releases,verbs=get;list;watch;create;update;patch;delete
@@ -84,17 +86,21 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedValidation, "EnvironmentUnavailable", err.Error())
 	}
 
+	policyEvaluator := r.PolicyEvaluator
+	if policyEvaluator == nil {
+		policyEvaluator = policy.NewDefaultEvaluator()
+	}
+	decision := policyEvaluator.EvaluateRelease(ctx, policy.ReleasePolicyInput{Release: release, BuildRun: buildRun, Environment: environment})
+	release.Status.Policy = policy.ToStatus(decision)
 	if releaseRequiresApproval(release, environment) && release.Spec.Approval.ApprovedBy == "" {
 		return ctrl.Result{}, r.markAwaitingApproval(ctx, release)
+	}
+	if !decision.Allowed {
+		return ctrl.Result{}, r.markPolicyDenied(ctx, release, decision)
 	}
 	release.Status.Approval = approvalStatus(release)
 	if deploymentTimedOut(release, time.Now()) {
 		return ctrl.Result{}, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseTimedOut, "DeploymentTimedOut", "Release exceeded its configured deployment timeout.")
-	}
-
-	blocked, err := r.enforceEnvironmentPolicy(ctx, release, buildRun, environment)
-	if blocked || err != nil {
-		return ctrl.Result{}, err
 	}
 
 	commit := release.Status.GitCommit
@@ -333,23 +339,6 @@ func (r *ReleaseReconciler) loadEnvironment(ctx context.Context, release *cicdv1
 	return environment, nil
 }
 
-func (r *ReleaseReconciler) enforceEnvironmentPolicy(ctx context.Context, release *cicdv1alpha1.Release, buildRun *cicdv1alpha1.BuildRun, environment *cicdv1alpha1.Environment) (bool, error) {
-	policy := environment.Spec.Policy
-	if policy.RequireSignedImages && buildRun.Status.SupplyChain.SignatureRef == "" {
-		return true, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedValidation, "PolicyNotSatisfied", fmt.Sprintf("Environment %q requires signed images, but BuildRun %q has no signature reference.", environment.Name, buildRun.Name))
-	}
-	if policy.RequireSBOM && buildRun.Status.SupplyChain.SBOMPath == "" && buildRun.Status.SupplyChain.SBOMDigest == "" {
-		return true, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedValidation, "PolicyNotSatisfied", fmt.Sprintf("Environment %q requires an SBOM, but BuildRun %q has no SBOM metadata.", environment.Name, buildRun.Name))
-	}
-	if policy.BlockCriticalVulnerabilities && buildRun.Status.SupplyChain.ScannerResultsRef == "" {
-		return true, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedValidation, "PolicyNotSatisfied", fmt.Sprintf("Environment %q blocks critical vulnerabilities, but BuildRun %q has no scanner results reference.", environment.Name, buildRun.Name))
-	}
-	if policy.BlockCriticalVulnerabilities && buildRun.Status.SupplyChain.CriticalVulnerabilities > 0 {
-		return true, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedValidation, "CriticalVulnerabilitiesFound", fmt.Sprintf("Environment %q blocks critical vulnerabilities, and BuildRun %q reported %d.", environment.Name, buildRun.Name, buildRun.Status.SupplyChain.CriticalVulnerabilities))
-	}
-	return false, nil
-}
-
 func (r *ReleaseReconciler) markAwaitingApproval(ctx context.Context, release *cicdv1alpha1.Release) error {
 	if release.Status.Phase == cicdv1alpha1.ReleasePhaseAwaitingApproval &&
 		release.Status.ObservedGeneration == release.Generation &&
@@ -368,6 +357,22 @@ func (r *ReleaseReconciler) markAwaitingApproval(ctx context.Context, release *c
 		Message:            "Release requires approval before updating the GitOps repository.",
 		LastTransitionTime: now,
 	})
+	return r.updateReleaseStatus(ctx, release)
+}
+
+func (r *ReleaseReconciler) markPolicyDenied(ctx context.Context, release *cicdv1alpha1.Release, decision policy.Decision) error {
+	now := metav1.Now()
+	release.Status.Phase = cicdv1alpha1.ReleasePhaseFailedValidation
+	release.Status.ObservedGeneration = release.Generation
+	release.Status.CompletedAt = &now
+	release.Status.Failure = cicdv1alpha1.FailureStatus{Reason: decision.Reason, Message: decision.Message}
+	domain.SetCondition(&release.Status.Conditions, metav1.Condition{
+		Type: "PolicyDenied", Status: metav1.ConditionTrue, ObservedGeneration: release.Generation,
+		Reason: decision.Reason, Message: decision.Message, LastTransitionTime: now,
+	})
+	if r.Recorder != nil {
+		r.Recorder.Event(release, "Warning", "PolicyDenied", decision.Message)
+	}
 	return r.updateReleaseStatus(ctx, release)
 }
 

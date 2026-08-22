@@ -76,6 +76,8 @@ spec:
                 properties:
                   blockCriticalVulnerabilities:
                     type: boolean
+                  requireImageDigest:
+                    type: boolean
                   requireSBOM:
                     type: boolean
                   requireSignedImages:

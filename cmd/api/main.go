@@ -19,6 +19,7 @@ import (
 	cloudivisionapi "github.com/cloudivision/cloudivision/internal/api"
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
+	"github.com/cloudivision/cloudivision/internal/policy"
 	"github.com/cloudivision/cloudivision/internal/provider"
 	providerbuild "github.com/cloudivision/cloudivision/internal/provider/build"
 	providergit "github.com/cloudivision/cloudivision/internal/provider/git"
@@ -95,6 +96,7 @@ func main() {
 		CORSOrigins:      csvEnv("CLOU_DIVISION_CORS_ALLOWED_ORIGINS", "http://localhost:4200,http://localhost:4201"),
 		MetricsEnabled:   envBool("CLOU_DIVISION_METRICS_ENABLED", true),
 		Providers:        providerRegistry,
+		PolicyEvaluator:  policy.NewDefaultEvaluator(),
 	}
 
 	addr := envOrDefault("CLOU_DIVISION_API_ADDR", envOrDefault("CLOUDIVISION_API_ADDR", ":8080"))

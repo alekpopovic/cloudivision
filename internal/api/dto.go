@@ -6,13 +6,15 @@ import (
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
+	"github.com/cloudivision/cloudivision/internal/policy"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type ErrorResponse struct {
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	RequestID string `json:"requestId,omitempty"`
+	Code       string             `json:"code"`
+	Message    string             `json:"message"`
+	RequestID  string             `json:"requestId,omitempty"`
+	Violations []policy.Violation `json:"violations,omitempty"`
 }
 
 type ProjectRequest struct {

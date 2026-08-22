@@ -19,6 +19,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/observability"
+	"github.com/cloudivision/cloudivision/internal/policy"
 	"github.com/cloudivision/cloudivision/internal/provider"
 	"github.com/cloudivision/cloudivision/internal/redact"
 	"github.com/cloudivision/cloudivision/internal/webhook"
@@ -42,6 +43,7 @@ type Server struct {
 	CORSOrigins      []string
 	MetricsEnabled   bool
 	Providers        *provider.Registry
+	PolicyEvaluator  policy.Evaluator
 }
 
 func (s Server) Handler() http.Handler {
@@ -208,6 +210,17 @@ func (s Server) pipelineTemplates(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		obj := &cicdv1alpha1.PipelineTemplate{ObjectMeta: objectMeta(req.Name, s.namespace(req.Namespace)), Spec: req.Spec}
+		policyEvaluator := s.PolicyEvaluator
+		if policyEvaluator == nil {
+			policyEvaluator = policy.NewDefaultEvaluator()
+		}
+		decision := policyEvaluator.EvaluatePipelineTemplate(r.Context(), policy.PipelineTemplatePolicyInput{
+			PipelineTemplate: obj, EnforceAuthorization: true, SecretUseAuthorized: true,
+		})
+		if !decision.Allowed {
+			s.writeError(w, policyDenied(decision))
+			return
+		}
 		if err := s.Client.Create(r.Context(), obj); err != nil {
 			s.writeError(w, err)
 			return
@@ -239,6 +252,17 @@ func (s Server) buildRuns(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		obj := &cicdv1alpha1.BuildRun{ObjectMeta: objectMeta(req.Name, s.namespace(req.Namespace)), Spec: req.Spec}
+		policyEvaluator := s.PolicyEvaluator
+		if policyEvaluator == nil {
+			policyEvaluator = policy.NewDefaultEvaluator()
+		}
+		decision := policyEvaluator.EvaluateBuildRun(r.Context(), policy.BuildRunPolicyInput{
+			BuildRun: obj, EnforceAuthorization: true, TriggerAuthorized: true, SecretUseAuthorized: true,
+		})
+		if !decision.Allowed {
+			s.writeError(w, policyDenied(decision))
+			return
+		}
 		if err := s.Client.Create(r.Context(), obj); err != nil {
 			s.writeError(w, err)
 			return
@@ -615,6 +639,18 @@ func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
 		}
 
 		buildRun := buildRunFromWebhook(namespace, repository, project, template, event)
+		policyEvaluator := s.PolicyEvaluator
+		if policyEvaluator == nil {
+			policyEvaluator = policy.NewDefaultEvaluator()
+		}
+		decision := policyEvaluator.EvaluateBuildRun(r.Context(), policy.BuildRunPolicyInput{
+			BuildRun: &buildRun, Project: project, Repository: repository, PipelineTemplate: template,
+			EnforceAuthorization: true, TriggerAuthorized: true, SecretUseAuthorized: true,
+		})
+		if !decision.Allowed {
+			s.writeError(w, policyDenied(decision))
+			return
+		}
 		if err := s.Client.Create(r.Context(), &buildRun); err != nil {
 			s.writeError(w, err)
 			return
@@ -873,7 +909,9 @@ func (s Server) writeError(w http.ResponseWriter, err error) {
 		status = http.StatusConflict
 		code = "already_exists"
 	}
-	writeError(w, status, code, message)
+	writeJSONStatus(w, status, ErrorResponse{
+		Code: code, Message: redact.MaskString(message), RequestID: w.Header().Get(observability.RequestIDHeader), Violations: apiErr.violations,
+	})
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
@@ -912,9 +950,14 @@ func routeLabel(r *http.Request) string {
 }
 
 type apiError struct {
-	status  int
-	code    string
-	message string
+	status     int
+	code       string
+	message    string
+	violations []policy.Violation
+}
+
+func policyDenied(decision policy.Decision) error {
+	return apiError{status: http.StatusForbidden, code: "policy_denied", message: decision.Message, violations: decision.Violations}
 }
 
 func (e apiError) Error() string {

@@ -8,12 +8,13 @@ import { BuildRun, Release } from '../../api/models';
 import { ConditionsTimelineComponent } from '../../shared/conditions-timeline.component';
 import { KeyValueListComponent } from '../../shared/key-value-list.component';
 import { PageHeaderComponent } from '../../shared/page-header.component';
+import { PolicyDecisionComponent } from '../../shared/policy-decision.component';
 import { StatusBadgeComponent } from '../../shared/status-badge.component';
 
 @Component({
   selector: 'app-release-detail-page',
   standalone: true,
-  imports: [CommonModule, RouterLink, PageHeaderComponent, StatusBadgeComponent, KeyValueListComponent, ConditionsTimelineComponent],
+  imports: [CommonModule, RouterLink, PageHeaderComponent, StatusBadgeComponent, KeyValueListComponent, ConditionsTimelineComponent, PolicyDecisionComponent],
   template: `
     <ng-container *ngIf="vm$ | async as vm">
       <app-page-header [title]="vm.release.name" description="Promotion, approval and deployment debugging." />
@@ -21,6 +22,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
       <section *ngIf="vm.release.status?.failure as failure" class="mb-5 rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
         <p class="font-semibold">{{ failure.reason }}</p><p class="mt-1">{{ failure.message }}</p>
       </section>
+      <app-policy-decision *ngIf="vm.release.status?.policy" class="mb-5 block" [decision]="vm.release.status?.policy" />
       <div class="grid gap-5 lg:grid-cols-2">
         <section class="rounded-md border border-slate-200 bg-white p-4">
           <h2 class="mb-3 text-sm font-semibold">GitOps deployment</h2>

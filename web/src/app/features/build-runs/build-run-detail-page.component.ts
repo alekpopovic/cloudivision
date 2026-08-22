@@ -10,12 +10,13 @@ import { ErrorMessageComponent } from '../../shared/error-message.component';
 import { KeyValueListComponent } from '../../shared/key-value-list.component';
 import { LogsViewerComponent } from '../../shared/logs-viewer.component';
 import { PageHeaderComponent } from '../../shared/page-header.component';
+import { PolicyDecisionComponent } from '../../shared/policy-decision.component';
 import { StatusBadgeComponent } from '../../shared/status-badge.component';
 
 @Component({
   selector: 'app-build-run-detail-page',
   standalone: true,
-  imports: [CommonModule, RouterLink, PageHeaderComponent, StatusBadgeComponent, KeyValueListComponent, ConditionsTimelineComponent, LogsViewerComponent, ErrorMessageComponent],
+  imports: [CommonModule, RouterLink, PageHeaderComponent, StatusBadgeComponent, KeyValueListComponent, ConditionsTimelineComponent, LogsViewerComponent, ErrorMessageComponent, PolicyDecisionComponent],
   template: `
     <app-error-message [error]="error" />
     <ng-container *ngIf="vm$ | async as vm">
@@ -31,6 +32,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
         <p class="font-semibold">{{ failure.reason || 'Build failed' }}</p>
         <p class="mt-1 whitespace-pre-wrap">{{ failure.message || 'No failure message was reported.' }}</p>
       </section>
+      <app-policy-decision *ngIf="vm.run.status?.policy" class="mb-5 block" [decision]="vm.run.status?.policy" />
 
       <nav class="mb-4 flex gap-2 border-b border-slate-200" aria-label="BuildRun detail tabs">
         <button class="border-b-2 px-3 py-2 text-sm font-medium" [class.border-blue-600]="activeTab === 'details'" [class.text-blue-700]="activeTab === 'details'" (click)="activeTab = 'details'">Debug details</button>
@@ -98,7 +100,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
           { key: 'Critical / High', value: (vm.run.status?.supplyChain?.criticalVulnerabilities || 0) + ' / ' + (vm.run.status?.supplyChain?.highVulnerabilities || 0) },
           { key: 'Signature', value: vm.run.status?.supplyChain?.signatureRef || 'Not signed' },
           { key: 'Provenance', value: vm.run.status?.supplyChain?.provenanceRef || 'Not written' },
-          { key: 'Policy evidence', value: policyDecision(vm.run) }
+          { key: 'Policy evidence', value: vm.run.status?.policy?.allowed ? 'Allowed' : (vm.run.status?.policy?.reason || 'Not evaluated') }
         ]" />
       </section>
     </ng-container>
@@ -156,9 +158,4 @@ export class BuildRunDetailPageComponent {
     });
   }
 
-  policyDecision(run: BuildRun): string {
-    const evidence = run.status?.supplyChain;
-    if ((evidence?.criticalVulnerabilities || 0) > 0) return 'Blocked when target policy forbids critical vulnerabilities';
-    return evidence?.sbomDigest || evidence?.signatureRef ? 'Evidence available for Release policy evaluation' : 'No SBOM or signature evidence recorded';
-  }
 }

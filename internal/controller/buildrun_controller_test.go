@@ -51,6 +51,37 @@ func TestBuildRunReconcileCreatesOneJob(t *testing.T) {
 	assertSecureJobSpec(t, &job)
 }
 
+func TestBuildRunReconcileSetsPolicyDeniedBeforeCreatingJob(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+	template := &cicdv1alpha1.PipelineTemplate{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: buildRun.Spec.PipelineTemplateRef, Namespace: buildRun.Namespace}, template); err != nil {
+		t.Fatal(err)
+	}
+	template.Spec.Security.AllowPrivileged = true
+	if err := reconciler.Update(ctx, template); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatal(err)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: buildRun.Name, Namespace: buildRun.Namespace}, updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.BuildRunPhaseFailed || !hasConditionReason(updated.Status.Conditions, "PolicyDenied", "PolicyDenied") {
+		t.Fatalf("status = %#v, want PolicyDenied", updated.Status)
+	}
+	if updated.Status.Policy.Allowed || len(updated.Status.Policy.Violations) != 1 {
+		t.Fatalf("policy = %#v", updated.Status.Policy)
+	}
+	job := &batchv1.Job{}
+	err := reconciler.Get(ctx, types.NamespacedName{Name: jobexecutor.NameForBuildRun(buildRun.Name), Namespace: buildRun.Namespace}, job)
+	if !apierrors.IsNotFound(err) {
+		t.Fatalf("get Job error = %v, want not found", err)
+	}
+}
+
 func TestBuildRunReconcileDoesNotAddUnneededFinalizer(t *testing.T) {
 	ctx := context.Background()
 	reconciler, buildRun := newBuildRunReconciler(t)

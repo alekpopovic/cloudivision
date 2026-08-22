@@ -14,6 +14,7 @@ import (
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
+	"github.com/cloudivision/cloudivision/internal/policy"
 	"github.com/cloudivision/cloudivision/internal/provider"
 	"github.com/cloudivision/cloudivision/internal/webhook"
 	corev1 "k8s.io/api/core/v1"
@@ -84,6 +85,24 @@ func TestPostBuildRunCreatesCR(t *testing.T) {
 	}
 	if created.Spec.RepositoryRef != "repo" {
 		t.Fatalf("repositoryRef = %q", created.Spec.RepositoryRef)
+	}
+}
+
+func TestPostBuildRunReturnsStructuredPolicyDenial(t *testing.T) {
+	server, _ := newTestServer(t)
+	server.PolicyEvaluator = denyPolicyEvaluator{}
+	body := `{"name":"build-1","namespace":"ci","spec":{"projectRef":"project","repositoryRef":"repo","pipelineTemplateRef":"template","revision":"main","triggeredBy":{"type":"api"},"image":{"repository":"ghcr.io/acme/app"},"executor":"job"}}`
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/build-runs", bytes.NewBufferString(body)))
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var response ErrorResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != "policy_denied" || len(response.Violations) != 1 || response.Violations[0].Policy != policy.CanTriggerBuild {
+		t.Fatalf("response = %#v", response)
 	}
 }
 
@@ -660,6 +679,20 @@ func (r *fakeAuditRecorder) Record(_ context.Context, event audit.Event) error {
 type fakeAuthenticator struct {
 	principal *auth.Principal
 	err       error
+}
+
+type denyPolicyEvaluator struct{}
+
+func (denyPolicyEvaluator) EvaluateBuildRun(context.Context, policy.BuildRunPolicyInput) policy.Decision {
+	return policy.Decision{Allowed: false, Reason: "PolicyDenied", Message: "build trigger denied", Violations: []policy.Violation{{Policy: policy.CanTriggerBuild, Severity: "error", Message: "build trigger denied", FieldPath: "spec.triggeredBy"}}}
+}
+
+func (denyPolicyEvaluator) EvaluateRelease(context.Context, policy.ReleasePolicyInput) policy.Decision {
+	return policy.Decision{Allowed: true}
+}
+
+func (denyPolicyEvaluator) EvaluatePipelineTemplate(context.Context, policy.PipelineTemplatePolicyInput) policy.Decision {
+	return policy.Decision{Allowed: true}
 }
 
 func (a fakeAuthenticator) Authenticate(*http.Request) (*auth.Principal, error) {
