@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Platform</title>
+  <rect width="64" height="64" rx="16" fill="#081426"/>
+  <path d="M18 22 32 14l14 8v20l-14 8-14-8V22Z" fill="none" stroke="#4F7CFF" stroke-width="4" stroke-linejoin="round"/>
+  <path d="m18 22 14 8 14-8M32 30v20" fill="none" stroke="#2DD4BF" stroke-width="4" stroke-linejoin="round"/>
+</svg>

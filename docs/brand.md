@@ -7,7 +7,7 @@ pipeline stages, and forward delivery through GitOps.
 ## Primary mark
 
 <p align="center">
-  <img src="../web/public/assets/brand/cloudivision-mark.png" alt="cloudivision modular C logo" width="180">
+  <img src="assets/brand/cloudivision-mark.png" alt="cloudivision modular C logo" width="180">
 </p>
 
 The transparent PNG is the canonical generated mark for v0.1. Use it on dark,
@@ -15,7 +15,7 @@ white, or very light neutral backgrounds with clear space equal to roughly one
 quarter of the mark's width. Do not rotate it, place it in a containing shape,
 add effects, or recolor individual modules.
 
-Asset: [`web/public/assets/brand/cloudivision-mark.png`](../web/public/assets/brand/cloudivision-mark.png)
+Asset: [`docs/assets/brand/cloudivision-mark.png`](assets/brand/cloudivision-mark.png)
 
 ## Wordmark
 
@@ -47,7 +47,7 @@ not illustrations.
 
 | Platform | Pipeline | Source | Build | Deploy | Observe | Security |
 | --- | --- | --- | --- | --- | --- | --- |
-| ![Platform](../web/public/assets/brand/icons/platform.svg) | ![Pipeline](../web/public/assets/brand/icons/pipeline.svg) | ![Source](../web/public/assets/brand/icons/source.svg) | ![Build](../web/public/assets/brand/icons/build.svg) | ![Deploy](../web/public/assets/brand/icons/deploy.svg) | ![Observe](../web/public/assets/brand/icons/observe.svg) | ![Security](../web/public/assets/brand/icons/security.svg) |
+| ![Platform](assets/icons/platform.svg) | ![Pipeline](assets/icons/pipeline.svg) | ![Source](assets/icons/source.svg) | ![Build](assets/icons/build.svg) | ![Deploy](assets/icons/deploy.svg) | ![Observe](assets/icons/observe.svg) | ![Security](assets/icons/security.svg) |
 
 Each SVG includes a title for standalone use. When an icon appears next to a
 visible label in the application, treat it as decorative with an empty `alt`.

@@ -10,6 +10,8 @@ guarantees documented in `docs/api/compatibility-policy.md`.
 
 - Added the cloudivision visual identity, reusable icon system, architecture chart,
   modern README, favicon, and branded Angular application shell.
+- Added a responsive Jekyll documentation site with branded navigation, dark
+  mode, client-side search, and a least-privilege GitHub Pages deployment workflow.
 
 ### Fixes
 

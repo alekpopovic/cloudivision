@@ -1,0 +1,4 @@
+source "https://rubygems.org"
+
+# Match the dependency set bundled by actions/jekyll-build-pages.
+gem "github-pages", "= 232"
