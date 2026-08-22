@@ -133,7 +133,8 @@ func configureProviderRegistry() (*provider.Registry, error) {
 	registry := provider.NewRegistry()
 	providers := []provider.Provider{
 		providergit.Generic(), providergit.GitHub(), providergit.GitLab(),
-		providerregistry.Generic(), providersecrets.Kubernetes(),
+		providerregistry.Generic(), providerregistry.GHCR(), providerregistry.GitLab(), providerregistry.Harbor(),
+		providerregistry.ECR(), providerregistry.GCR(), providerregistry.ACR(), providersecrets.Kubernetes(),
 		providergitops.Generic(), providergitops.ArgoCD(), providerbuild.BuildKit(),
 		providernotifications.Noop(), providersupplychain.Noop(), providersupplychain.Syft(),
 		providersupplychain.Grype(), providersupplychain.Cosign(),

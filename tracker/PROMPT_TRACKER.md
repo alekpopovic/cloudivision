@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-22T19:07:18Z`
-Last executed prompt: `43`
-Next prompt: `44`
+Updated at: `2026-08-22T19:22:10Z`
+Last executed prompt: `44`
+Next prompt: `45`
 
 ## How to update
 
@@ -72,7 +72,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 41 | done | Roadmap | v0.2 Roadmap Planning | `prompts/41-v0-2-roadmap-planning.md` | Created a focused v0.2 roadmap and ordered backlog tied to the v0.1 final-gate gaps: authenticated immutable image builds, durable GitHub webhooks, real GitOps/Argo convergence, stage-oriented Angular UX, security closure, cross-version upgrade, dependency triage, and measured scale. Deferred v0.3 and enterprise scope is explicit. |
 | 42 | done | Roadmap | v0.2 Implementation Plan | `prompts/42-v0-2-implementation-plan.md` | Created the executable v0.2 implementation plan with seven epics, work items, CRD/API impacts, tests, acceptance criteria, risks, dependencies, milestone ordering, and explicit exclusions. |
 | 43 | done | Build Execution | BuildKit Builder Hardening | `prompts/43-buildkit-builder-hardening.md` | Hardened rootless BuildKit input/path validation, deterministic command options, cache settings, bounded failures, metadata digest capture, runner image-stage conditions/status, CRDs, docs, and tests. Go test/vet and Helm security checks passed. |
-| 44 | pending | Providers | Registry Provider and Credentials | `prompts/44-registry-provider-and-credentials.md` |  |
+| 44 | done | Providers | Registry Provider and Credentials | `prompts/44-registry-provider-and-credentials.md` | Added registry provider interface and generic/GHCR/GitLab/Harbor implementations, cloud skeletons, image/digest resolution, credential parsing/redaction, scoped Secret validation/projection, runner Docker config handling, CRDs/API models, docs, and tests. Go, Angular, Helm, and security gates passed. |
 | 45 | pending | Supply Chain | Image Tagging, Digest and Immutability | `prompts/45-image-tagging-digest-and-immutability.md` |  |
 | 46 | pending | API | GitHub Webhook Production Readiness | `prompts/46-github-webhook-production-readiness.md` |  |
 | 47 | pending | API | Branch, Tag and Pull Request Event Filters | `prompts/47-branch-tag-and-pull-request-event-filters.md` |  |

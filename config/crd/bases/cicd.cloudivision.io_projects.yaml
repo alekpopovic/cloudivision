@@ -88,6 +88,31 @@ spec:
               ownerTeam:
                 minLength: 1
                 type: string
+              registry:
+                properties:
+                  credentialSecretRef:
+                    properties:
+                      key:
+                        type: string
+                      name:
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  imagePrefix:
+                    type: string
+                  provider:
+                    enum:
+                    - generic
+                    - ghcr
+                    - gitlab
+                    - harbor
+                    - ecr
+                    - gcr
+                    - acr
+                    type: string
+                type: object
               serviceAccountName:
                 type: string
             required:

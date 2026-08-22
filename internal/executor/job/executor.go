@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/executor"
+	providerregistry "github.com/cloudivision/cloudivision/internal/provider/registry"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +32,13 @@ const (
 	defaultCPULimit                      = "1000m"
 	defaultMemoryRequest                 = "128Mi"
 	defaultMemoryLimit                   = "1Gi"
+	registryCredentialsVolume            = "registry-credentials"
+	RegistryCredentialsDir               = "/var/run/secrets/cloudivision-registry"
+)
+
+var (
+	ErrRegistryCredentialsMissing = errors.New("registry credentials are missing")
+	ErrRegistryCredentialsInvalid = errors.New("registry credentials are invalid")
 )
 
 type Executor struct {
@@ -43,6 +52,9 @@ func (e Executor) EnsureRun(ctx context.Context, req executor.EnsureRunRequest) 
 	}
 	if req.Template.Spec.Security.AllowPrivileged && !allowPrivilegedBuilds() {
 		return nil, fmt.Errorf("PipelineTemplate %q requests privileged build execution; set CLOU_DIVISION_ALLOW_PRIVILEGED_BUILDS=true to allow this unsupported mode", req.Template.Name)
+	}
+	if err := e.validateRegistryCredentials(ctx, req); err != nil {
+		return nil, err
 	}
 	key := types.NamespacedName{
 		Name:      NameForBuildRun(req.BuildRun.Name),
@@ -139,6 +151,19 @@ func buildJob(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, re
 		})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "cosign-key", MountPath: "/var/run/secrets/cloudivision-signing", ReadOnly: true})
 	}
+	if registryCredentialRequired(project, template) && project.Spec.Registry.CredentialSecretRef != nil {
+		ref := project.Spec.Registry.CredentialSecretRef
+		mode := int32(0o400)
+		secretVolume := &corev1.SecretVolumeSource{SecretName: ref.Name, DefaultMode: &mode}
+		if ref.Key != "" {
+			secretVolume.Items = []corev1.KeyToPath{{Key: ref.Key, Path: providerregistry.DockerConfigJSONKey, Mode: &mode}}
+		}
+		volumes = append(volumes, corev1.Volume{
+			Name:         registryCredentialsVolume,
+			VolumeSource: corev1.VolumeSource{Secret: secretVolume},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: registryCredentialsVolume, MountPath: RegistryCredentialsDir, ReadOnly: true})
+	}
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      NameForBuildRun(buildRun.Name),
@@ -199,7 +224,7 @@ func runnerImage() string {
 }
 
 func runnerEnv(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, repository *cicdv1alpha1.Repository) []corev1.EnvVar {
-	return []corev1.EnvVar{
+	env := []corev1.EnvVar{
 		{Name: "BUILD_RUN_NAME", Value: buildRun.Name},
 		{Name: "BUILD_RUN_NAMESPACE", Value: buildRun.Namespace},
 		{Name: "PROJECT_NAME", Value: project.Name},
@@ -211,6 +236,20 @@ func runnerEnv(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, r
 		{Name: "IMAGE_TAG", Value: buildRun.Spec.Image.Tag},
 		{Name: "GITOPS_ENABLED", Value: strconv.FormatBool(buildRun.Spec.GitOps.Enabled)},
 	}
+	if project.Spec.Registry != nil && project.Spec.Registry.Provider != "" {
+		imagePrefix := project.Spec.Registry.ImagePrefix
+		if imagePrefix == "" {
+			imagePrefix = project.Spec.DefaultRegistry
+		}
+		env = append(env,
+			corev1.EnvVar{Name: "REGISTRY_PROVIDER", Value: string(project.Spec.Registry.Provider)},
+			corev1.EnvVar{Name: "REGISTRY_IMAGE_PREFIX", Value: imagePrefix},
+		)
+		if project.Spec.Registry.CredentialSecretRef != nil && project.Spec.Registry.CredentialSecretRef.Name != "" {
+			env = append(env, corev1.EnvVar{Name: "REGISTRY_CREDENTIALS_DIR", Value: RegistryCredentialsDir})
+		}
+	}
+	return env
 }
 
 func resourceRequirements(resources cicdv1alpha1.PipelineResourceSpec) corev1.ResourceRequirements {
@@ -254,6 +293,40 @@ func validateRequest(req executor.EnsureRunRequest) error {
 		return fmt.Errorf("BuildRun name and namespace are required")
 	}
 	return nil
+}
+
+func (e Executor) validateRegistryCredentials(ctx context.Context, req executor.EnsureRunRequest) error {
+	if !registryCredentialRequired(req.Project, req.Template) {
+		return nil
+	}
+	ref := req.Project.Spec.Registry.CredentialSecretRef
+	if ref == nil || ref.Name == "" {
+		return fmt.Errorf("Project %q registry credentialSecretRef is required for image push: %w", req.Project.Name, ErrRegistryCredentialsMissing)
+	}
+	secret := &corev1.Secret{}
+	key := types.NamespacedName{Name: ref.Name, Namespace: req.BuildRun.Namespace}
+	if err := e.Client.Get(ctx, key, secret); err != nil {
+		if apierrors.IsNotFound(err) {
+			return fmt.Errorf("registry credential Secret %q was not found in namespace %q: %w", ref.Name, req.BuildRun.Namespace, ErrRegistryCredentialsMissing)
+		}
+		return fmt.Errorf("get registry credential Secret %s: %w", key, err)
+	}
+	data := secret.Data
+	if ref.Key != "" {
+		value, ok := data[ref.Key]
+		if !ok {
+			return fmt.Errorf("registry credential Secret %q does not contain key %q: %w", ref.Name, ref.Key, ErrRegistryCredentialsInvalid)
+		}
+		data = map[string][]byte{providerregistry.DockerConfigJSONKey: value}
+	}
+	if _, err := providerregistry.ParseCredential(data); err != nil {
+		return fmt.Errorf("registry credential Secret %q has no supported credential data: %w: %w", ref.Name, ErrRegistryCredentialsInvalid, err)
+	}
+	return nil
+}
+
+func registryCredentialRequired(project *cicdv1alpha1.Project, template *cicdv1alpha1.PipelineTemplate) bool {
+	return project != nil && template != nil && project.Spec.Registry != nil && project.Spec.Registry.Provider != "" && template.Spec.Build.Enabled && template.Spec.Build.Push
 }
 
 func serviceAccountName(project *cicdv1alpha1.Project) string {

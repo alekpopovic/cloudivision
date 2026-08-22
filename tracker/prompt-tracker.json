@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-22T19:07:18Z",
-  "last_executed_prompt": 43,
-  "next_prompt": 44,
+  "updated_at": "2026-08-22T19:22:10Z",
+  "last_executed_prompt": 44,
+  "next_prompt": 45,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -413,8 +413,9 @@
       "title": "Registry Provider and Credentials",
       "phase": "Providers",
       "file": "prompts/44-registry-provider-and-credentials.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Added registry provider interface and generic/GHCR/GitLab/Harbor implementations, cloud skeletons, image/digest resolution, credential parsing/redaction, scoped Secret validation/projection, runner Docker config handling, CRDs/API models, docs, and tests. Go, Angular, Helm, and security gates passed.",
+      "executed_at": "2026-08-22T19:22:10Z"
     },
     {
       "id": 45,

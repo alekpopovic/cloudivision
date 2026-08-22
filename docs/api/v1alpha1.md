@@ -23,12 +23,18 @@ Important spec fields:
 | `displayName`, `description`, `ownerTeam` | Human ownership metadata. |
 | `namespace` | Namespace where runner RBAC/workloads are managed. |
 | `defaultRegistry`, `defaultBranch` | Artifact/source defaults. |
+| `registry.provider`, `registry.imagePrefix` | Registry adapter and resolved image prefix. |
+| `registry.credentialSecretRef` | Dedicated namespaced registry Secret name and optional Docker config key. |
 | `serviceAccountName` | Optional runner ServiceAccount override. |
 | `isolation.createNamespace` | Whether the controller creates the target namespace. |
 | `isolation.podSecurityLevel` | `baseline` or `restricted`. |
 | `isolation.networkPolicyMode` | `disabled`, `defaultDeny` or `egressAllowList`. |
 
 Status phases are `Pending`, `Ready` and `Error`. `namespaceReady` and the Ready/Failed condition explain whether namespace, runner RBAC and network policy reconciliation succeeded.
+
+Implemented registry providers and Secret formats are documented in the
+[registry provider](../registry/providers.md) and
+[credential](../registry/credentials.md) guides.
 
 ```yaml
 apiVersion: cicd.cloudivision.io/v1alpha1

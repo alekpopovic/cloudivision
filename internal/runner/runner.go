@@ -17,6 +17,7 @@ import (
 	cloudivisiongit "github.com/cloudivision/cloudivision/internal/git"
 	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/observability"
+	providerregistry "github.com/cloudivision/cloudivision/internal/provider/registry"
 	"github.com/cloudivision/cloudivision/internal/redact"
 	"github.com/cloudivision/cloudivision/internal/supplychain"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -176,11 +177,62 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 			r.setCondition(buildRun, ConditionImageBuilt, metav1.ConditionFalse, reason, "Image build context is invalid.")
 			return r.fail(ctx, buildRun, reason, redactor.Mask(err.Error()))
 		}
+		imageRepository := buildRun.Spec.Image.Repository
+		imageTag := buildRun.Spec.Image.Tag
+		buildEnv := buildParamsEnv(buildRun.Spec.Params)
+		registryRedactor := redact.New()
+		if cfg.RegistryProvider != "" {
+			registryProvider, providerErr := providerregistry.New(cfg.RegistryProvider)
+			if providerErr != nil {
+				r.setCondition(buildRun, ConditionImageBuilt, metav1.ConditionFalse, "RegistryProviderUnsupported", "Configured registry provider is unsupported.")
+				return r.fail(ctx, buildRun, "RegistryProviderUnsupported", redactor.Mask(providerErr.Error()))
+			}
+			resolved, resolveErr := registryProvider.ResolveImage(ctx, providerregistry.ImageRequest{
+				ImagePrefix: cfg.RegistryImagePrefix,
+				Repository:  imageRepository,
+				Tag:         imageTag,
+			})
+			if resolveErr != nil {
+				r.setCondition(buildRun, ConditionImageBuilt, metav1.ConditionFalse, "RegistryImageInvalid", "Configured registry image is invalid.")
+				return r.fail(ctx, buildRun, "RegistryImageInvalid", redactor.Mask(resolveErr.Error()))
+			}
+			imageRepository = resolved.Repository
+			imageTag = resolved.Tag
+			if template.Spec.Build.Push {
+				credential, credentialErr := providerregistry.LoadCredentialDir(cfg.RegistryCredentialsDir)
+				if credentialErr != nil {
+					reason := registryCredentialFailureReason(credentialErr)
+					r.setCondition(buildRun, ConditionImageBuilt, metav1.ConditionFalse, reason, "Registry credentials could not be loaded.")
+					return r.fail(ctx, buildRun, reason, redactor.Mask(credentialErr.Error()))
+				}
+				registryRedactor = providerregistry.Redactor(credential)
+				registryHost, hostErr := providerregistry.RegistryHost(imageRepository)
+				if hostErr != nil {
+					r.setCondition(buildRun, ConditionImageBuilt, metav1.ConditionFalse, "RegistryImageInvalid", "Configured registry image has no registry host.")
+					return r.fail(ctx, buildRun, "RegistryImageInvalid", redactor.Mask(hostErr.Error()))
+				}
+				login, loginErr := registryProvider.Login(ctx, providerregistry.LoginRequest{Registry: registryHost, Credential: credential})
+				if loginErr != nil {
+					reason := registryCredentialFailureReason(loginErr)
+					r.setCondition(buildRun, ConditionImageBuilt, metav1.ConditionFalse, reason, "Registry login configuration failed.")
+					return r.fail(ctx, buildRun, reason, redactor.Mask(registryRedactor.Mask(loginErr.Error())))
+				}
+				dockerConfigDir := filepath.Join(r.Workspace, ".docker")
+				if removeErr := os.RemoveAll(dockerConfigDir); removeErr != nil {
+					return r.fail(ctx, buildRun, "RegistryCredentialsInvalid", redactor.Mask(removeErr.Error()))
+				}
+				if _, writeErr := providerregistry.WriteDockerConfig(dockerConfigDir, login); writeErr != nil {
+					return r.fail(ctx, buildRun, "RegistryCredentialsInvalid", redactor.Mask(registryRedactor.Mask(writeErr.Error())))
+				}
+				defer os.RemoveAll(dockerConfigDir)
+				buildEnv["DOCKER_CONFIG"] = dockerConfigDir
+			}
+		}
 		req := build.BuildRequest{
 			ContextDir:      contextDir,
 			Dockerfile:      template.Spec.Build.Dockerfile,
-			ImageRepository: buildRun.Spec.Image.Repository,
-			ImageTag:        buildRun.Spec.Image.Tag,
+			ImageRepository: imageRepository,
+			ImageTag:        imageTag,
 			Push:            template.Spec.Build.Push,
 			BuildArgs:       template.Spec.Build.BuildArgs,
 			Target:          template.Spec.Build.Target,
@@ -191,7 +243,7 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 				Mode:    build.CacheMode(template.Spec.Build.Cache.Mode),
 				Ref:     template.Spec.Build.Cache.Ref,
 			},
-			Env: buildParamsEnv(buildRun.Spec.Params),
+			Env: buildEnv,
 		}
 		buildResult, err := r.Builder.Build(ctx, req)
 		if err != nil {
@@ -200,7 +252,7 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 			if reason == build.ReasonDigestCaptureFailed {
 				r.setCondition(buildRun, ConditionImageDigest, metav1.ConditionFalse, reason, "BuildKit did not return a valid image digest.")
 			}
-			return r.fail(ctx, buildRun, reason, redactor.Mask(err.Error()))
+			return r.fail(ctx, buildRun, reason, redactor.Mask(registryRedactor.Mask(err.Error())))
 		}
 		result = buildResult
 		buildRun.Status.Image = &cicdv1alpha1.ImageRef{
@@ -244,6 +296,16 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("mark BuildRun succeeded: %w", err)
 	}
 	return r.updateStatus(ctx, buildRun)
+}
+
+func registryCredentialFailureReason(err error) string {
+	if errors.Is(err, providerregistry.ErrCredentialsMissing) {
+		return "RegistryCredentialsMissing"
+	}
+	if errors.Is(err, providerregistry.ErrUnsupportedProvider) {
+		return "RegistryProviderUnsupported"
+	}
+	return "RegistryCredentialsInvalid"
 }
 
 type supplyChainHookError struct {

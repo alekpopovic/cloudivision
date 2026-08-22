@@ -45,6 +45,18 @@ const (
 	RepositoryProviderGeneric RepositoryProvider = "generic"
 )
 
+type RegistryProviderType string
+
+const (
+	RegistryProviderGeneric RegistryProviderType = "generic"
+	RegistryProviderGHCR    RegistryProviderType = "ghcr"
+	RegistryProviderGitLab  RegistryProviderType = "gitlab"
+	RegistryProviderHarbor  RegistryProviderType = "harbor"
+	RegistryProviderECR     RegistryProviderType = "ecr"
+	RegistryProviderGCR     RegistryProviderType = "gcr"
+	RegistryProviderACR     RegistryProviderType = "acr"
+)
+
 type PipelineTemplatePhase string
 
 const (
@@ -182,6 +194,15 @@ type ProjectIsolation struct {
 	NetworkPolicyMode NetworkPolicyMode `json:"networkPolicyMode"`
 }
 
+type ProjectRegistrySpec struct {
+	// +kubebuilder:validation:Enum=generic;ghcr;gitlab;harbor;ecr;gcr;acr
+	Provider RegistryProviderType `json:"provider,omitempty"`
+	// +optional
+	ImagePrefix string `json:"imagePrefix,omitempty"`
+	// +optional
+	CredentialSecretRef *SecretKeyRef `json:"credentialSecretRef,omitempty"`
+}
+
 type ProjectSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	DisplayName string `json:"displayName"`
@@ -198,6 +219,8 @@ type ProjectSpec struct {
 	// +optional
 	ServiceAccountName string           `json:"serviceAccountName,omitempty"`
 	Isolation          ProjectIsolation `json:"isolation"`
+	// +optional
+	Registry *ProjectRegistrySpec `json:"registry,omitempty"`
 }
 
 type ProjectStatus struct {

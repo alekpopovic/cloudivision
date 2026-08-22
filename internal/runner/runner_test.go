@@ -255,6 +255,77 @@ func TestRunnerForwardsBuildKitOptionsAndMapsBuilderFailure(t *testing.T) {
 	assertCondition(t, updated.Status.Conditions, ConditionImageBuildStarted)
 }
 
+func TestRunnerSuppliesScopedDockerConfigToBuilder(t *testing.T) {
+	ctx := context.Background()
+	repo := createGitRepository(t)
+	buildRun := testBuildRun(repo)
+	template := testPipelineTemplate(nil)
+	template.Spec.Build.Enabled = true
+	template.Spec.Build.Push = true
+	credentialsDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(credentialsDir, "username"), []byte("robot"), 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(credentialsDir, "password"), []byte("registry-secret"), 0o400); err != nil {
+		t.Fatal(err)
+	}
+	builder := &recordingBuilder{result: &build.BuildResult{
+		ImageRepository: "ghcr.io/cloudivision/example", Tag: "main", Digest: "sha256:abc123",
+	}}
+	k8sClient := newFakeRunnerClient(t, buildRun, testRepository(repo), template)
+	runner := Runner{
+		Client: k8sClient, Git: cloudivisiongit.ExecClient{}, Steps: steps.Runner{}, Builder: builder,
+		Workspace: filepath.Join(t.TempDir(), "workspace"),
+	}
+	cfg := testConfig(repo)
+	cfg.RegistryProvider = "ghcr"
+	cfg.RegistryImagePrefix = "ghcr.io/cloudivision"
+	cfg.RegistryCredentialsDir = credentialsDir
+
+	if err := runner.Run(ctx, cfg); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(builder.dockerConfig) == 0 || !strings.Contains(string(builder.dockerConfig), "auths") {
+		t.Fatalf("Docker config was not supplied to builder: %q", builder.dockerConfig)
+	}
+	for key, value := range builder.request.Env {
+		if strings.Contains(value, "registry-secret") {
+			t.Fatalf("builder env %s leaked registry password", key)
+		}
+	}
+	if builder.request.Env["DOCKER_CONFIG"] == "" {
+		t.Fatalf("builder env = %#v, want DOCKER_CONFIG path", builder.request.Env)
+	}
+}
+
+func TestRunnerReportsMissingRegistryCredentials(t *testing.T) {
+	ctx := context.Background()
+	repo := createGitRepository(t)
+	buildRun := testBuildRun(repo)
+	template := testPipelineTemplate(nil)
+	template.Spec.Build.Enabled = true
+	template.Spec.Build.Push = true
+	k8sClient := newFakeRunnerClient(t, buildRun, testRepository(repo), template)
+	runner := Runner{
+		Client: k8sClient, Git: cloudivisiongit.ExecClient{}, Steps: steps.Runner{}, Builder: successBuilder{},
+		Workspace: filepath.Join(t.TempDir(), "workspace"),
+	}
+	cfg := testConfig(repo)
+	cfg.RegistryProvider = "generic"
+	cfg.RegistryCredentialsDir = filepath.Join(t.TempDir(), "missing")
+
+	if err := runner.Run(ctx, cfg); err == nil {
+		t.Fatal("Run() error = nil, want missing registry credentials")
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status.Failure.Reason != "RegistryCredentialsMissing" {
+		t.Fatalf("failure = %#v", updated.Status.Failure)
+	}
+}
+
 func TestRunnerReportsMissingRequiredSBOMAdapter(t *testing.T) {
 	ctx := context.Background()
 	repo := createGitRepository(t)
@@ -300,13 +371,18 @@ func (successBuilder) Build(context.Context, build.BuildRequest) (*build.BuildRe
 }
 
 type recordingBuilder struct {
-	request build.BuildRequest
-	err     error
+	request      build.BuildRequest
+	result       *build.BuildResult
+	err          error
+	dockerConfig []byte
 }
 
 func (b *recordingBuilder) Build(_ context.Context, req build.BuildRequest) (*build.BuildResult, error) {
 	b.request = req
-	return nil, b.err
+	if dir := req.Env["DOCKER_CONFIG"]; dir != "" {
+		b.dockerConfig, _ = os.ReadFile(filepath.Join(dir, "config.json"))
+	}
+	return b.result, b.err
 }
 
 type fakeSBOMGenerator struct{}

@@ -4,16 +4,19 @@ import "testing"
 
 func TestConfigFromEnv(t *testing.T) {
 	env := map[string]string{
-		"BUILD_RUN_NAME":         "build-1",
-		"BUILD_RUN_NAMESPACE":    "ci",
-		"PROJECT_NAME":           "project",
-		"REPOSITORY_URL":         "https://example.com/repo.git",
-		"REVISION":               "main",
-		"BRANCH":                 "main",
-		"PIPELINE_TEMPLATE_NAME": "template",
-		"IMAGE_REPOSITORY":       "ghcr.io/cloudivision/app",
-		"IMAGE_TAG":              "main",
-		"GITOPS_ENABLED":         "true",
+		"BUILD_RUN_NAME":           "build-1",
+		"BUILD_RUN_NAMESPACE":      "ci",
+		"PROJECT_NAME":             "project",
+		"REPOSITORY_URL":           "https://example.com/repo.git",
+		"REVISION":                 "main",
+		"BRANCH":                   "main",
+		"PIPELINE_TEMPLATE_NAME":   "template",
+		"IMAGE_REPOSITORY":         "ghcr.io/cloudivision/app",
+		"IMAGE_TAG":                "main",
+		"REGISTRY_PROVIDER":        "ghcr",
+		"REGISTRY_IMAGE_PREFIX":    "ghcr.io/cloudivision",
+		"REGISTRY_CREDENTIALS_DIR": "/var/run/secrets/cloudivision-registry",
+		"GITOPS_ENABLED":           "true",
 	}
 	cfg, err := ConfigFromEnv(func(key string) string { return env[key] })
 	if err != nil {
@@ -24,6 +27,9 @@ func TestConfigFromEnv(t *testing.T) {
 	}
 	if cfg.BuildRunName != "build-1" {
 		t.Fatalf("BuildRunName = %q", cfg.BuildRunName)
+	}
+	if cfg.RegistryProvider != "ghcr" || cfg.RegistryCredentialsDir == "" {
+		t.Fatalf("registry config = %#v", cfg)
 	}
 }
 

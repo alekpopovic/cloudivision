@@ -327,6 +327,43 @@ func TestBuildRunReconcileFailsWhenProjectNamespaceDiffers(t *testing.T) {
 	}
 }
 
+func TestBuildRunReconcileReportsMissingRegistryCredentials(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+	project := &cicdv1alpha1.Project{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: buildRun.Spec.ProjectRef, Namespace: buildRun.Namespace}, project); err != nil {
+		t.Fatal(err)
+	}
+	project.Spec.Registry = &cicdv1alpha1.ProjectRegistrySpec{
+		Provider:            cicdv1alpha1.RegistryProviderGHCR,
+		CredentialSecretRef: &cicdv1alpha1.SecretKeyRef{Name: "missing-registry-auth"},
+	}
+	if err := reconciler.Update(ctx, project); err != nil {
+		t.Fatal(err)
+	}
+	template := &cicdv1alpha1.PipelineTemplate{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: buildRun.Spec.PipelineTemplateRef, Namespace: buildRun.Namespace}, template); err != nil {
+		t.Fatal(err)
+	}
+	template.Spec.Build.Enabled = true
+	template.Spec.Build.Builder = cicdv1alpha1.BuildBuilderBuildKit
+	template.Spec.Build.Push = true
+	if err := reconciler.Update(ctx, template); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("Reconcile() error = %v", err)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := reconciler.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status.Failure.Reason != "RegistryCredentialsMissing" || !strings.Contains(updated.Status.Failure.Message, "missing-registry-auth") {
+		t.Fatalf("failure = %#v", updated.Status.Failure)
+	}
+}
+
 func TestTerminalBuildRunDoesNotCreateJob(t *testing.T) {
 	ctx := context.Background()
 	reconciler, buildRun := newBuildRunReconciler(t)

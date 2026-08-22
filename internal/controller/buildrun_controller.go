@@ -55,6 +55,7 @@ type EventRecorder interface {
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=projects;repositories;pipelinetemplates,verbs=get;list;watch
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=releases,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get
 // +kubebuilder:rbac:groups=tekton.dev,resources=pipelineruns,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
@@ -233,6 +234,10 @@ func (r *BuildRunReconciler) markExecutorError(ctx context.Context, buildRun *ci
 	reason := "ExecutorFailed"
 	if errors.Is(err, tektonexecutor.ErrTektonUnavailable) {
 		reason = "TektonUnavailable"
+	} else if errors.Is(err, jobexecutor.ErrRegistryCredentialsMissing) {
+		reason = "RegistryCredentialsMissing"
+	} else if errors.Is(err, jobexecutor.ErrRegistryCredentialsInvalid) {
+		reason = "RegistryCredentialsInvalid"
 	}
 	now := metav1.Now()
 	if markErr := domain.MarkBuildRunFailed(buildRun, now, reason, err.Error()); markErr != nil {

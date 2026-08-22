@@ -6,29 +6,35 @@ import (
 )
 
 type Config struct {
-	BuildRunName         string
-	BuildRunNamespace    string
-	ProjectName          string
-	RepositoryURL        string
-	Revision             string
-	Branch               string
-	PipelineTemplateName string
-	ImageRepository      string
-	ImageTag             string
-	GitOpsEnabled        bool
+	BuildRunName           string
+	BuildRunNamespace      string
+	ProjectName            string
+	RepositoryURL          string
+	Revision               string
+	Branch                 string
+	PipelineTemplateName   string
+	ImageRepository        string
+	ImageTag               string
+	RegistryProvider       string
+	RegistryImagePrefix    string
+	RegistryCredentialsDir string
+	GitOpsEnabled          bool
 }
 
 func ConfigFromEnv(getenv func(string) string) (Config, error) {
 	cfg := Config{
-		BuildRunName:         getenv("BUILD_RUN_NAME"),
-		BuildRunNamespace:    getenv("BUILD_RUN_NAMESPACE"),
-		ProjectName:          getenv("PROJECT_NAME"),
-		RepositoryURL:        getenv("REPOSITORY_URL"),
-		Revision:             getenv("REVISION"),
-		Branch:               getenv("BRANCH"),
-		PipelineTemplateName: getenv("PIPELINE_TEMPLATE_NAME"),
-		ImageRepository:      getenv("IMAGE_REPOSITORY"),
-		ImageTag:             getenv("IMAGE_TAG"),
+		BuildRunName:           getenv("BUILD_RUN_NAME"),
+		BuildRunNamespace:      getenv("BUILD_RUN_NAMESPACE"),
+		ProjectName:            getenv("PROJECT_NAME"),
+		RepositoryURL:          getenv("REPOSITORY_URL"),
+		Revision:               getenv("REVISION"),
+		Branch:                 getenv("BRANCH"),
+		PipelineTemplateName:   getenv("PIPELINE_TEMPLATE_NAME"),
+		ImageRepository:        getenv("IMAGE_REPOSITORY"),
+		ImageTag:               getenv("IMAGE_TAG"),
+		RegistryProvider:       getenv("REGISTRY_PROVIDER"),
+		RegistryImagePrefix:    getenv("REGISTRY_IMAGE_PREFIX"),
+		RegistryCredentialsDir: getenv("REGISTRY_CREDENTIALS_DIR"),
 	}
 	if value := getenv("GITOPS_ENABLED"); value != "" {
 		parsed, err := strconv.ParseBool(value)
