@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-22T00:46:38Z`
-Last executed prompt: `33`
-Next prompt: `34`
+Updated at: `2026-08-22T00:51:13Z`
+Last executed prompt: `34`
+Next prompt: `35`
 
 ## How to update
 
@@ -62,7 +62,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 31 | done | Frontend | Angular UX Upgrade for Real CI/CD Debugging | `prompts/31-angular-ux-upgrade-for-real-ci-cd-debugging.md` | Upgraded Angular debugging UX with BuildRun timelines/failures/reruns, advanced logs, repository onboarding, pipeline editor, Release detail, first-run workflow, routes, and tests. |
 | 32 | done | Providers | Provider Adapter Registry | `prompts/32-provider-adapter-registry.md` | Added thread-safe provider registry and category packages, initial provider catalog, provider list/health APIs, Providers UI, OpenAPI/docs, and tests. |
 | 33 | done | Policy | Policy Engine Layer | `prompts/33-policy-engine-layer.md` | Added centralized code-based policy evaluator, structured API denials, controller PolicyDenied status, CRD policy decisions, Angular violation UI, tests, and docs. |
-| 34 | pending | Operations | Upgrade, Backup, Restore and Uninstall | `prompts/34-upgrade-backup-restore-and-uninstall.md` |  |
+| 34 | done | Operations | Upgrade, Backup, Restore and Uninstall | `prompts/34-upgrade-backup-restore-and-uninstall.md` | Added lifecycle operations runbooks plus offline/live Helm upgrade test, fixtures, CRD retention assertions, and Make target. |
 | 35 | pending | Observability | Observability Dashboards and Alerts | `prompts/35-observability-dashboards-and-alerts.md` |  |
 | 36 | pending | Scale | Performance and Scale Test Harness | `prompts/36-performance-and-scale-test-harness.md` |  |
 | 37 | pending | CLI | cloudivision CLI | `prompts/37-cloudivision-cli.md` |  |

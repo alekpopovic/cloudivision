@@ -265,6 +265,37 @@ spec:
                   namespace:
                     type: string
                 type: object
+              policy:
+                properties:
+                  allowed:
+                    type: boolean
+                  evaluatedAt:
+                    format: date-time
+                    type: string
+                  message:
+                    type: string
+                  reason:
+                    type: string
+                  violations:
+                    items:
+                      properties:
+                        fieldPath:
+                          type: string
+                        message:
+                          type: string
+                        policy:
+                          type: string
+                        severity:
+                          type: string
+                      required:
+                      - message
+                      - policy
+                      - severity
+                      type: object
+                    type: array
+                required:
+                - allowed
+                type: object
               startedAt:
                 format: date-time
                 type: string
@@ -372,6 +403,8 @@ spec:
               policy:
                 properties:
                   blockCriticalVulnerabilities:
+                    type: boolean
+                  requireImageDigest:
                     type: boolean
                   requireSBOM:
                     type: boolean
@@ -1351,6 +1384,37 @@ spec:
                 - FailedProviderStatus
                 - TimedOut
                 type: string
+              policy:
+                properties:
+                  allowed:
+                    type: boolean
+                  evaluatedAt:
+                    format: date-time
+                    type: string
+                  message:
+                    type: string
+                  reason:
+                    type: string
+                  violations:
+                    items:
+                      properties:
+                        fieldPath:
+                          type: string
+                        message:
+                          type: string
+                        policy:
+                          type: string
+                        severity:
+                          type: string
+                      required:
+                      - message
+                      - policy
+                      - severity
+                      type: object
+                    type: array
+                required:
+                - allowed
+                type: object
               pullRequest:
                 properties:
                   headBranch:

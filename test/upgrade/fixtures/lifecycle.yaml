@@ -1,0 +1,77 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Project
+metadata:
+  name: upgrade-test
+  namespace: __NAMESPACE__
+spec:
+  displayName: Upgrade lifecycle test
+  ownerTeam: platform
+  namespace: __NAMESPACE__
+  defaultRegistry: example.invalid
+  defaultBranch: main
+  serviceAccountName: cloudivision-runner
+  isolation:
+    createNamespace: false
+    podSecurityLevel: restricted
+    networkPolicyMode: disabled
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Repository
+metadata:
+  name: upgrade-test
+  namespace: __NAMESPACE__
+spec:
+  projectRef: upgrade-test
+  provider: generic
+  url: __REPOSITORY_URL__
+  defaultBranch: main
+  pipelineTemplateRef: upgrade-test
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata:
+  name: upgrade-test
+  namespace: __NAMESPACE__
+spec:
+  projectRef: upgrade-test
+  steps:
+    - name: verify-checkout
+      image: alpine:3.22
+      command: [sh]
+      args: [-c, "test -f go.mod"]
+      timeoutSeconds: 120
+  build:
+    enabled: false
+    builder: none
+    push: false
+  resources:
+    cpuRequest: 50m
+    cpuLimit: 500m
+    memoryRequest: 64Mi
+    memoryLimit: 512Mi
+    timeoutSeconds: 300
+  security:
+    allowPrivileged: false
+    runAsNonRoot: true
+    readOnlyRootFilesystem: false
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: BuildRun
+metadata:
+  name: upgrade-before
+  namespace: __NAMESPACE__
+spec:
+  projectRef: upgrade-test
+  repositoryRef: upgrade-test
+  pipelineTemplateRef: upgrade-test
+  revision: __REVISION__
+  branch: main
+  triggeredBy:
+    type: manual
+    actor: upgrade-test
+  image:
+    repository: example.invalid/upgrade-test
+    tag: before
+  executor: job
+  gitOps:
+    enabled: false
