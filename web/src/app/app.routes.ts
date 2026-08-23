@@ -12,6 +12,8 @@ import { RepositoriesPageComponent } from './features/repositories/repositories-
 import { FirstRunWizardComponent } from './features/first-run/first-run-wizard.component';
 import { ProvidersPageComponent } from './features/providers/providers-page.component';
 import { OrganizationsPageComponent } from './features/organizations/organizations-page.component';
+import { AuditExportPageComponent } from './features/reports/audit-export-page.component';
+import { ReportsPageComponent } from './features/reports/reports-page.component';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
@@ -19,6 +21,8 @@ export const routes: Routes = [
   { path: 'first-run', component: FirstRunWizardComponent },
   { path: 'projects', component: ProjectsPageComponent },
   { path: 'organization', component: OrganizationsPageComponent },
+  { path: 'audit', component: AuditExportPageComponent },
+  { path: 'reports', component: ReportsPageComponent },
   { path: 'projects/:namespace/:name', component: ProjectDetailPageComponent },
   { path: 'repositories', component: RepositoriesPageComponent },
   { path: 'pipeline-templates', component: PipelineTemplatesPageComponent },

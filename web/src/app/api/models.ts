@@ -27,6 +27,10 @@ export interface Team { id: string; organizationId: string; name: string; }
 export interface Membership { organizationId: string; userSubject: string; teamId?: string; role: Role; }
 export interface ProjectAccess { organizationId: string; project: string; teamId: string; role: Role; }
 
+export interface BuildReport { total: number; succeeded: number; failed: number; successRate: number; failureRate: number; averageDurationSeconds: number; failedByReason: Record<string, number>; }
+export interface ReleaseReport { total: number; byEnvironment: Record<string, number>; approvals: number; rejections: number; rollbacks: number; deploymentFailures: number; }
+export interface SecurityReport { policyDenials: number; unsignedReleasesBlocked: number; webhookRejections: number; criticalVulnerabilityBlocks: number; }
+
 export interface Principal {
   subject: string;
   email?: string;

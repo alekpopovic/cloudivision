@@ -23,6 +23,9 @@ func RequiredPermission(method, path string) (Permission, bool) {
 	if strings.HasPrefix(path, "/api/v1/webhooks/") {
 		return PermissionTriggerBuild, false
 	}
+	if method == http.MethodGet && (path == "/api/v1/audit/events/export" || strings.HasPrefix(path, "/api/v1/reports/")) {
+		return PermissionAuditExport, true
+	}
 	if method == http.MethodGet {
 		return PermissionRead, true
 	}

@@ -21,6 +21,10 @@ The API is served below `/api/v1`. The machine-readable contract is
 | `/api/v1/releases/{namespace}/{name}/approve` | `POST` | Approve a release |
 | `/api/v1/releases/{namespace}/{name}/reject` | `POST` | Reject a release |
 | `/api/v1/audit/events` | `GET` | List audit events |
+| `/api/v1/audit/events/export` | `GET` | Export filtered audit events as JSON or CSV |
+| `/api/v1/reports/builds` | `GET` | Build outcome and duration report |
+| `/api/v1/reports/releases` | `GET` | Release, approval and rollback report |
+| `/api/v1/reports/security` | `GET` | Policy and security rejection report |
 | `/api/v1/providers` | `GET` | List provider capabilities |
 | `/api/v1/providers/health` | `GET` | Read provider health |
 | `/api/v1/webhooks/{provider}/{repository}` | `POST` | Receive a signed webhook |

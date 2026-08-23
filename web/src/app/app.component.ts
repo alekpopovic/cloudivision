@@ -30,6 +30,7 @@ export class AppComponent {
     { label: 'Providers', path: '/providers', icon: 'platform' },
     { label: 'Build Runs', path: '/build-runs', icon: 'build' },
     { label: 'Environments', path: '/environments', icon: 'deploy' },
-    { label: 'Releases', path: '/releases', icon: 'deploy' }
+    { label: 'Releases', path: '/releases', icon: 'deploy' },
+    { label: 'Audit & Reports', path: '/reports', icon: 'observe' }
   ];
 }

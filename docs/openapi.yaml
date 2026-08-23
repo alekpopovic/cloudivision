@@ -335,6 +335,51 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/PaginatedResponse"}
+  /api/v1/audit/events/export:
+    get:
+      description: Export permission-protected, recursively redacted audit events.
+      parameters:
+        - {$ref: "#/components/parameters/ProjectFilter"}
+        - {$ref: "#/components/parameters/RepositoryFilter"}
+        - {$ref: "#/components/parameters/FromFilter"}
+        - {$ref: "#/components/parameters/ToFilter"}
+        - {name: organization, in: query, schema: {type: string}}
+        - {name: buildRun, in: query, schema: {type: string}}
+        - {name: release, in: query, schema: {type: string}}
+        - {name: actor, in: query, schema: {type: string}}
+        - {name: eventType, in: query, schema: {type: string}}
+        - {name: format, in: query, schema: {type: string, enum: [json, csv], default: json}}
+      responses:
+        "200": {description: JSON array or CSV attachment.}
+        "403": {description: Principal lacks audit export permission.}
+  /api/v1/reports/builds:
+    get:
+      parameters:
+        - {$ref: "#/components/parameters/ProjectFilter"}
+        - {$ref: "#/components/parameters/RepositoryFilter"}
+        - {$ref: "#/components/parameters/FromFilter"}
+        - {$ref: "#/components/parameters/ToFilter"}
+        - {name: format, in: query, schema: {type: string, enum: [json, csv], default: json}}
+      responses:
+        "200": {description: Build outcome and duration report.}
+  /api/v1/reports/releases:
+    get:
+      parameters:
+        - {$ref: "#/components/parameters/ProjectFilter"}
+        - {$ref: "#/components/parameters/FromFilter"}
+        - {$ref: "#/components/parameters/ToFilter"}
+        - {name: format, in: query, schema: {type: string, enum: [json, csv], default: json}}
+      responses:
+        "200": {description: Release, approval, rollback and deployment failure report.}
+  /api/v1/reports/security:
+    get:
+      parameters:
+        - {$ref: "#/components/parameters/ProjectFilter"}
+        - {$ref: "#/components/parameters/FromFilter"}
+        - {$ref: "#/components/parameters/ToFilter"}
+        - {name: format, in: query, schema: {type: string, enum: [json, csv], default: json}}
+      responses:
+        "200": {description: Policy denial and security rejection report.}
   /api/v1/providers:
     get:
       responses:

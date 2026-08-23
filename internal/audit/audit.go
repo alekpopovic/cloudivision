@@ -36,6 +36,9 @@ type EventFilter struct {
 	BuildRun     string
 	Release      string
 	Type         string
+	Actor        string
+	From         *time.Time
+	To           *time.Time
 }
 
 type Recorder interface {
@@ -154,6 +157,9 @@ where ($1 = '' or organization = $1)
   and ($4 = '' or build_run = $4)
   and ($5 = '' or release = $5)
   and ($6 = '' or type = $6)
+  and ($7 = '' or actor = $7)
+  and ($8::timestamptz is null or created_at >= $8)
+  and ($9::timestamptz is null or created_at <= $9)
 order by created_at desc`,
 		filter.Organization,
 		filter.Project,
@@ -161,6 +167,9 @@ order by created_at desc`,
 		filter.BuildRun,
 		filter.Release,
 		filter.Type,
+		filter.Actor,
+		filter.From,
+		filter.To,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list audit events: %w", err)

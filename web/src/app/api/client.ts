@@ -4,7 +4,7 @@ import { Observable, catchError, map, of, shareReplay, switchMap, throwError } f
 
 import { environment } from '../../environments/environment';
 import { OrganizationContext } from '../core/organization-context.service';
-import { ApiError, ApprovalActionRequest, BuildRun, CatalogPipelineTemplate, Environment, LogsResponse, Membership, Organization, Page, PipelineTemplate, Principal, Project, ProjectAccess, ProviderHealthResult, ProviderSummary, Release, ReleasePromoteRequest, ReleaseRollbackRequest, Repository, Team } from './models';
+import { ApiError, ApprovalActionRequest, BuildReport, BuildRun, CatalogPipelineTemplate, Environment, LogsResponse, Membership, Organization, Page, PipelineTemplate, Principal, Project, ProjectAccess, ProviderHealthResult, ProviderSummary, Release, ReleasePromoteRequest, ReleaseReport, ReleaseRollbackRequest, Repository, SecurityReport, Team } from './models';
 
 interface RuntimeConfig {
   apiBaseUrl?: string;
@@ -35,6 +35,12 @@ export class ApiClient {
   organizationTeams(organization: string): Observable<Team[]> { return this.get<Team[]>(`/api/v1/organizations/${encodeURIComponent(organization)}/teams`); }
   organizationMembers(organization: string): Observable<Membership[]> { return this.get<Membership[]>(`/api/v1/organizations/${encodeURIComponent(organization)}/members`); }
   organizationProjectAccess(organization: string): Observable<ProjectAccess[]> { return this.get<ProjectAccess[]>(`/api/v1/organizations/${encodeURIComponent(organization)}/project-access`); }
+
+  buildReport(filters?: Record<string,string>): Observable<BuildReport> { return this.get<BuildReport>('/api/v1/reports/builds', filters); }
+  releaseReport(filters?: Record<string,string>): Observable<ReleaseReport> { return this.get<ReleaseReport>('/api/v1/reports/releases', filters); }
+  securityReport(filters?: Record<string,string>): Observable<SecurityReport> { return this.get<SecurityReport>('/api/v1/reports/security', filters); }
+  auditExport(format: 'json' | 'csv', filters?: Record<string,string>): Observable<Blob> { return this.download('/api/v1/audit/events/export', { ...(filters ?? {}), format }); }
+  reportExport(report: 'builds'|'releases'|'security', filters?: Record<string,string>): Observable<Blob> { return this.download(`/api/v1/reports/${report}`, { ...(filters ?? {}), format:'csv' }); }
 
   createProject(body: { name: string; namespace?: string; spec: Project['spec'] }): Observable<Project> {
     return this.post<Project>('/api/v1/projects', body);
@@ -167,6 +173,8 @@ export class ApiClient {
   private put<T>(path: string, body: unknown): Observable<T> {
     return this.config$.pipe(switchMap((config) => this.http.put<T>(`${config.apiBaseUrl}${path}`, body, { headers: this.organizationHeaders() })), catchError((error) => throwError(() => this.toApiError(error))));
   }
+
+  private download(path: string, params: Record<string,string>): Observable<Blob> { return this.config$.pipe(switchMap((config) => this.http.get(`${config.apiBaseUrl}${path}`, { params:new HttpParams({fromObject:params}), headers:this.organizationHeaders(), responseType:'blob' })),catchError((error)=>throwError(()=>this.toApiError(error)))); }
 
   private organizationHeaders(): HttpHeaders { const id = this.organizationContext.value; return id ? new HttpHeaders({ 'X-Cloudivision-Organization': id }) : new HttpHeaders(); }
 

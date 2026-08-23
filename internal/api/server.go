@@ -97,6 +97,10 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/releases/{namespace}/{name}/promote", s.promoteRelease)
 	mux.HandleFunc("POST /api/v1/releases/{namespace}/{name}/rollback", s.rollbackRelease)
 	mux.HandleFunc("GET /api/v1/audit/events", s.auditEvents)
+	mux.HandleFunc("GET /api/v1/audit/events/export", s.auditExport)
+	mux.HandleFunc("GET /api/v1/reports/builds", s.buildReport)
+	mux.HandleFunc("GET /api/v1/reports/releases", s.releaseReport)
+	mux.HandleFunc("GET /api/v1/reports/security", s.securityReport)
 	mux.HandleFunc("GET /api/v1/providers", s.providers)
 	mux.HandleFunc("GET /api/v1/providers/health", s.providerHealth)
 	mux.HandleFunc("POST /api/v1/webhooks/github/{repositoryName}", s.webhook(webhook.ProviderGitHub))
@@ -793,11 +797,15 @@ func (s Server) auditEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	events, err := lister.ListEvents(r.Context(), audit.EventFilter{
-		Project:    r.URL.Query().Get("project"),
-		Repository: r.URL.Query().Get("repository"),
-		BuildRun:   r.URL.Query().Get("buildRun"),
-		Release:    r.URL.Query().Get("release"),
-		Type:       r.URL.Query().Get("type"),
+		Organization: r.URL.Query().Get("organization"),
+		Project:      r.URL.Query().Get("project"),
+		Repository:   r.URL.Query().Get("repository"),
+		BuildRun:     r.URL.Query().Get("buildRun"),
+		Release:      r.URL.Query().Get("release"),
+		Type:         r.URL.Query().Get("type"),
+		Actor:        r.URL.Query().Get("actor"),
+		From:         options.from,
+		To:           options.to,
 	})
 	if err != nil {
 		s.writeError(w, err)

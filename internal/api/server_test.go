@@ -824,6 +824,84 @@ func TestAuditEventsEndpointUsesConfiguredLister(t *testing.T) {
 	}
 }
 
+func TestAuditExportJSONAndCSVFiltersAndRedactsSecrets(t *testing.T) {
+	now := time.Now().UTC()
+	server, _ := newTestServer(t)
+	server.AuditEvents = fakeAuditLister{events: []audit.Event{
+		{ID: "one", Type: "WebhookRejected", Actor: "alice", Organization: "acme", Project: "store", Message: "token=super-secret", Metadata: json.RawMessage(`{"token":"super-secret","nested":{"password":"hidden"}}`), CreatedAt: now},
+		{ID: "two", Type: "BuildRunCreated", Actor: "bob", Organization: "other", Project: "other", CreatedAt: now},
+	}}
+	for _, format := range []string{"json", "csv"} {
+		recorder := httptest.NewRecorder()
+		path := "/api/v1/audit/events/export?format=" + format + "&organization=acme&project=store&actor=alice&type=WebhookRejected&from=" + now.Add(-time.Minute).Format(time.RFC3339)
+		server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("%s status=%d body=%s", format, recorder.Code, recorder.Body.String())
+		}
+		body := recorder.Body.String()
+		if !strings.Contains(body, "one") || strings.Contains(body, "two") || strings.Contains(body, "super-secret") || strings.Contains(body, "hidden") {
+			t.Fatalf("unsafe or unfiltered %s export: %s", format, body)
+		}
+		if format == "csv" && !strings.Contains(recorder.Header().Get("Content-Type"), "text/csv") {
+			t.Fatalf("content type = %q", recorder.Header().Get("Content-Type"))
+		}
+	}
+}
+
+func TestAuditExportPermissionChecks(t *testing.T) {
+	server, _ := newTestServer(t)
+	server.AuthMode = "oidc"
+	server.Authenticator = fakeAuthenticator{principal: &auth.Principal{Subject: "viewer", Roles: []auth.Role{auth.RoleViewer}}}
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/audit/events/export", nil))
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("viewer status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	server.Authenticator = fakeAuthenticator{principal: &auth.Principal{Subject: "auditor", Roles: []auth.Role{auth.RoleAuditor}}}
+	recorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/audit/events/export", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("auditor status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestComplianceReports(t *testing.T) {
+	started := metav1.NewTime(time.Now().UTC().Add(-2 * time.Minute))
+	completed := metav1.NewTime(started.Add(time.Minute))
+	succeeded := &cicdv1alpha1.BuildRun{ObjectMeta: metav1.ObjectMeta{Name: "success", Namespace: "ci", CreationTimestamp: started}, Spec: cicdv1alpha1.BuildRunSpec{ProjectRef: "store", RepositoryRef: "repo"}, Status: cicdv1alpha1.BuildRunStatus{Phase: cicdv1alpha1.BuildRunPhaseSucceeded, StartedAt: &started, CompletedAt: &completed}}
+	failed := &cicdv1alpha1.BuildRun{ObjectMeta: metav1.ObjectMeta{Name: "failed", Namespace: "ci", CreationTimestamp: started}, Spec: cicdv1alpha1.BuildRunSpec{ProjectRef: "store", RepositoryRef: "repo"}, Status: cicdv1alpha1.BuildRunStatus{Phase: cicdv1alpha1.BuildRunPhaseFailed, Failure: cicdv1alpha1.FailureStatus{Reason: "TestsFailed"}}}
+	release := &cicdv1alpha1.Release{ObjectMeta: metav1.ObjectMeta{Name: "release", Namespace: "ci", CreationTimestamp: started}, Spec: cicdv1alpha1.ReleaseSpec{ProjectRef: "store", EnvironmentRef: "prod", RollbackOf: "old"}, Status: cicdv1alpha1.ReleaseStatus{Phase: cicdv1alpha1.ReleasePhaseFailedProviderStatus}}
+	server, _ := newTestServer(t, succeeded, failed, release)
+	server.AuditEvents = fakeAuditLister{events: []audit.Event{{Type: "ReleaseApproved", Project: "store", CreatedAt: time.Now().UTC()}, {Type: "WebhookRejected", Project: "store", CreatedAt: time.Now().UTC()}, {Type: "PolicyDenied", Project: "store", Message: "unsigned release blocked", CreatedAt: time.Now().UTC()}, {Type: "CriticalVulnerabilityBlocked", Project: "store", Message: "critical vulnerability blocked", CreatedAt: time.Now().UTC()}}}
+	buildRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(buildRecorder, httptest.NewRequest(http.MethodGet, "/api/v1/reports/builds?namespace=ci&project=store", nil))
+	var buildReport BuildReport
+	if err := json.Unmarshal(buildRecorder.Body.Bytes(), &buildReport); err != nil {
+		t.Fatal(err)
+	}
+	if buildReport.Total != 2 || buildReport.Succeeded != 1 || buildReport.FailedByReason["TestsFailed"] != 1 || buildReport.AverageDurationSeconds != 60 {
+		t.Fatalf("build report = %#v", buildReport)
+	}
+	releaseRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(releaseRecorder, httptest.NewRequest(http.MethodGet, "/api/v1/reports/releases?namespace=ci&project=store", nil))
+	var releaseReport ReleaseReport
+	if err := json.Unmarshal(releaseRecorder.Body.Bytes(), &releaseReport); err != nil {
+		t.Fatal(err)
+	}
+	if releaseReport.Total != 1 || releaseReport.Approvals != 1 || releaseReport.Rollbacks != 1 || releaseReport.DeploymentFailures != 1 {
+		t.Fatalf("release report = %#v", releaseReport)
+	}
+	securityRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(securityRecorder, httptest.NewRequest(http.MethodGet, "/api/v1/reports/security?project=store", nil))
+	var securityReport SecurityReport
+	if err := json.Unmarshal(securityRecorder.Body.Bytes(), &securityReport); err != nil {
+		t.Fatal(err)
+	}
+	if securityReport.PolicyDenials != 1 || securityReport.WebhookRejections != 1 || securityReport.UnsignedReleasesBlocked != 1 || securityReport.CriticalVulnerabilityBlocks != 1 {
+		t.Fatalf("security report = %#v", securityReport)
+	}
+}
+
 func TestApproveReleasePatchesSpecAndRecordsAudit(t *testing.T) {
 	environment := &cicdv1alpha1.Environment{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "ci"},
