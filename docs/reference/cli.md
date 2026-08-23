@@ -37,7 +37,7 @@ cloudivision -n ci release approve RELEASE_NAME --actor alice --comment "change 
 cloudivision -n ci release reject RELEASE_NAME --actor alice --comment "rollback required"
 ```
 
-The `release rollback` command reports that rollback is unavailable in the v0.1 API. Revert through GitOps and create an auditable replacement Release; the CLI does not apply manifests directly.
+The v0.2 HTTP API supports rollback, but the CLI `release rollback` command has not yet been wired to it. Use the API or revert through GitOps and create an auditable replacement Release; the CLI does not apply manifests directly.
 
 Run `cloudivision doctor` to check API health, authentication, provider/GitOps health and, when `kubectl` is available, CRDs, deployments, runner image configuration, and Job RBAC. `WARN` means an optional Kubernetes check could not run; `FAIL` makes doctor exit non-zero.
 

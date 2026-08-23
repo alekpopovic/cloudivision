@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: cloudivision API
-  version: 0.1.0
+  version: 0.2.0
   description: Thin HTTP API over cloudivision Kubernetes CRDs. Bearer authentication is required outside explicitly documented development auth-disabled mode; provider webhooks use signatures instead.
 paths:
   /healthz:

@@ -446,7 +446,7 @@ type PipelineBuildSpec struct {
 	// +optional
 	Target string `json:"target,omitempty"`
 	// +kubebuilder:validation:MaxItems=16
-	// +listType=set
+	// +listType=atomic
 	Platforms []string `json:"platforms,omitempty"`
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
@@ -471,10 +471,10 @@ type PipelineCacheSpec struct {
 	// +optional
 	Key string `json:"key,omitempty"`
 	// +kubebuilder:validation:MaxItems=32
-	// +listType=set
+	// +listType=atomic
 	Paths []string `json:"paths,omitempty"`
 	// +kubebuilder:validation:MaxItems=16
-	// +listType=set
+	// +listType=atomic
 	RestoreKeys []string `json:"restoreKeys,omitempty"`
 	// +kubebuilder:validation:Minimum=1
 	TTLSeconds int `json:"ttlSeconds,omitempty"`
@@ -628,7 +628,7 @@ type GitOpsKustomizeSpec struct {
 
 type GitOpsRawYAMLSpec struct {
 	// +kubebuilder:validation:MaxItems=32
-	// +listType=set
+	// +listType=atomic
 	Files []string `json:"files,omitempty"`
 	// +kubebuilder:validation:Enum=Deployment;StatefulSet;DaemonSet;CronJob
 	WorkloadKind string `json:"workloadKind,omitempty"`

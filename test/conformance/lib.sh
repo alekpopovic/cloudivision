@@ -123,6 +123,10 @@ wait_for_jsonpath() {
     if [[ "${value}" == "${expected}" ]]; then
       return 0
     fi
+    if [[ "${jsonpath}" == "{.status.phase}" && "${expected}" == "Succeeded" && ( "${value}" == "Failed" || "${value}" == "Cancelled" ) ]]; then
+      printf '%s reached terminal phase %s while waiting for %s\n' "${resource}" "${value}" "${expected}" >&2
+      return 1
+    fi
     sleep 2
   done
   printf 'timeout after %ss waiting for %s jsonpath %s to equal %q (last value %q)\n' \

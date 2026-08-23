@@ -24,16 +24,16 @@ image digests keylessly with Cosign.
 5. Produce local evidence:
 
 ```sh
-./scripts/release/build-local.sh 0.1.0
-sha256sum -c dist/release/v0.1.0/SHA256SUMS
-helm install cloudivision dist/release/v0.1.0/cloudivision-0.1.0.tgz \
+./scripts/release/build-local.sh 0.2.0
+sha256sum -c dist/release/v0.2.0/SHA256SUMS
+helm install cloudivision dist/release/v0.2.0/cloudivision-0.2.0.tgz \
   --namespace cloudivision --create-namespace --dry-run
 ```
 
 To include local images without pushing:
 
 ```sh
-RELEASE_BUILD_IMAGES=true ./scripts/release/build-local.sh 0.1.0
+RELEASE_BUILD_IMAGES=true ./scripts/release/build-local.sh 0.2.0
 ```
 
 Use `RELEASE_GENERATE_SBOM=true` to require Syft. Use a protected
@@ -41,7 +41,7 @@ Use `RELEASE_GENERATE_SBOM=true` to require Syft. Use a protected
 Conformance is opt-in because it targets a Kubernetes context:
 
 ```sh
-RELEASE_RUN_CONFORMANCE=true ./scripts/release/build-local.sh 0.1.0
+RELEASE_RUN_CONFORMANCE=true ./scripts/release/build-local.sh 0.2.0
 ```
 
 ## Publish
@@ -50,8 +50,8 @@ After RC installation, build, webhook, GitOps release, production approval,
 rollback, upgrade and uninstall-retention tests pass:
 
 ```sh
-git tag -s v0.1.0 -m "cloudivision v0.1.0"
-git push origin v0.1.0
+git tag -s v0.2.0 -m "cloudivision v0.2.0"
+git push origin v0.2.0
 ```
 
 The tag workflow validates the version, reruns checks, pushes four GHCR images,
@@ -73,10 +73,10 @@ delete or blindly replace a CRD. Restore custom resources into an isolated clust
 when an older controller cannot read the new schema. Revoked images or signatures
 must remain auditable in release notes.
 
-## v0.1.0 checklist
+## v0.2.0 checklist
 
 - [ ] Final gate recommends shipping; critical/high dependency findings triaged.
-- [ ] `VERSION`, chart version, appVersion, changelog and tag all equal `0.1.0`.
+- [ ] `VERSION`, chart version, appVersion, changelog and tag all equal `0.2.0`.
 - [ ] `gofmt`, Go test/vet, npm ci/build/test, Helm and security checks pass.
 - [ ] Clean-cluster conformance, upgrade and limited scale evidence reviewed.
 - [ ] RC verifies first build, signed webhook, GitOps release and approval.

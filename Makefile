@@ -88,6 +88,7 @@ security-check:
 		./test/security/no-docker-sock.sh "$$rendered"; \
 		./test/security/no-hostpath.sh "$$rendered"; \
 		./test/security/no-invalid-pod-security-context.sh "$$rendered"; \
+		./test/security/no-quadratic-crd-schema.sh "$$rendered"; \
 		./test/security/rbac-minimal.sh "$$rendered"
 
 release-local:

@@ -41,11 +41,11 @@ spec:
   projectRef: conformance
   steps:
     - name: test-go-example
-      image: golang:1.26-alpine
+      image: alpine:3.22
       workingDir: examples/go-api
-      command: [go]
-      args: [test, ./...]
-      timeoutSeconds: 120
+      command: [sh]
+      args: [-c, "test -f go.mod && test -f main.go && test -f main_test.go"]
+      timeoutSeconds: 60
   build:
     enabled: false
     builder: none

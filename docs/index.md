@@ -6,7 +6,7 @@ home: true
 
 <section class="hero">
   <div class="hero-copy">
-    <span class="hero-badge">v0.1 alpha · Kubernetes native</span>
+    <span class="hero-badge">v0.2 alpha · Kubernetes native</span>
     <h1>Build in Kubernetes.<br><span>Deliver through GitOps.</span></h1>
     <p>cloudivision turns source events into observable BuildRuns, isolated runner Jobs, immutable artifacts, and auditable GitOps releases.</p>
     <div class="hero-actions">

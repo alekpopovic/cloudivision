@@ -14,7 +14,7 @@ cloudivision version
 Use a pinned release and a user-owned destination when desired:
 
 ```sh
-CLOUDIVISION_CLI_VERSION=0.1.0 CLOUDIVISION_CLI_INSTALL_DIR="$HOME/.local/bin" ./scripts/install-cli.sh
+CLOUDIVISION_CLI_VERSION=0.2.0 CLOUDIVISION_CLI_INSTALL_DIR="$HOME/.local/bin" ./scripts/install-cli.sh
 ```
 
 For a manual install, download `cloudivision-cli_VERSION_OS_ARCH.tar.gz`, verify it with `sha256sum -c SHA256SUMS`, extract it, and move `cloudivision` to a directory on `PATH`.
@@ -24,9 +24,9 @@ For a manual install, download `cloudivision-cli_VERSION_OS_ARCH.tar.gz`, verify
 Download `cloudivision-cli_VERSION_windows_amd64.zip` (or `windows_arm64.zip`) and `SHA256SUMS` from the GitHub release. In PowerShell, verify and install it:
 
 ```powershell
-(Get-FileHash .\cloudivision-cli_0.1.0_windows_amd64.zip -Algorithm SHA256).Hash
-Expand-Archive .\cloudivision-cli_0.1.0_windows_amd64.zip
-$env:Path += ";$PWD\cloudivision-cli_0.1.0_windows_amd64"
+(Get-FileHash .\cloudivision-cli_0.2.0_windows_amd64.zip -Algorithm SHA256).Hash
+Expand-Archive .\cloudivision-cli_0.2.0_windows_amd64.zip
+$env:Path += ";$PWD\cloudivision-cli_0.2.0_windows_amd64"
 cloudivision.exe version
 ```
 

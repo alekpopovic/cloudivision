@@ -6,6 +6,9 @@ web/node_modules
 web/dist
 web/.angular
 web/coverage
+examples/angular-app/node_modules
+examples/angular-app/dist
+examples/angular-app/.angular
 node_modules
 coverage.out
 *.test

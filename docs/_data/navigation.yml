@@ -100,6 +100,8 @@
   items:
     - title: v0.1 final gate
       url: /readiness/v0.1-final-gate.html
+    - title: v0.2 final gate
+      url: /readiness/v0.2-final-gate.html
     - title: v0.2 roadmap
       url: /roadmap/v0.2.html
     - title: Backlog

@@ -16,16 +16,16 @@
 <p align="center">
   <a href="https://github.com/alekpopovic/cloudivision/actions/workflows/ci.yaml"><img src="https://github.com/alekpopovic/cloudivision/actions/workflows/ci.yaml/badge.svg" alt="CI status"></a>
   <a href="https://github.com/alekpopovic/cloudivision/actions/workflows/docs-pages.yaml"><img src="https://github.com/alekpopovic/cloudivision/actions/workflows/docs-pages.yaml/badge.svg" alt="Documentation build status"></a>
-  <img src="https://img.shields.io/badge/release-v0.1.0-4F7CFF" alt="Release v0.1.0">
+  <img src="https://img.shields.io/badge/release-v0.2.0-4F7CFF" alt="Release v0.2.0">
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26">
   <img src="https://img.shields.io/badge/Angular-20-DD0031?logo=angular&logoColor=white" alt="Angular 20">
   <img src="https://img.shields.io/badge/Kubernetes-native-326CE5?logo=kubernetes&logoColor=white" alt="Kubernetes native">
 </p>
 
 > [!IMPORTANT]
-> v0.1.0 is an alpha release. The clean-cluster gate passes, but the default
+> v0.2.0 is an alpha release. The clean-cluster gate passes, but the default
 > disabled authentication mode is for development only. Read the
-> [final gate](docs/readiness/v0.1-final-gate.md) before production evaluation.
+> [final gate](docs/readiness/v0.2-final-gate.md) before production evaluation.
 
 ## How it works
 
@@ -158,9 +158,9 @@ Browse the modern, searchable [cloudivision documentation site](https://alekpopo
 
 ## Release status
 
-- Version: **v0.1.0 alpha**
+- Version: **v0.2.0 alpha**
 - Readiness decision: **ship with known issues**
-- Next increment: [v0.2 roadmap](docs/roadmap/v0.2.md)
+- Next increment: v0.3 roadmap
 - Prioritized work: [product backlog](docs/roadmap/backlog.md)
 - Changes: [CHANGELOG.md](CHANGELOG.md)
 

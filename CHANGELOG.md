@@ -8,11 +8,6 @@ guarantees documented in `docs/api/compatibility-policy.md`.
 
 ### Features
 
-- Added the cloudivision visual identity, reusable icon system, architecture chart,
-  modern README, favicon, and branded Angular application shell.
-- Added a responsive Jekyll documentation site with branded navigation, dark
-  mode, client-side search, and a least-privilege GitHub Pages deployment workflow.
-
 ### Fixes
 
 ### Security
@@ -22,6 +17,67 @@ guarantees documented in `docs/api/compatibility-policy.md`.
 ### Upgrade notes
 
 ### Known issues
+
+## [0.2.0] - 2026-08-23
+
+### Features
+
+- Added hardened BuildKit and registry flows, supply-chain evidence, dependency
+  caches, artifact/log backends, quotas, cancellation, retry and concurrency.
+- Expanded webhook filters, GitOps strategies, release promotion/rollback,
+  notifications, organizations/teams, audit exports, compliance reports, and
+  optional cluster targets and remote runners.
+- Added richer Angular onboarding, debugging, release, provider, organization,
+  report, and plugin views plus generated Go and TypeScript API clients.
+- Added experimental `v1beta1` conversion and admission foundations, an
+  in-process plugin registry, a versioned pipeline catalog, eight runnable
+  examples, and expanded conformance/upgrade/scale coverage.
+- Added the cloudivision visual identity and a searchable Jekyll documentation
+  site with architecture, operational, security, API, and roadmap guidance.
+
+### Fixes
+
+- Made scalar list CRD fields atomic so Kubernetes 1.36 does not reject their
+  schemas for quadratic `uniqueItems` validation cost.
+- Made conformance fail immediately on unexpected terminal BuildRun phases and
+  use a checked-in real-world source fixture.
+- Excluded generated example dependencies and output from product image build
+  contexts.
+
+### Security
+
+- Added optional admission validation, organization-aware authorization,
+  least-privilege multi-cluster and remote-runner designs, signed webhook replay
+  protection, audit/report exports, and a CRD complexity security gate.
+- Runner defaults remain non-root, bounded and unprivileged with no Docker socket
+  or hostPath dependency; production npm dependencies audit clean.
+
+### Breaking changes
+
+- The stored Kubernetes API remains experimental `v1alpha1`. New fields are
+  additive, but Helm does not upgrade CRDs automatically; apply the reviewed
+  v0.2 CRD bundle before upgrading workloads.
+- Primitive build platform, dependency-cache path, restore-key, and raw-YAML file
+  lists now use atomic server-side-apply semantics.
+
+### Upgrade notes
+
+- Back up custom resources, apply `charts/cloudivision/crds/` or `config/crd/bases/`,
+  then upgrade controller, API, runner, and web images together.
+- The live same-code lifecycle gate preserved custom resources and reconciled a
+  new BuildRun. A true published v0.1.0-to-v0.2.0 rehearsal is still recommended.
+
+### Known issues
+
+- The Job executor still runs step commands inside the runner image and does not
+  honor per-step images; Tekton supports step images. This remains planned API
+  and executor work.
+- Rootless BuildKit with a private authenticated registry and an external GitOps
+  commit were not exercised in the v0.2 local final gate.
+- Six development-only Angular toolchain advisories remain (three moderate and
+  three high); production dependencies have no reported vulnerabilities.
+- Optional admission webhooks, remote runners, cluster targets and `v1beta1`
+  conversions are experimental and disabled by default.
 
 ## [0.1.0] - 2026-08-22
 
@@ -91,5 +147,6 @@ guarantees documented in `docs/api/compatibility-policy.md`.
   (three high, three moderate); resolving them requires a breaking Angular major
   upgrade and is tracked for v0.2. Production dependencies audit clean.
 
-[Unreleased]: https://github.com/alekpopovic/cloudivision/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/alekpopovic/cloudivision/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/alekpopovic/cloudivision/releases/tag/v0.2.0
 [0.1.0]: https://github.com/alekpopovic/cloudivision/releases/tag/v0.1.0

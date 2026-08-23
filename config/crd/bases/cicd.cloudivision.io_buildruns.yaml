@@ -101,7 +101,7 @@ spec:
                           type: string
                         maxItems: 32
                         type: array
-                        uniqueItems: true
+                        x-kubernetes-list-type: atomic
                       workloadKind:
                         enum:
                         - Deployment

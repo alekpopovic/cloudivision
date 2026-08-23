@@ -2,7 +2,7 @@ title: cloudivision docs
 product_name: cloudivision
 tagline: Kubernetes-native CI/CD control plane
 description: Build in isolated Kubernetes Jobs and deliver immutable artifacts through GitOps.
-version: 0.1.0
+version: 0.2.0
 url: https://alekpopovic.github.io
 baseurl: /cloudivision
 repository_url: https://github.com/alekpopovic/cloudivision

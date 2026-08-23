@@ -101,7 +101,7 @@ spec:
                           type: string
                         maxItems: 32
                         type: array
-                        uniqueItems: true
+                        x-kubernetes-list-type: atomic
                       workloadKind:
                         enum:
                         - Deployment
@@ -826,7 +826,7 @@ spec:
                       type: string
                     maxItems: 16
                     type: array
-                    uniqueItems: true
+                    x-kubernetes-list-type: atomic
                   push:
                     default: true
                     type: boolean
@@ -855,13 +855,13 @@ spec:
                       type: string
                     maxItems: 32
                     type: array
-                    uniqueItems: true
+                    x-kubernetes-list-type: atomic
                   restoreKeys:
                     items:
                       type: string
                     maxItems: 16
                     type: array
-                    uniqueItems: true
+                    x-kubernetes-list-type: atomic
                   ttlSeconds:
                     minimum: 1
                     type: integer
