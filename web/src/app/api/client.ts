@@ -37,6 +37,13 @@ export class ApiClient {
     return this.get<Project>(`/api/v1/projects/${name}`, namespace ? { namespace } : undefined);
   }
 
+  purgeProjectCache(name: string, namespace?: string, repository?: string): Observable<{ project: string; repository?: string; purged: boolean }> {
+    return this.post<{ project: string; repository?: string; purged: boolean }>(
+      `/api/v1/projects/${name}/cache/purge${this.queryString({ namespace, repository })}`,
+      undefined
+    );
+  }
+
   repositories(): Observable<Repository[]> {
     return this.get<Repository[]>('/api/v1/repositories');
   }
@@ -128,6 +135,15 @@ export class ApiClient {
       switchMap((config) => this.http.post<T>(`${config.apiBaseUrl}${path}`, body)),
       catchError((error) => throwError(() => this.toApiError(error)))
     );
+  }
+
+  private queryString(values: Record<string, string | undefined>): string {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(values)) {
+      if (value) params.set(key, value);
+    }
+    const encoded = params.toString();
+    return encoded ? `?${encoded}` : '';
   }
 
   private toApiError(error: unknown): ApiError {

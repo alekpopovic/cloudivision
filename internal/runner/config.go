@@ -25,8 +25,11 @@ type Config struct {
 	LogRoot                string
 	ArtifactBackend        string
 	ArtifactRoot           string
+	CacheBackend           string
+	CacheRoot              string
 	MaxArtifactsBytes      int64
 	MaxLogBytes            int64
+	MaxCacheBytes          int64
 }
 
 func ConfigFromEnv(getenv func(string) string) (Config, error) {
@@ -47,6 +50,8 @@ func ConfigFromEnv(getenv func(string) string) (Config, error) {
 		LogRoot:                getenv("LOG_ROOT"),
 		ArtifactBackend:        getenv("ARTIFACT_BACKEND"),
 		ArtifactRoot:           getenv("ARTIFACT_ROOT"),
+		CacheBackend:           getenv("CACHE_BACKEND"),
+		CacheRoot:              getenv("CACHE_ROOT"),
 	}
 	var err error
 	if value := getenv("PROJECT_MAX_ARTIFACTS_SIZE"); value != "" {
@@ -59,6 +64,12 @@ func ConfigFromEnv(getenv func(string) string) (Config, error) {
 		cfg.MaxLogBytes, err = byteQuantity(value)
 		if err != nil {
 			return Config{}, fmt.Errorf("parse PROJECT_MAX_LOG_SIZE: %w", err)
+		}
+	}
+	if value := getenv("CACHE_MAX_SIZE"); value != "" {
+		cfg.MaxCacheBytes, err = byteQuantity(value)
+		if err != nil {
+			return Config{}, fmt.Errorf("parse CACHE_MAX_SIZE: %w", err)
 		}
 	}
 	if value := getenv("GITOPS_ENABLED"); value != "" {

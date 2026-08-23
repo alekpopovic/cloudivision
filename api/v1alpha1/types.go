@@ -431,6 +431,32 @@ type PipelineBuildSpec struct {
 	Cache PipelineBuildCacheSpec `json:"cache,omitempty"`
 }
 
+type DependencyCacheMode string
+
+const (
+	DependencyCacheModePVC           DependencyCacheMode = "pvc"
+	DependencyCacheModeRegistry      DependencyCacheMode = "registry"
+	DependencyCacheModeObjectStorage DependencyCacheMode = "object-storage"
+)
+
+// PipelineCacheSpec configures an opt-in dependency cache. Cache entries are
+// always scoped by the BuildRun project and repository before Key is applied.
+type PipelineCacheSpec struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// +kubebuilder:validation:Enum=pvc;registry;object-storage
+	Mode DependencyCacheMode `json:"mode,omitempty"`
+	// +optional
+	Key string `json:"key,omitempty"`
+	// +kubebuilder:validation:MaxItems=32
+	// +listType=set
+	Paths []string `json:"paths,omitempty"`
+	// +kubebuilder:validation:MaxItems=16
+	// +listType=set
+	RestoreKeys []string `json:"restoreKeys,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	TTLSeconds int `json:"ttlSeconds,omitempty"`
+}
+
 type PipelineResourceSpec struct {
 	CPURequest    string `json:"cpuRequest,omitempty"`
 	CPULimit      string `json:"cpuLimit,omitempty"`
@@ -474,6 +500,7 @@ type PipelineSupplyChainSpec struct {
 }
 
 // +kubebuilder:validation:XValidation:rule="(has(self.steps) && size(self.steps) > 0) || (has(self.build) && self.build.enabled)",message="at least one step or an enabled image build is required"
+// +kubebuilder:validation:XValidation:rule="!has(self.cache) || !self.cache.enabled || self.cache.mode != 'registry' || (self.build.enabled && self.build.builder == 'buildkit')",message="registry dependency cache requires an enabled BuildKit image build"
 type PipelineTemplateSpec struct {
 	// +optional
 	ProjectRef string `json:"projectRef,omitempty"`
@@ -486,6 +513,7 @@ type PipelineTemplateSpec struct {
 	// +listMapKey=name
 	Steps       []PipelineStep          `json:"steps,omitempty"`
 	Build       PipelineBuildSpec       `json:"build,omitempty"`
+	Cache       PipelineCacheSpec       `json:"cache,omitempty"`
 	Resources   PipelineResourceSpec    `json:"resources,omitempty"`
 	Security    PipelineSecuritySpec    `json:"security,omitempty"`
 	SupplyChain PipelineSupplyChainSpec `json:"supplyChain,omitempty"`

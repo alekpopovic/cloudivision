@@ -172,6 +172,10 @@ func buildJob(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, re
 		volumes = append(volumes, corev1.Volume{Name: "stored-artifacts", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: os.Getenv("CLOU_DIVISION_ARTIFACT_PVC")}}})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "stored-artifacts", MountPath: defaultString(os.Getenv("CLOU_DIVISION_ARTIFACT_ROOT"), "/var/lib/cloudivision/artifacts")})
 	}
+	if template.Spec.Cache.Enabled && template.Spec.Cache.Mode == cicdv1alpha1.DependencyCacheModePVC && os.Getenv("CLOU_DIVISION_CACHE_PVC") != "" {
+		volumes = append(volumes, corev1.Volume{Name: "dependency-cache", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: os.Getenv("CLOU_DIVISION_CACHE_PVC")}}})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "dependency-cache", MountPath: defaultString(os.Getenv("CLOU_DIVISION_CACHE_ROOT"), "/var/lib/cloudivision/cache")})
+	}
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      NameForBuildRun(buildRun.Name),
@@ -197,7 +201,7 @@ func buildJob(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, re
 						{
 							Name:         "runner",
 							Image:        runnerImage(),
-							Env:          runnerEnv(buildRun, project, repository),
+							Env:          runnerEnv(buildRun, project, repository, template),
 							Resources:    resourceRequirements(template.Spec.Resources),
 							VolumeMounts: volumeMounts,
 							SecurityContext: &corev1.SecurityContext{
@@ -231,7 +235,7 @@ func runnerImage() string {
 	return DefaultRunnerImage
 }
 
-func runnerEnv(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, repository *cicdv1alpha1.Repository) []corev1.EnvVar {
+func runnerEnv(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, repository *cicdv1alpha1.Repository, template *cicdv1alpha1.PipelineTemplate) []corev1.EnvVar {
 	env := []corev1.EnvVar{
 		{Name: "BUILD_RUN_NAME", Value: buildRun.Name},
 		{Name: "BUILD_RUN_NAMESPACE", Value: buildRun.Namespace},
@@ -276,6 +280,22 @@ func runnerEnv(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, r
 	}
 	if root := os.Getenv("CLOU_DIVISION_ARTIFACT_ROOT"); root != "" {
 		env = append(env, corev1.EnvVar{Name: "ARTIFACT_ROOT", Value: root})
+	}
+	if template.Spec.Cache.Enabled {
+		switch template.Spec.Cache.Mode {
+		case cicdv1alpha1.DependencyCacheModePVC:
+			if os.Getenv("CLOU_DIVISION_CACHE_PVC") != "" {
+				env = append(env, corev1.EnvVar{Name: "CACHE_BACKEND", Value: "pvc"})
+			}
+		case cicdv1alpha1.DependencyCacheModeObjectStorage:
+			env = append(env, corev1.EnvVar{Name: "CACHE_BACKEND", Value: "object-storage"})
+		}
+	}
+	if root := os.Getenv("CLOU_DIVISION_CACHE_ROOT"); root != "" {
+		env = append(env, corev1.EnvVar{Name: "CACHE_ROOT", Value: root})
+	}
+	if maximum := os.Getenv("CLOU_DIVISION_CACHE_MAX_SIZE"); maximum != "" {
+		env = append(env, corev1.EnvVar{Name: "CACHE_MAX_SIZE", Value: maximum})
 	}
 	return env
 }

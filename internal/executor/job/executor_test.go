@@ -105,6 +105,25 @@ func TestBuildJobMountsCosignKeySecretReadOnly(t *testing.T) {
 	}
 }
 
+func TestBuildJobMountsOptInPVCCache(t *testing.T) {
+	t.Setenv("CLOU_DIVISION_CACHE_PVC", "runner-cache")
+	t.Setenv("CLOU_DIVISION_CACHE_ROOT", "/cache")
+	template := testPipelineTemplate()
+	template.Spec.Cache = cicdv1alpha1.PipelineCacheSpec{Enabled: true, Mode: cicdv1alpha1.DependencyCacheModePVC, Paths: []string{"node_modules"}}
+	job := buildJob(testBuildRun(), testProject(), testRepository(), template)
+	pod := job.Spec.Template.Spec
+	if len(pod.Volumes) != 1 || pod.Volumes[0].PersistentVolumeClaim == nil || pod.Volumes[0].PersistentVolumeClaim.ClaimName != "runner-cache" {
+		t.Fatalf("volumes = %#v", pod.Volumes)
+	}
+	container := pod.Containers[0]
+	if len(container.VolumeMounts) != 1 || container.VolumeMounts[0].MountPath != "/cache" {
+		t.Fatalf("mounts = %#v", container.VolumeMounts)
+	}
+	if got := envValue(container.Env, "CACHE_BACKEND"); got != "pvc" {
+		t.Fatalf("CACHE_BACKEND = %q", got)
+	}
+}
+
 func TestEnsureRunProjectsOnlyConfiguredRegistrySecret(t *testing.T) {
 	ctx := context.Background()
 	scheme := newScheme(t)

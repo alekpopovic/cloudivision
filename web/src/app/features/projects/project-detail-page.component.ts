@@ -4,6 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import { switchMap } from 'rxjs';
 
 import { ApiClient } from '../../api/client';
+import { ApiError } from '../../api/models';
 import { ConditionsTimelineComponent } from '../../shared/conditions-timeline.component';
 import { KeyValueListComponent } from '../../shared/key-value-list.component';
 import { PageHeaderComponent } from '../../shared/page-header.component';
@@ -17,6 +18,10 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
     <ng-container *ngIf="project$ | async as project">
       <app-page-header [title]="project.spec.displayName || project.name" [description]="project.spec.description || 'Project detail'" />
       <div class="mb-4"><app-status-badge [status]="project.status?.phase || 'Pending'" /></div>
+      <div class="mb-4 flex items-center gap-3">
+        <button type="button" class="rounded border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 disabled:opacity-40" [disabled]="purgingCache" (click)="purgeCache(project)">{{ purgingCache ? 'Purging…' : 'Purge dependency cache' }}</button>
+        <span class="text-xs text-emerald-700" *ngIf="cacheMessage">{{ cacheMessage }}</span>
+      </div>
       <app-key-value-list [items]="[
         { key: 'Name', value: project.name },
         { key: 'Control namespace', value: project.namespace },
@@ -38,11 +43,22 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
 export class ProjectDetailPageComponent {
   private readonly api = inject(ApiClient);
   private readonly route = inject(ActivatedRoute);
+  purgingCache = false;
+  cacheMessage = '';
   readonly project$ = this.route.paramMap.pipe(
     switchMap((params) => this.api.project(params.get('name') || '', params.get('namespace') || undefined))
   );
 
   quotaNumber(value: number | undefined, fallback: string, suffix = ''): string {
     return value ? `${value}${suffix}` : fallback;
+  }
+
+  purgeCache(project: { name: string; namespace: string }): void {
+    this.purgingCache = true;
+    this.cacheMessage = '';
+    this.api.purgeProjectCache(project.name, project.namespace).subscribe({
+      next: () => { this.purgingCache = false; this.cacheMessage = 'Cache purged.'; },
+      error: (error: ApiError) => { this.purgingCache = false; this.cacheMessage = `${error.code}: ${error.message}`; }
+    });
   }
 }

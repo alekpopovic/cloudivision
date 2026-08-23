@@ -106,6 +106,13 @@ artifacts:
     root: /var/lib/cloudivision/artifacts
     existingClaim: ""
 
+cache:
+  # PipelineTemplate.spec.cache is still opt-in; this only makes a shared PVC backend available.
+  local:
+    root: /var/lib/cloudivision/cache
+    existingClaim: ""
+    maxSize: 2Gi
+
 ingress:
   enabled: false
   className: ""

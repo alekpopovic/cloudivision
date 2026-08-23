@@ -28,6 +28,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
                 <app-status-badge [status]="template.status?.phase || 'Ready'" />
               </div>
               <p class="mt-1 text-xs text-slate-500">{{ template.spec.steps?.length || 0 }} steps / {{ template.spec.build?.builder || 'none' }}</p>
+              <p class="mt-1 text-xs" [class.text-emerald-700]="template.spec.cache?.enabled" [class.text-slate-500]="!template.spec.cache?.enabled">Cache: {{ template.spec.cache?.enabled ? (template.spec.cache?.mode || 'configured') : 'disabled' }}</p>
             </div>
           </div>
           <ng-template #empty><app-empty-state title="No templates" message="Create a template with steps and build settings." /></ng-template>

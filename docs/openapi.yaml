@@ -49,6 +49,17 @@ paths:
       responses:
         "200":
           description: Get a Project resource.
+  /api/v1/projects/{name}/cache/purge:
+    post:
+      parameters:
+        - {name: name, in: path, required: true, schema: {type: string}}
+        - {name: namespace, in: query, required: false, schema: {type: string}}
+        - {name: repository, in: query, required: false, schema: {type: string}}
+      responses:
+        "200":
+          description: Purge all dependency caches for a project, or only the selected repository.
+        "503":
+          description: A purge-capable PVC cache backend is not configured on the API server.
   /api/v1/repositories:
     get:
       responses:

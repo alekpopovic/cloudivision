@@ -110,6 +110,40 @@ spec:
                 - enabled
                 - push
                 type: object
+              cache:
+                description: Optional dependency cache scoped by project and repository.
+                properties:
+                  enabled:
+                    type: boolean
+                  key:
+                    type: string
+                  mode:
+                    enum:
+                    - pvc
+                    - registry
+                    - object-storage
+                    type: string
+                  paths:
+                    items:
+                      type: string
+                    maxItems: 32
+                    type: array
+                    uniqueItems: true
+                  restoreKeys:
+                    items:
+                      type: string
+                    maxItems: 16
+                    type: array
+                    uniqueItems: true
+                  ttlSeconds:
+                    minimum: 1
+                    type: integer
+                type: object
+                x-kubernetes-validations:
+                - message: cache mode is required when cache is enabled
+                  rule: '!self.enabled || (has(self.mode) && self.mode != '''')'
+                - message: pvc cache requires at least one path
+                  rule: '!self.enabled || self.mode != ''pvc'' || (has(self.paths) && size(self.paths) > 0)'
               description:
                 type: string
               params:
@@ -423,6 +457,9 @@ spec:
             - message: at least one step or an enabled image build is required
               rule: (has(self.steps) && size(self.steps) > 0) || (has(self.build)
                 && self.build.enabled)
+            - message: registry dependency cache requires an enabled BuildKit image build
+              rule: '!has(self.cache) || !self.cache.enabled || self.cache.mode != ''registry''
+                || (self.build.enabled && self.build.builder == ''buildkit'')'
           status:
             properties:
               conditions:

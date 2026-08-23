@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-23T00:36:42Z",
-  "last_executed_prompt": 52,
-  "next_prompt": 53,
+  "updated_at": "2026-08-23T00:47:48Z",
+  "last_executed_prompt": 53,
+  "next_prompt": 54,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -494,8 +494,9 @@
       "title": "Runner Workspace and Dependency Cache",
       "phase": "Build Execution",
       "file": "prompts/53-runner-workspace-and-dependency-cache.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Added opt-in scoped dependency cache with PVC snapshots, BuildKit registry mode, object-store skeleton, TTL/size/path hardening, runner restore/save, purge API/UI, Helm configuration, tests and security docs.",
+      "executed_at": "2026-08-23T00:47:48Z"
     },
     {
       "id": 54,

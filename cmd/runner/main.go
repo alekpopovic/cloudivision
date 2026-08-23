@@ -8,6 +8,7 @@ import (
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/artifacts"
+	dependencycache "github.com/cloudivision/cloudivision/internal/cache"
 	"github.com/cloudivision/cloudivision/internal/logstore"
 	"github.com/cloudivision/cloudivision/internal/runner"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -68,6 +69,16 @@ func main() {
 		buildRunner.ArtifactStore = artifacts.OCIStore{}
 	default:
 		logger.Error("unsupported artifact backend", "backend", cfg.ArtifactBackend)
+		os.Exit(1)
+	}
+	switch strings.ToLower(cfg.CacheBackend) {
+	case "", "disabled":
+	case "pvc", "local":
+		buildRunner.CacheStore = dependencycache.LocalStore{Root: cfg.CacheRoot}
+	case "object-storage":
+		buildRunner.CacheStore = dependencycache.ObjectStore{}
+	default:
+		logger.Error("unsupported cache backend", "backend", cfg.CacheBackend)
 		os.Exit(1)
 	}
 	logger.Info("starting cloudivision build runner", "buildRun", cfg.BuildRunName, "namespace", cfg.BuildRunNamespace)

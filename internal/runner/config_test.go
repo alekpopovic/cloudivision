@@ -17,6 +17,9 @@ func TestConfigFromEnv(t *testing.T) {
 		"REGISTRY_IMAGE_PREFIX":    "ghcr.io/cloudivision",
 		"REGISTRY_CREDENTIALS_DIR": "/var/run/secrets/cloudivision-registry",
 		"GITOPS_ENABLED":           "true",
+		"CACHE_BACKEND":            "pvc",
+		"CACHE_ROOT":               "/cache",
+		"CACHE_MAX_SIZE":           "2Gi",
 	}
 	cfg, err := ConfigFromEnv(func(key string) string { return env[key] })
 	if err != nil {
@@ -30,6 +33,9 @@ func TestConfigFromEnv(t *testing.T) {
 	}
 	if cfg.RegistryProvider != "ghcr" || cfg.RegistryCredentialsDir == "" {
 		t.Fatalf("registry config = %#v", cfg)
+	}
+	if cfg.CacheBackend != "pvc" || cfg.CacheRoot != "/cache" || cfg.MaxCacheBytes != 2*1024*1024*1024 {
+		t.Fatalf("cache config = %#v", cfg)
 	}
 }
 

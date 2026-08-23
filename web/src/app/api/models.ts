@@ -106,6 +106,14 @@ export interface PipelineTemplate {
     projectRef?: string;
     description?: string;
     params?: Array<{ name: string; description?: string; default?: string; required: boolean }>;
+    cache?: {
+      enabled?: boolean;
+      mode?: 'pvc' | 'registry' | 'object-storage';
+      key?: string;
+      paths?: string[];
+      restoreKeys?: string[];
+      ttlSeconds?: number;
+    };
     steps?: PipelineStep[];
     build?: {
       enabled: boolean;

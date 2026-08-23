@@ -12,6 +12,7 @@ import (
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/artifacts"
 	"github.com/cloudivision/cloudivision/internal/build"
+	dependencycache "github.com/cloudivision/cloudivision/internal/cache"
 	"github.com/cloudivision/cloudivision/internal/executor/steps"
 	cloudivisiongit "github.com/cloudivision/cloudivision/internal/git"
 	"github.com/cloudivision/cloudivision/internal/logstore"
@@ -61,6 +62,48 @@ func TestRunnerExecutesPipelineWithoutImageBuild(t *testing.T) {
 	assertCondition(t, updated.Status.Conditions, ConditionStepsCompleted)
 	if updated.Status.Failure.Reason != "" {
 		t.Fatalf("failure = %#v, want empty", updated.Status.Failure)
+	}
+}
+
+func TestRunnerRestoresAndSavesOptInDependencyCache(t *testing.T) {
+	ctx := context.Background()
+	repo := createGitRepository(t)
+	buildRun := testBuildRun(repo)
+	template := testPipelineTemplate([]cicdv1alpha1.PipelineStep{{
+		Name: "cache-check", Command: []string{"sh"}, Args: []string{"-c", "test -f deps/cached && echo updated > deps/result"},
+	}})
+	template.Spec.Cache = cicdv1alpha1.PipelineCacheSpec{Enabled: true, Mode: cicdv1alpha1.DependencyCacheModePVC, Key: "deps-v1", Paths: []string{"deps"}}
+	store := dependencycache.LocalStore{Root: t.TempDir()}
+	seed := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(seed, "deps"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(seed, "deps", "cached"), []byte("yes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	request := dependencycache.Request{Project: buildRun.Spec.ProjectRef, Repository: buildRun.Spec.RepositoryRef, Key: "deps-v1", Paths: []string{"deps"}, Workspace: seed}
+	if err := store.Save(ctx, request); err != nil {
+		t.Fatal(err)
+	}
+	k8sClient := newFakeRunnerClient(t, buildRun, testRepository(repo), template)
+	buildRunner := Runner{Client: k8sClient, Git: cloudivisiongit.ExecClient{}, Steps: steps.Runner{}, Builder: failBuilder{}, Workspace: filepath.Join(t.TempDir(), "workspace"), CacheStore: store}
+	if err := buildRunner.Run(ctx, testConfig(repo)); err != nil {
+		t.Fatal(err)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatal(err)
+	}
+	assertCondition(t, updated.Status.Conditions, ConditionCacheRestored)
+	assertCondition(t, updated.Status.Conditions, ConditionCacheSaved)
+	restored := t.TempDir()
+	request.Workspace = restored
+	hit, err := store.Restore(ctx, request)
+	if err != nil || !hit {
+		t.Fatalf("Restore() = %v, %v", hit, err)
+	}
+	if _, err := os.Stat(filepath.Join(restored, "deps", "result")); err != nil {
+		t.Fatalf("saved cache does not contain step output: %v", err)
 	}
 }
 

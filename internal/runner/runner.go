@@ -14,6 +14,7 @@ import (
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/artifacts"
 	"github.com/cloudivision/cloudivision/internal/build"
+	dependencycache "github.com/cloudivision/cloudivision/internal/cache"
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/executor/steps"
 	cloudivisiongit "github.com/cloudivision/cloudivision/internal/git"
@@ -40,6 +41,8 @@ const (
 	ConditionImageScanned      = "ImageScanned"
 	ConditionImageSigned       = "ImageSigned"
 	ConditionProvenanceWritten = "ProvenanceWritten"
+	ConditionCacheRestored     = "CacheRestored"
+	ConditionCacheSaved        = "CacheSaved"
 )
 
 type StepRunner interface {
@@ -59,6 +62,7 @@ type Runner struct {
 	Logger        *slog.Logger
 	LogStore      logstore.LogStore
 	ArtifactStore artifacts.ArtifactStore
+	CacheStore    dependencycache.Store
 }
 
 func New(k8sClient client.Client, logger *slog.Logger) Runner {
@@ -192,6 +196,47 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 	}
 	if err := r.Git.Checkout(ctx, sourceDir, checkoutRef(buildRun, cfg)); err != nil {
 		return r.fail(ctx, buildRun, "RepositoryCheckoutFailed", redactor.Mask(err.Error()))
+	}
+	cacheRequest := dependencycache.Request{
+		Project: buildRun.Spec.ProjectRef, Repository: buildRun.Spec.RepositoryRef,
+		Key: template.Spec.Cache.Key, Paths: template.Spec.Cache.Paths, Workspace: sourceDir,
+		TTL: time.Duration(template.Spec.Cache.TTLSeconds) * time.Second, MaxBytes: cfg.MaxCacheBytes,
+	}
+	if template.Spec.Cache.Enabled {
+		switch template.Spec.Cache.Mode {
+		case cicdv1alpha1.DependencyCacheModePVC, cicdv1alpha1.DependencyCacheModeObjectStorage:
+			if r.CacheStore == nil {
+				return r.fail(ctx, buildRun, "CacheUnavailable", "Pipeline dependency cache is enabled but no cache backend is configured.")
+			}
+			keys := append([]string{template.Spec.Cache.Key}, template.Spec.Cache.RestoreKeys...)
+			hit := false
+			for _, key := range keys {
+				cacheRequest.Key = key
+				restored, restoreErr := r.CacheStore.Restore(ctx, cacheRequest)
+				if restoreErr != nil {
+					return r.fail(ctx, buildRun, "CacheRestoreFailed", redactor.Mask(restoreErr.Error()))
+				}
+				if restored {
+					hit = true
+					break
+				}
+			}
+			cacheRequest.Key = template.Spec.Cache.Key
+			if hit {
+				r.setCondition(buildRun, ConditionCacheRestored, metav1.ConditionTrue, "CacheHit", "A project- and repository-scoped dependency cache was restored.")
+			} else {
+				r.setCondition(buildRun, ConditionCacheRestored, metav1.ConditionFalse, "CacheMiss", "No matching dependency cache entry was found.")
+			}
+		case cicdv1alpha1.DependencyCacheModeRegistry:
+			cacheRef, cacheErr := dependencycache.RegistryRef(buildRun.Spec.Image.Repository, buildRun.Spec.ProjectRef, buildRun.Spec.RepositoryRef, template.Spec.Cache.Key)
+			if cacheErr != nil {
+				return r.fail(ctx, buildRun, "CacheConfigurationInvalid", cacheErr.Error())
+			}
+			template.Spec.Build.Cache = cicdv1alpha1.PipelineBuildCacheSpec{Enabled: true, Mode: cicdv1alpha1.BuildCacheModeRegistry, Ref: cacheRef}
+			r.setCondition(buildRun, ConditionCacheRestored, metav1.ConditionTrue, "RegistryCacheConfigured", "A scoped BuildKit registry cache was configured.")
+		default:
+			return r.fail(ctx, buildRun, "CacheConfigurationInvalid", fmt.Sprintf("unsupported dependency cache mode %q", template.Spec.Cache.Mode))
+		}
 	}
 	r.setCondition(buildRun, ConditionRepositoryCloned, metav1.ConditionTrue, "RepositoryCloned", "Repository cloned and checked out.")
 	if err := r.updateStatus(ctx, buildRun); err != nil {
@@ -334,6 +379,15 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 			}
 			return r.fail(ctx, buildRun, reason, redactor.Mask(err.Error()))
 		}
+		if err := r.updateStatus(ctx, buildRun); err != nil {
+			return err
+		}
+	}
+	if template.Spec.Cache.Enabled && (template.Spec.Cache.Mode == cicdv1alpha1.DependencyCacheModePVC || template.Spec.Cache.Mode == cicdv1alpha1.DependencyCacheModeObjectStorage) {
+		if err := r.CacheStore.Save(ctx, cacheRequest); err != nil {
+			return r.fail(ctx, buildRun, "CacheSaveFailed", redactor.Mask(err.Error()))
+		}
+		r.setCondition(buildRun, ConditionCacheSaved, metav1.ConditionTrue, "CacheSaved", "Dependency cache saved after successful pipeline execution.")
 		if err := r.updateStatus(ctx, buildRun); err != nil {
 			return err
 		}

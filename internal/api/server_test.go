@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/artifacts"
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
+	dependencycache "github.com/cloudivision/cloudivision/internal/cache"
 	"github.com/cloudivision/cloudivision/internal/logstore"
 	"github.com/cloudivision/cloudivision/internal/policy"
 	"github.com/cloudivision/cloudivision/internal/provider"
@@ -139,6 +141,30 @@ func TestListBuildRuns(t *testing.T) {
 	}
 	if len(page.Items) != 1 || page.Items[0].Name != "build-1" || page.Limit != defaultPageLimit {
 		t.Fatalf("page = %#v, want build-1 with default limit", page)
+	}
+}
+
+func TestPurgeProjectCache(t *testing.T) {
+	project := &cicdv1alpha1.Project{ObjectMeta: metav1.ObjectMeta{Name: "project", Namespace: "ci"}}
+	server, _ := newTestServer(t, project)
+	store := dependencycache.LocalStore{Root: t.TempDir()}
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "deps.lock"), []byte("cached"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	request := dependencycache.Request{Project: "project", Repository: "repo", Key: "key", Paths: []string{"deps.lock"}, Workspace: workspace}
+	if err := store.Save(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	server.CacheStore = store
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/projects/project/cache/purge?namespace=ci", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	hit, err := store.Restore(context.Background(), request)
+	if err != nil || hit {
+		t.Fatalf("Restore() after API purge = %v, %v", hit, err)
 	}
 }
 

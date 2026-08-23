@@ -10,6 +10,7 @@ The API is served below `/api/v1`. The machine-readable contract is
 | --- | --- | --- |
 | `/api/v1/projects` | `GET`, `POST` | List and create projects |
 | `/api/v1/projects/{name}` | `GET` | Read a project |
+| `/api/v1/projects/{name}/cache/purge` | `POST` | Purge project dependency cache entries |
 | `/api/v1/repositories` | `GET`, `POST` | List and create repositories |
 | `/api/v1/pipeline-templates` | `GET`, `POST` | List and create templates |
 | `/api/v1/build-runs` | `GET`, `POST` | List and trigger builds |

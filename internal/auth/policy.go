@@ -31,7 +31,7 @@ func RequiredPermission(method, path string) (Permission, bool) {
 	if method == http.MethodPost && strings.HasPrefix(path, "/api/v1/releases/") && (strings.HasSuffix(path, "/approve") || strings.HasSuffix(path, "/reject")) {
 		return PermissionApproveRelease, true
 	}
-	if method == http.MethodPost && (path == "/api/v1/projects" || path == "/api/v1/repositories" || path == "/api/v1/pipeline-templates") {
+	if method == http.MethodPost && (path == "/api/v1/projects" || strings.HasPrefix(path, "/api/v1/projects/") && strings.HasSuffix(path, "/cache/purge") || path == "/api/v1/repositories" || path == "/api/v1/pipeline-templates") {
 		return PermissionManageProjects, true
 	}
 	return PermissionAdmin, true

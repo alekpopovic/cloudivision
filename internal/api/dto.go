@@ -37,6 +37,12 @@ type ProjectResponse struct {
 	Status    cicdv1alpha1.ProjectStatus `json:"status"`
 }
 
+type CachePurgeResponse struct {
+	Project    string `json:"project"`
+	Repository string `json:"repository,omitempty"`
+	Purged     bool   `json:"purged"`
+}
+
 type RepositoryRequest struct {
 	Name      string                      `json:"name"`
 	Namespace string                      `json:"namespace,omitempty"`

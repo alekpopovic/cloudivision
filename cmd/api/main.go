@@ -20,6 +20,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/artifacts"
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
+	dependencycache "github.com/cloudivision/cloudivision/internal/cache"
 	"github.com/cloudivision/cloudivision/internal/logstore"
 	"github.com/cloudivision/cloudivision/internal/policy"
 	"github.com/cloudivision/cloudivision/internal/provider"
@@ -94,12 +95,18 @@ func main() {
 		logger.Error("configure artifact backend", "error", err)
 		os.Exit(1)
 	}
+	configuredCacheStore, err := configureCacheStore()
+	if err != nil {
+		logger.Error("configure dependency cache backend", "error", err)
+		os.Exit(1)
+	}
 
 	apiServer := cloudivisionapi.Server{
 		Client:           k8sClient,
 		LogReader:        cloudivisionapi.KubernetesPodLogReader{Client: clientset},
 		LogStore:         configuredLogStore,
 		ArtifactStore:    configuredArtifactStore,
+		CacheStore:       configuredCacheStore,
 		Logger:           logger,
 		Audit:            auditRecorder,
 		AuditEvents:      auditEvents,
@@ -179,6 +186,14 @@ func configureArtifactStore() (artifacts.ArtifactStore, error) {
 	default:
 		return nil, fmt.Errorf("unsupported CLOU_DIVISION_ARTIFACT_BACKEND")
 	}
+}
+
+func configureCacheStore() (dependencycache.Store, error) {
+	root := os.Getenv("CLOU_DIVISION_CACHE_ROOT")
+	if root == "" || os.Getenv("CLOU_DIVISION_CACHE_PVC") == "" {
+		return nil, nil
+	}
+	return dependencycache.LocalStore{Root: root}, nil
 }
 
 func configureProviderRegistry() (*provider.Registry, error) {

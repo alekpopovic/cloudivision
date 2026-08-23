@@ -18,6 +18,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
 	buildlogic "github.com/cloudivision/cloudivision/internal/build"
+	dependencycache "github.com/cloudivision/cloudivision/internal/cache"
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/logstore"
@@ -38,6 +39,7 @@ type Server struct {
 	LogReader        PodLogReader
 	LogStore         logstore.LogStore
 	ArtifactStore    artifacts.ArtifactStore
+	CacheStore       dependencycache.Store
 	Logger           *slog.Logger
 	Audit            audit.Recorder
 	AuditEvents      audit.EventLister
@@ -62,6 +64,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/projects", s.projects)
 	mux.HandleFunc("POST /api/v1/projects", s.projects)
 	mux.HandleFunc("GET /api/v1/projects/{name}", s.project)
+	mux.HandleFunc("POST /api/v1/projects/{name}/cache/purge", s.purgeProjectCache)
 	mux.HandleFunc("GET /api/v1/repositories", s.repositories)
 	mux.HandleFunc("POST /api/v1/repositories", s.repositories)
 	mux.HandleFunc("GET /api/v1/pipeline-templates", s.pipelineTemplates)
@@ -158,6 +161,36 @@ func (s Server) project(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, projectDTO(obj))
 }
 
+func (s Server) purgeProjectCache(w http.ResponseWriter, r *http.Request) {
+	project := &cicdv1alpha1.Project{}
+	if err := s.Client.Get(r.Context(), client.ObjectKey{Name: r.PathValue("name"), Namespace: s.namespace(r.URL.Query().Get("namespace"))}, project); err != nil {
+		s.writeError(w, err)
+		return
+	}
+	if s.CacheStore == nil {
+		s.writeError(w, apiError{status: http.StatusServiceUnavailable, code: "cache_unavailable", message: "dependency cache backend is not configured"})
+		return
+	}
+	repository := strings.TrimSpace(r.URL.Query().Get("repository"))
+	if repository != "" {
+		repositoryObject := &cicdv1alpha1.Repository{}
+		if err := s.Client.Get(r.Context(), client.ObjectKey{Name: repository, Namespace: project.Namespace}, repositoryObject); err != nil {
+			s.writeError(w, err)
+			return
+		}
+		if repositoryObject.Spec.ProjectRef != project.Name {
+			s.writeError(w, badRequest("repository does not belong to project"))
+			return
+		}
+	}
+	if err := s.CacheStore.Purge(r.Context(), dependencycache.PurgeRequest{Project: project.Name, Repository: repository}); err != nil {
+		s.writeError(w, fmt.Errorf("purge project dependency cache: %w", err))
+		return
+	}
+	s.recordAudit(r.Context(), audit.Event{Type: "ProjectCachePurged", Actor: auth.ActorFromContext(r.Context(), ""), Project: project.Name, Repository: repository, Message: "Purged dependency cache."})
+	writeJSON(w, http.StatusOK, CachePurgeResponse{Project: project.Name, Repository: repository, Purged: true})
+}
+
 func (s Server) repositories(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -218,6 +251,20 @@ func (s Server) pipelineTemplates(w http.ResponseWriter, r *http.Request) {
 		if req.Spec.Build.Enabled && req.Spec.Build.Builder == "" {
 			s.writeError(w, badRequest("build.builder is required when build.enabled is true"))
 			return
+		}
+		if req.Spec.Cache.Enabled {
+			if req.Spec.Cache.Mode == "" {
+				s.writeError(w, badRequest("cache.mode is required when cache.enabled is true"))
+				return
+			}
+			if req.Spec.Cache.Mode == cicdv1alpha1.DependencyCacheModePVC && len(req.Spec.Cache.Paths) == 0 {
+				s.writeError(w, badRequest("cache.paths is required for pvc cache mode"))
+				return
+			}
+			if req.Spec.Cache.Mode == cicdv1alpha1.DependencyCacheModeRegistry && (!req.Spec.Build.Enabled || req.Spec.Build.Builder != cicdv1alpha1.BuildBuilderBuildKit) {
+				s.writeError(w, badRequest("registry cache mode requires an enabled BuildKit image build"))
+				return
+			}
 		}
 		obj := &cicdv1alpha1.PipelineTemplate{ObjectMeta: objectMeta(req.Name, s.namespace(req.Namespace)), Spec: req.Spec}
 		policyEvaluator := s.PolicyEvaluator

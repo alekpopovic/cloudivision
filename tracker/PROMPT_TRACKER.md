@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-23T00:36:42Z`
-Last executed prompt: `52`
-Next prompt: `53`
+Updated at: `2026-08-23T00:47:48Z`
+Last executed prompt: `53`
+Next prompt: `54`
 
 ## How to update
 
@@ -81,7 +81,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 50 | done | Storage | Artifact Storage | `prompts/50-artifact-storage.md` | Added artifact storage abstraction with disabled/noop, memory/local, object/OCI skeleton backends; safe runner collection, SHA-256 metadata in BuildRun status, API list/download, Angular Artifacts tab, Helm local PVC config, demo pipeline, tests and docs. Go tests/vet, Angular tests/build, Helm renders and YAML validation passed. |
 | 51 | done | Scale | Project Quotas and Runner Concurrency | `prompts/51-project-quotas-and-runner-concurrency.md` | Added enforceable project concurrency, queue, resource, duration, artifact, and log quotas with status/metrics/UI/docs coverage. |
 | 52 | done | API | API Pagination and Server-Side Filtering | `prompts/52-api-pagination-and-server-side-filtering.md` | Added safe token pagination and server-side filtering/sorting for BuildRuns, Releases and audit events; Angular and CLI page navigation; API/OpenAPI docs and tests. |
-| 53 | pending | Build Execution | Runner Workspace and Dependency Cache | `prompts/53-runner-workspace-and-dependency-cache.md` |  |
+| 53 | done | Build Execution | Runner Workspace and Dependency Cache | `prompts/53-runner-workspace-and-dependency-cache.md` | Added opt-in scoped dependency cache with PVC snapshots, BuildKit registry mode, object-store skeleton, TTL/size/path hardening, runner restore/save, purge API/UI, Helm configuration, tests and security docs. |
 | 54 | pending | Release / GitOps | GitOps Helm Values Production Flow | `prompts/54-gitops-helm-values-production-flow.md` |  |
 | 55 | pending | Release / GitOps | GitOps Kustomize and Raw YAML Support | `prompts/55-gitops-kustomize-and-raw-yaml-support.md` |  |
 | 56 | pending | Release / GitOps | Argo CD and Flux Status Integration | `prompts/56-argo-cd-and-flux-status-integration.md` |  |
