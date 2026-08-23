@@ -35,7 +35,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
             <div *ngFor="let template of templates" class="px-4 py-3">
               <div class="flex items-center justify-between">
                 <p class="text-sm font-medium">{{ template.name }}</p>
-                <app-status-badge [status]="template.status?.phase || 'Ready'" />
+                <div class="flex items-center gap-2"><button type="button" class="rounded border px-2 py-1 text-xs" (click)="editTemplate(template)">Edit</button><app-status-badge [status]="template.status?.phase || 'Ready'" /></div>
               </div>
               <p class="mt-1 text-xs text-slate-500">{{ template.spec.steps?.length || 0 }} steps / {{ template.spec.build?.builder || 'none' }}</p>
               <p class="mt-1 text-xs" [class.text-emerald-700]="template.spec.cache?.enabled" [class.text-slate-500]="!template.spec.cache?.enabled">Cache: {{ template.spec.cache?.enabled ? (template.spec.cache?.mode || 'configured') : 'disabled' }}</p>
@@ -44,7 +44,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
           <ng-template #empty><app-empty-state title="No templates" message="Create a template with steps and build settings." /></ng-template>
         </div>
       </div>
-      <form [formGroup]="form" (ngSubmit)="create()" class="rounded-md border border-slate-200 bg-white p-4">
+      <form [formGroup]="form" (ngSubmit)="save()" class="rounded-md border border-slate-200 bg-white p-4">
 				<div class="flex items-center justify-between"><h2 class="text-sm font-semibold">PipelineTemplate editor</h2><button type="button" class="rounded border border-slate-300 px-2 py-1 text-xs" (click)="yamlMode = !yamlMode">{{ yamlMode ? 'Visual mode' : 'YAML mode' }}</button></div>
 				<div *ngIf="yamlMode" class="mt-4">
 					<label class="text-sm font-medium">YAML preview</label>
@@ -65,6 +65,10 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
               <input class="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="step name" formControlName="name" />
               <input class="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="image" formControlName="image" />
               <input class="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="command, e.g. npm test" formControlName="command" />
+              <input class="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="args" formControlName="args" />
+              <input class="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="working directory" formControlName="workingDir" />
+              <textarea class="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="Environment, one KEY=value per line" formControlName="env"></textarea>
+              <div class="mt-2 grid grid-cols-2 gap-2"><label class="text-xs">Timeout (seconds)<input type="number" min="1" class="mt-1 w-full rounded border px-2 py-1" formControlName="timeoutSeconds" /></label><label class="flex items-end gap-2 pb-1 text-xs"><input type="checkbox" formControlName="continueOnError" /> Continue on error</label></div>
             </div>
           </div>
         </div>
@@ -79,8 +83,14 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
         </label>
         <label class="mt-3 block text-sm">Dockerfile<input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" formControlName="dockerfile" /></label>
         <label class="mt-3 block text-sm">Context dir<input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" formControlName="contextDir" /></label>
-				<p *ngIf="form.invalid" class="mt-3 text-xs text-rose-700">Name and every step name, image and command are required.</p>
-				<div class="mt-4 flex gap-2"><button class="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50" [disabled]="form.invalid">Create</button><button type="button" class="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-500" disabled title="Dry-run API is not available">Dry run (not available)</button></div>
+        <label class="mt-3 block text-sm">Image repository<input class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2" formControlName="buildImage" /></label>
+        <label class="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" formControlName="push" /> Push image</label>
+        <textarea class="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder="Build args, one KEY=value per line" formControlName="buildArgs"></textarea>
+        <label class="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" formControlName="allowPrivileged" /> Allow privileged workload</label>
+        <p *ngIf="form.controls.allowPrivileged.value" class="mt-2 rounded bg-amber-50 p-2 text-xs text-amber-800">Privileged execution is unsafe and is normally denied by backend policy.</p>
+				<p *ngIf="form.invalid || !hasExecutableWork" class="mt-3 text-xs text-rose-700">Name, executable work, and every step name, image and command are required.</p>
+        <p *ngIf="duplicateStepNames.length" class="mt-2 text-xs text-rose-700">Duplicate step names: {{ duplicateStepNames.join(', ') }}</p>
+				<div class="mt-4 flex gap-2"><button class="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50" [disabled]="!canSave">{{ editingName ? 'Save changes' : 'Create' }}</button><button *ngIf="editingName" type="button" class="rounded-md border border-slate-300 px-4 py-2 text-sm" (click)="cancelEdit()">Cancel</button></div>
 				</ng-container>
       </form>
     </section>
@@ -92,6 +102,8 @@ export class PipelineTemplatesPageComponent {
   private readonly refresh$ = new Subject<void>();
   error: ApiError | null = null;
 	yamlMode = false;
+  editingName = '';
+  editingNamespace = '';
   readonly templates$ = this.refresh$.pipe(
     startWith(undefined),
     switchMap(() => this.api.pipelineTemplates().pipe(catchError((error: ApiError) => { this.error = error; return of([]); })))
@@ -104,7 +116,11 @@ export class PipelineTemplatesPageComponent {
     buildEnabled: [true],
     builder: ['buildkit' as 'buildkit' | 'buildah' | 'none'],
     dockerfile: ['Dockerfile'],
-    contextDir: ['.']
+    contextDir: ['.'],
+    buildImage: [''],
+    push: [true],
+    buildArgs: [''],
+    allowPrivileged: [false]
   });
 
   get steps(): FormArray {
@@ -133,28 +149,38 @@ export class PipelineTemplatesPageComponent {
 		for (const step of value.steps) {
 			lines.push(`    - name: ${step.name || 'step'}`, `      image: ${step.image || 'image'}`, `      command: [${step.command.split(' ').filter(Boolean).map((part) => JSON.stringify(part)).join(', ')}]`);
 		}
-		lines.push('  build:', `    enabled: ${value.buildEnabled}`, `    builder: ${value.builder}`, `    dockerfile: ${value.dockerfile}`, `    contextDir: ${value.contextDir}`);
+		lines.push('  build:', `    enabled: ${value.buildEnabled}`, `    builder: ${value.builder}`, `    dockerfile: ${value.dockerfile}`, `    contextDir: ${value.contextDir}`, `    image: ${value.buildImage}`, `    push: ${value.push}`);
 		return lines.join('\n');
 	}
 
-  create(): void {
-    if (this.form.invalid) return;
+  get duplicateStepNames(): string[] {
+    const names = this.steps.controls.map((control) => String(control.get('name')?.value || '')).filter(Boolean);
+    return [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
+  }
+
+  get hasExecutableWork(): boolean { return this.steps.length > 0 || this.form.controls.buildEnabled.value; }
+  get canSave(): boolean { return this.form.valid && this.hasExecutableWork && this.duplicateStepNames.length === 0; }
+
+  save(): void {
+	  if (!this.canSave) return;
     const value = this.form.getRawValue();
-    this.api.createPipelineTemplate({
+	  const spec = {
+		projectRef: value.projectRef || undefined,
+		steps: value.steps.map((step) => ({ name: step.name, image: step.image, command: this.words(step.command), args: this.words(step.args), workingDir: step.workingDir || undefined, env: this.keyValues(step.env).map(([name, value]) => ({ name, value })), timeoutSeconds: step.timeoutSeconds || undefined, continueOnError: step.continueOnError })),
+		build: { enabled: value.buildEnabled, builder: value.builder, dockerfile: value.dockerfile, contextDir: value.contextDir, image: value.buildImage || undefined, push: value.push, buildArgs: Object.fromEntries(this.keyValues(value.buildArgs)) },
+		security: { runAsNonRoot: true, allowPrivileged: value.allowPrivileged, readOnlyRootFilesystem: false }
+	  };
+    const request$ = this.editingName ? this.api.updatePipelineTemplate(this.editingNamespace, this.editingName, spec) : this.api.createPipelineTemplate({
       name: value.name,
-      spec: {
-        projectRef: value.projectRef || undefined,
-        steps: value.steps.map((step) => ({ name: step.name, image: step.image, command: step.command.split(' ').filter(Boolean) })),
-        build: { enabled: value.buildEnabled, builder: value.builder, dockerfile: value.dockerfile, contextDir: value.contextDir, push: true },
-        security: { runAsNonRoot: true, allowPrivileged: false, readOnlyRootFilesystem: false }
-      }
-    }).subscribe({ next: () => { this.form.reset({ buildEnabled: true, builder: 'buildkit', dockerfile: 'Dockerfile', contextDir: '.' }); this.refresh$.next(); }, error: (error: ApiError) => (this.error = error) });
+		spec
+	  });
+    request$.subscribe({ next: () => { this.cancelEdit(); this.refresh$.next(); }, error: (error: ApiError) => (this.error = error) });
   }
 
   importCatalog(item: CatalogPipelineTemplate): void {
     while (this.steps.length) this.steps.removeAt(0);
     for (const step of item.spec.steps || []) this.steps.push(this.stepGroup(step));
-    this.form.patchValue({ name: item.name, projectRef: item.spec.projectRef || '', buildEnabled: item.spec.build?.enabled ?? false, builder: item.spec.build?.builder || 'none', dockerfile: item.spec.build?.dockerfile || 'Dockerfile', contextDir: item.spec.build?.contextDir || '.' });
+    this.form.patchValue({ name: item.name, projectRef: item.spec.projectRef || '', buildEnabled: item.spec.build?.enabled ?? false, builder: item.spec.build?.builder || 'none', dockerfile: item.spec.build?.dockerfile || 'Dockerfile', contextDir: item.spec.build?.contextDir || '.', buildImage: item.spec.build?.image || '', push: item.spec.build?.push ?? true, buildArgs: this.objectLines(item.spec.build?.buildArgs), allowPrivileged: item.spec.security?.['allowPrivileged'] === true });
   }
 
   installCatalog(item: CatalogPipelineTemplate): void {
@@ -163,11 +189,29 @@ export class PipelineTemplatesPageComponent {
     this.api.installCatalogPipelineTemplate(item.name, { projectRef }).subscribe({ next: () => this.refresh$.next(), error: (error: ApiError) => this.error = error });
   }
 
-  private stepGroup(step?: { name: string; image: string; command?: string[] }) {
+  editTemplate(template: import('../../api/models').PipelineTemplate): void {
+    this.editingName = template.name; this.editingNamespace = template.namespace;
+    while (this.steps.length) this.steps.removeAt(0);
+    for (const step of template.spec.steps || []) this.steps.push(this.stepGroup(step));
+    this.form.patchValue({ name: template.name, projectRef: template.spec.projectRef || '', buildEnabled: template.spec.build?.enabled ?? false, builder: template.spec.build?.builder || 'none', dockerfile: template.spec.build?.dockerfile || 'Dockerfile', contextDir: template.spec.build?.contextDir || '.', buildImage: template.spec.build?.image || '', push: template.spec.build?.push ?? true, buildArgs: this.objectLines(template.spec.build?.buildArgs), allowPrivileged: template.spec.security?.['allowPrivileged'] === true });
+  }
+
+  cancelEdit(): void {
+    this.editingName = ''; this.editingNamespace = '';
+    while (this.steps.length) this.steps.removeAt(0); this.steps.push(this.stepGroup());
+    this.form.reset({ name: '', projectRef: '', buildEnabled: true, builder: 'buildkit', dockerfile: 'Dockerfile', contextDir: '.', buildImage: '', push: true, buildArgs: '', allowPrivileged: false });
+  }
+
+  private stepGroup(step?: { name: string; image: string; command?: string[]; args?: string[]; workingDir?: string; env?: Array<{name: string; value?: string}>; timeoutSeconds?: number; continueOnError?: boolean }) {
     return this.fb.nonNullable.group({
 	  name: [step?.name || '', Validators.required],
 	  image: [step?.image || '', Validators.required],
-	  command: [(step?.command || []).join(' '), Validators.required]
+	  command: [(step?.command || []).join(' '), Validators.required],
+      args: [(step?.args || []).join(' ')], workingDir: [step?.workingDir || ''], env: [(step?.env || []).map((entry) => `${entry.name}=${entry.value || ''}`).join('\n')], timeoutSeconds: [step?.timeoutSeconds || 600, [Validators.required, Validators.min(1)]], continueOnError: [step?.continueOnError || false]
     });
   }
+
+  private words(value: string): string[] { return value.trim().split(/\s+/).filter(Boolean); }
+  private keyValues(value: string): Array<[string, string]> { return value.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => { const at = line.indexOf('='); return at > 0 ? [line.slice(0, at), line.slice(at + 1)] : [line, '']; }); }
+  private objectLines(value: Record<string, string> | undefined): string { return Object.entries(value || {}).map(([key, item]) => `${key}=${item}`).join('\n'); }
 }

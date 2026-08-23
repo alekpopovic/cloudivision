@@ -140,6 +140,28 @@ func TestCatalogInstallRejectsInvalidTemplateName(t *testing.T) {
 	}
 }
 
+func TestPipelineTemplateValidationAndUpdate(t *testing.T) {
+	template := &cicdv1alpha1.PipelineTemplate{ObjectMeta: metav1.ObjectMeta{Name: "ci", Namespace: "ci"}, Spec: cicdv1alpha1.PipelineTemplateSpec{Steps: []cicdv1alpha1.PipelineStep{{Name: "test", Image: "alpine", Command: []string{"true"}}}, Build: cicdv1alpha1.PipelineBuildSpec{Builder: cicdv1alpha1.BuildBuilderNone}}}
+	server, k8sClient := newTestServer(t, template)
+	invalid := httptest.NewRecorder()
+	server.Handler().ServeHTTP(invalid, httptest.NewRequest(http.MethodPost, "/api/v1/pipeline-templates", bytes.NewBufferString(`{"name":"bad","namespace":"ci","spec":{"steps":[{"name":"test","image":"alpine","command":["true"]},{"name":"test","image":"alpine","command":["true"]}],"build":{"enabled":false,"builder":"none","push":false}}}`)))
+	if invalid.Code != http.StatusBadRequest || !strings.Contains(invalid.Body.String(), "duplicate") {
+		t.Fatalf("status=%d body=%s", invalid.Code, invalid.Body.String())
+	}
+	updated := httptest.NewRecorder()
+	server.Handler().ServeHTTP(updated, httptest.NewRequest(http.MethodPut, "/api/v1/pipeline-templates/ci/ci", bytes.NewBufferString(`{"spec":{"description":"updated","steps":[{"name":"lint","image":"alpine","command":["true"]}],"build":{"enabled":false,"builder":"none","push":false},"security":{"runAsNonRoot":true}}}`)))
+	if updated.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", updated.Code, updated.Body.String())
+	}
+	object := &cicdv1alpha1.PipelineTemplate{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: "ci", Name: "ci"}, object); err != nil {
+		t.Fatal(err)
+	}
+	if object.Spec.Description != "updated" || object.Spec.Steps[0].Name != "lint" {
+		t.Fatalf("object = %#v", object.Spec)
+	}
+}
+
 func TestPostBuildRunReturnsStructuredPolicyDenial(t *testing.T) {
 	server, _ := newTestServer(t)
 	server.PolicyEvaluator = denyPolicyEvaluator{}

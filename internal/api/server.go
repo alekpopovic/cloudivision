@@ -72,6 +72,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/repositories", s.repositories)
 	mux.HandleFunc("GET /api/v1/pipeline-templates", s.pipelineTemplates)
 	mux.HandleFunc("POST /api/v1/pipeline-templates", s.pipelineTemplates)
+	mux.HandleFunc("PUT /api/v1/pipeline-templates/{namespace}/{name}", s.updatePipelineTemplate)
 	mux.HandleFunc("GET /api/v1/catalog/pipeline-templates", s.catalogPipelineTemplates)
 	mux.HandleFunc("POST /api/v1/catalog/pipeline-templates/{name}/install", s.installCatalogPipelineTemplate)
 	mux.HandleFunc("GET /api/v1/build-runs", s.buildRuns)
@@ -157,6 +158,54 @@ func (s Server) projects(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusCreated, projectDTO(*obj))
 	}
+}
+
+func (s Server) updatePipelineTemplate(w http.ResponseWriter, r *http.Request) {
+	var request PipelineTemplateRequest
+	if !s.decode(w, r, &request) {
+		return
+	}
+	if err := validatePipelineTemplateSpec(request.Spec); err != nil {
+		s.writeError(w, badRequest(err.Error()))
+		return
+	}
+	object := &cicdv1alpha1.PipelineTemplate{}
+	if err := s.Client.Get(r.Context(), client.ObjectKey{Namespace: r.PathValue("namespace"), Name: r.PathValue("name")}, object); err != nil {
+		s.writeError(w, err)
+		return
+	}
+	object.Spec = request.Spec
+	if err := s.Client.Update(r.Context(), object); err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, pipelineTemplateDTO(*object))
+}
+
+func validatePipelineTemplateSpec(spec cicdv1alpha1.PipelineTemplateSpec) error {
+	if len(spec.Steps) == 0 && !spec.Build.Enabled {
+		return errors.New("at least one step or an enabled build is required")
+	}
+	names := map[string]bool{}
+	for index, step := range spec.Steps {
+		if strings.TrimSpace(step.Name) == "" {
+			return fmt.Errorf("steps[%d].name is required", index)
+		}
+		if strings.TrimSpace(step.Image) == "" {
+			return fmt.Errorf("steps[%d].image is required", index)
+		}
+		if len(step.Command) == 0 {
+			return fmt.Errorf("steps[%d].command is required", index)
+		}
+		if names[step.Name] {
+			return fmt.Errorf("duplicate step name %q", step.Name)
+		}
+		names[step.Name] = true
+	}
+	if spec.Build.Enabled && spec.Build.Builder == "" {
+		return errors.New("build.builder is required when build.enabled is true")
+	}
+	return nil
 }
 
 func (s Server) project(w http.ResponseWriter, r *http.Request) {
@@ -252,6 +301,10 @@ func (s Server) pipelineTemplates(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := validateName(req.Name); err != nil {
+			s.writeError(w, badRequest(err.Error()))
+			return
+		}
+		if err := validatePipelineTemplateSpec(req.Spec); err != nil {
 			s.writeError(w, badRequest(err.Error()))
 			return
 		}

@@ -19,7 +19,7 @@ type PipelineTemplate struct {
 func PipelineTemplates() []PipelineTemplate {
 	definitions := []PipelineTemplate{
 		stack("go", "Go test and rootless image build", "golang:1.26", []string{"go", "test", "./..."}),
-		stack("node-npm", "Node.js npm CI", "node:24-alpine", []string{"npm", "ci", "&&", "npm", "test"}),
+		stack("node-npm", "Node.js npm CI", "node:24-alpine", []string{"sh", "-c", "npm ci && npm test"}),
 		stack("node-pnpm", "Node.js pnpm CI", "node:24-alpine", []string{"sh", "-c", "corepack enable && pnpm install --frozen-lockfile && pnpm test"}),
 		stack("angular", "Angular test and production build", "node:24-alpine", []string{"sh", "-c", "npm ci && npm test -- --watch=false && npm run build"}),
 		stack("react", "React test and production build", "node:24-alpine", []string{"sh", "-c", "npm ci && npm test -- --watch=false && npm run build"}),

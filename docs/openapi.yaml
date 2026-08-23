@@ -78,6 +78,19 @@ paths:
       responses:
         "201":
           description: Create a PipelineTemplate resource.
+  /api/v1/pipeline-templates/{namespace}/{name}:
+    put:
+      parameters:
+        - {name: namespace, in: path, required: true, schema: {type: string}}
+        - {name: name, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object}
+      responses:
+        "200": {description: Update a PipelineTemplate after backend validation.}
+        "400": {description: Invalid or duplicate steps.}
   /api/v1/build-runs:
     get:
       parameters:

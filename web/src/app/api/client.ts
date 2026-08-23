@@ -60,6 +60,10 @@ export class ApiClient {
     return this.post<PipelineTemplate>('/api/v1/pipeline-templates', body);
   }
 
+  updatePipelineTemplate(namespace: string, name: string, spec: PipelineTemplate['spec']): Observable<PipelineTemplate> {
+    return this.put<PipelineTemplate>(`/api/v1/pipeline-templates/${namespace}/${name}`, { name, namespace, spec });
+  }
+
   catalogPipelineTemplates(): Observable<CatalogPipelineTemplate[]> {
     return this.get<CatalogPipelineTemplate[]>('/api/v1/catalog/pipeline-templates');
   }
@@ -151,6 +155,10 @@ export class ApiClient {
       switchMap((config) => this.http.post<T>(`${config.apiBaseUrl}${path}`, body)),
       catchError((error) => throwError(() => this.toApiError(error)))
     );
+  }
+
+  private put<T>(path: string, body: unknown): Observable<T> {
+    return this.config$.pipe(switchMap((config) => this.http.put<T>(`${config.apiBaseUrl}${path}`, body)), catchError((error) => throwError(() => this.toApiError(error))));
   }
 
   private queryString(values: Record<string, string | undefined>): string {
