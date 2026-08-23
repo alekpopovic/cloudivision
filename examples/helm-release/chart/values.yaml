@@ -1,0 +1,5 @@
+image:
+  repository: ghcr.io/example/example-api
+  tag: main
+  digest: ""
+replicaCount: 1

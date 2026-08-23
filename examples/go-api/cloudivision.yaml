@@ -1,0 +1,47 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: example-go-api, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  description: Test and package the Go API
+  steps:
+    - name: test
+      image: golang:1.26-alpine
+      workingDir: examples/go-api
+      command: [go]
+      args: [test, ./...]
+      timeoutSeconds: 120
+  build:
+    enabled: true
+    contextDir: examples/go-api
+    dockerfile: Dockerfile
+    builder: buildkit
+    image: localhost:5001/examples/go-api
+    push: false
+  resources: {cpuRequest: 100m, cpuLimit: "1", memoryRequest: 128Mi, memoryLimit: 1Gi, timeoutSeconds: 600}
+  security: {allowPrivileged: false, runAsNonRoot: true, readOnlyRootFilesystem: false}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Repository
+metadata: {name: example-go-api, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  provider: generic
+  url: https://github.com/alekpopovic/cloudivision.git
+  defaultBranch: main
+  pipelineTemplateRef: example-go-api
+  webhook: {enabled: false, events: [push]}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: BuildRun
+metadata: {name: example-go-api-manual, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  repositoryRef: example-go-api
+  pipelineTemplateRef: example-go-api
+  revision: main
+  branch: main
+  triggeredBy: {type: manual, actor: evaluator}
+  image: {repository: localhost:5001/examples/go-api, tag: dev}
+  executor: job
+  gitOps: {enabled: false}

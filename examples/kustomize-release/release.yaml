@@ -1,0 +1,10 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Release
+metadata: {name: example-kustomize-release, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  environmentRef: example-dev
+  buildRunRef: example-kustomize-release-manual
+  image: {repository: ghcr.io/example/example-api, tag: dev, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  approval: {required: false}
+  strategy: gitops

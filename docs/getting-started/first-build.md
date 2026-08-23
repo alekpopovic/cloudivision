@@ -1,5 +1,7 @@
 # First build
 
+For self-contained Go, Node.js, Angular, Python, Java, Dockerfile, Helm, and Kustomize fixtures, see the [real-world examples](../examples/index.md).
+
 After the kind quickstart, create the standard Node.js example and trigger it:
 
 ```sh

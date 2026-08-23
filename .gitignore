@@ -7,6 +7,8 @@
 *.test
 *.out
 coverage.out
+__pycache__/
+*.py[cod]
 
 # Node / Angular
 node_modules/
@@ -14,6 +16,8 @@ node_modules/
 /web/dist/
 /web/.angular/
 /web/coverage/
+/examples/angular-app/.angular/
+/examples/angular-app/dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

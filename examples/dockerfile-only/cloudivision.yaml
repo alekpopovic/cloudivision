@@ -1,0 +1,30 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: example-dockerfile, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  description: Validate and build a Dockerfile-only static site
+  steps:
+    - {name: test, image: alpine:3.22, workingDir: examples/dockerfile-only, command: [sh], args: [test.sh], timeoutSeconds: 60}
+  build: {enabled: true, contextDir: examples/dockerfile-only, dockerfile: Dockerfile, builder: buildkit, image: localhost:5001/examples/static-site, push: false}
+  resources: {cpuRequest: 50m, cpuLimit: "1", memoryRequest: 64Mi, memoryLimit: 512Mi, timeoutSeconds: 600}
+  security: {allowPrivileged: false, runAsNonRoot: true, readOnlyRootFilesystem: false}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Repository
+metadata: {name: example-dockerfile, namespace: cloudivision}
+spec: {projectRef: demo-project, provider: generic, url: https://github.com/alekpopovic/cloudivision.git, defaultBranch: main, pipelineTemplateRef: example-dockerfile, webhook: {enabled: false, events: [push]}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: BuildRun
+metadata: {name: example-dockerfile-manual, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  repositoryRef: example-dockerfile
+  pipelineTemplateRef: example-dockerfile
+  revision: main
+  branch: main
+  triggeredBy: {type: manual, actor: evaluator}
+  image: {repository: localhost:5001/examples/static-site, tag: dev}
+  executor: job
+  gitOps: {enabled: false}

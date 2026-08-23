@@ -15,6 +15,9 @@
     - title: First GitOps release
       url: /getting-started/first-release.html
       icon: deploy
+    - title: Real-world examples
+      url: /examples/
+      icon: build
 
 - title: Concepts
   items:

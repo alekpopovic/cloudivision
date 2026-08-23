@@ -1,0 +1,30 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: example-java-maven, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  description: Test and package a Java 21 Maven application
+  steps:
+    - {name: test, image: maven:3.9-eclipse-temurin-21-alpine, workingDir: examples/java-maven, command: [mvn], args: [-B, test], timeoutSeconds: 300}
+  build: {enabled: true, contextDir: examples/java-maven, dockerfile: Dockerfile, builder: buildkit, image: localhost:5001/examples/java-maven, push: false}
+  resources: {cpuRequest: 200m, cpuLimit: "2", memoryRequest: 256Mi, memoryLimit: 2Gi, timeoutSeconds: 900}
+  security: {allowPrivileged: false, runAsNonRoot: true, readOnlyRootFilesystem: false}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Repository
+metadata: {name: example-java-maven, namespace: cloudivision}
+spec: {projectRef: demo-project, provider: generic, url: https://github.com/alekpopovic/cloudivision.git, defaultBranch: main, pipelineTemplateRef: example-java-maven, webhook: {enabled: false, events: [push]}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: BuildRun
+metadata: {name: example-java-maven-manual, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  repositoryRef: example-java-maven
+  pipelineTemplateRef: example-java-maven
+  revision: main
+  branch: main
+  triggeredBy: {type: manual, actor: evaluator}
+  image: {repository: localhost:5001/examples/java-maven, tag: dev}
+  executor: job
+  gitOps: {enabled: false}

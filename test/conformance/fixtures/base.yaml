@@ -40,11 +40,12 @@ metadata:
 spec:
   projectRef: conformance
   steps:
-    - name: verify-checkout
-      image: alpine:3.22
-      command: [sh]
-      args: [-c, "test -f client/package.json && test -f Dockerfile"]
-      timeoutSeconds: 60
+    - name: test-go-example
+      image: golang:1.26-alpine
+      workingDir: examples/go-api
+      command: [go]
+      args: [test, ./...]
+      timeoutSeconds: 120
   build:
     enabled: false
     builder: none

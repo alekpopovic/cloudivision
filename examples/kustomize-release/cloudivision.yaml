@@ -1,0 +1,30 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: example-kustomize-release, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  description: Render and validate a Kustomize GitOps release
+  steps:
+    - {name: test, image: registry.k8s.io/kubectl:v1.34.0, workingDir: examples/kustomize-release, command: [sh], args: [test.sh], timeoutSeconds: 120}
+  build: {enabled: false, builder: none, push: false}
+  resources: {cpuRequest: 50m, cpuLimit: 500m, memoryRequest: 64Mi, memoryLimit: 512Mi, timeoutSeconds: 300}
+  security: {allowPrivileged: false, runAsNonRoot: true, readOnlyRootFilesystem: false}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Repository
+metadata: {name: example-kustomize-release, namespace: cloudivision}
+spec: {projectRef: demo-project, provider: generic, url: https://github.com/alekpopovic/cloudivision.git, defaultBranch: main, pipelineTemplateRef: example-kustomize-release, webhook: {enabled: false, events: [push]}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: BuildRun
+metadata: {name: example-kustomize-release-manual, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  repositoryRef: example-kustomize-release
+  pipelineTemplateRef: example-kustomize-release
+  revision: main
+  branch: main
+  triggeredBy: {type: manual, actor: evaluator}
+  image: {repository: ghcr.io/example/example-api, tag: dev}
+  executor: job
+  gitOps: {enabled: false}

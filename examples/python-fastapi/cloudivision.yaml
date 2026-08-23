@@ -1,0 +1,30 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: example-python-fastapi, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  description: Test and package a FastAPI service
+  steps:
+    - {name: test, image: python:3.13-alpine, workingDir: examples/python-fastapi, command: [python], args: [-m, unittest, discover, -s, tests], timeoutSeconds: 120}
+  build: {enabled: true, contextDir: examples/python-fastapi, dockerfile: Dockerfile, builder: buildkit, image: localhost:5001/examples/python-fastapi, push: false}
+  resources: {cpuRequest: 100m, cpuLimit: "1", memoryRequest: 128Mi, memoryLimit: 1Gi, timeoutSeconds: 600}
+  security: {allowPrivileged: false, runAsNonRoot: true, readOnlyRootFilesystem: false}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Repository
+metadata: {name: example-python-fastapi, namespace: cloudivision}
+spec: {projectRef: demo-project, provider: generic, url: https://github.com/alekpopovic/cloudivision.git, defaultBranch: main, pipelineTemplateRef: example-python-fastapi, webhook: {enabled: false, events: [push]}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: BuildRun
+metadata: {name: example-python-fastapi-manual, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  repositoryRef: example-python-fastapi
+  pipelineTemplateRef: example-python-fastapi
+  revision: main
+  branch: main
+  triggeredBy: {type: manual, actor: evaluator}
+  image: {repository: localhost:5001/examples/python-fastapi, tag: dev}
+  executor: job
+  gitOps: {enabled: false}

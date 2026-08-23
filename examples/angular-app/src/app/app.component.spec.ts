@@ -1,0 +1,11 @@
+import { TestBed } from '@angular/core/testing';
+import { AppComponent } from './app.component';
+
+describe('AppComponent', () => {
+  it('renders the delivery status', async () => {
+    await TestBed.configureTestingModule({ imports: [AppComponent] }).compileComponents();
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Pipeline ready');
+  });
+});

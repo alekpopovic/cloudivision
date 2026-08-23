@@ -1,0 +1,10 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Release
+metadata: {name: example-helm-release, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  environmentRef: example-production
+  buildRunRef: example-helm-release-manual
+  image: {repository: ghcr.io/example/example-api, tag: main, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  approval: {required: true}
+  strategy: gitops

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: example-api
+description: Minimal cloudivision Helm release fixture
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

@@ -1,0 +1,32 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: example-angular-app, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  description: Install, test, build and package a standalone Angular app
+  steps:
+    - {name: install, image: node:24-alpine, workingDir: examples/angular-app, command: [npm], args: [ci], timeoutSeconds: 300}
+    - {name: test, image: cypress/browsers:node-22.15.0-chrome-136.0.7103.92-1-ff-138.0.1-edge-136.0.3240.50-1, workingDir: examples/angular-app, command: [npm], args: [test, --, --browsers=ChromeHeadless], timeoutSeconds: 300}
+    - {name: build, image: node:24-alpine, workingDir: examples/angular-app, command: [npm], args: [run, build], timeoutSeconds: 300}
+  build: {enabled: true, contextDir: examples/angular-app, dockerfile: Dockerfile, builder: buildkit, image: localhost:5001/examples/angular-app, push: false}
+  resources: {cpuRequest: 200m, cpuLimit: "2", memoryRequest: 256Mi, memoryLimit: 2Gi, timeoutSeconds: 1200}
+  security: {allowPrivileged: false, runAsNonRoot: true, readOnlyRootFilesystem: false}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: Repository
+metadata: {name: example-angular-app, namespace: cloudivision}
+spec: {projectRef: demo-project, provider: generic, url: https://github.com/alekpopovic/cloudivision.git, defaultBranch: main, pipelineTemplateRef: example-angular-app, webhook: {enabled: false, events: [push]}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: BuildRun
+metadata: {name: example-angular-app-manual, namespace: cloudivision}
+spec:
+  projectRef: demo-project
+  repositoryRef: example-angular-app
+  pipelineTemplateRef: example-angular-app
+  revision: main
+  branch: main
+  triggeredBy: {type: manual, actor: evaluator}
+  image: {repository: localhost:5001/examples/angular-app, tag: dev}
+  executor: job
+  gitOps: {enabled: false}
