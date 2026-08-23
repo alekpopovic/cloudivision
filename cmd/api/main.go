@@ -203,7 +203,7 @@ func configureProviderRegistry(k8sClient client.Client) (*provider.Registry, err
 		providergit.Generic(), providergit.GitHub(), providergit.GitLab(),
 		providerregistry.Generic(), providerregistry.GHCR(), providerregistry.GitLab(), providerregistry.Harbor(),
 		providerregistry.ECR(), providerregistry.GCR(), providerregistry.ACR(), providersecrets.Kubernetes(k8sClient), providersecrets.ExternalSecrets(k8sClient), providersecrets.Vault(providersecrets.VaultConfig{Address: os.Getenv("CLOU_DIVISION_VAULT_ADDRESS"), AuthMethod: os.Getenv("CLOU_DIVISION_VAULT_AUTH_METHOD"), Mount: os.Getenv("CLOU_DIVISION_VAULT_MOUNT")}),
-		providergitops.Generic(), providergitops.ArgoCD(), providerbuild.BuildKit(),
+		providergitops.Generic(), providergitops.ArgoCD(), providerbuild.BuildKit(), providerbuild.RemoteAgent(),
 		providernotifications.Noop(), providernotifications.Webhook(), providernotifications.Slack(), providernotifications.Teams(), providernotifications.Email(), providersupplychain.Noop(), providersupplychain.Syft(),
 		providersupplychain.Grype(), providersupplychain.Cosign(),
 	}

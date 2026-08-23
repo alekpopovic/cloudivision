@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-23T10:41:07Z`
-Last executed prompt: `67`
-Next prompt: `68`
+Updated at: `2026-08-23T10:42:50Z`
+Last executed prompt: `68`
+Next prompt: `69`
 
 ## How to update
 
@@ -96,7 +96,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 65 | done | API Evolution | CRD v1beta1 API Implementation | `prompts/65-crd-v1beta1-api-implementation.md` | Added experimental v1beta1 types, loss-preserving alpha/beta conversions, round-trip tests, and API documentation; v1alpha1 remains the served storage version. |
 | 66 | done | API Evolution | Admission Webhooks and Defaulting | `prompts/66-admission-webhooks-and-defaulting.md` | Added optional TLS-backed mutating/validating webhooks, six-resource defaulting and validation, unit tests, Helm cert-manager/existing-secret support, and operations documentation. |
 | 67 | done | Architecture | Multi-Cluster Architecture | `prompts/67-multi-cluster-architecture.md` | Added experimental ClusterTarget CRD, local/external Kubernetes discovery health checks and controller status, API listing with implicit local target, RBAC/chart assets, tests, and architecture/security docs; external scheduling remains disabled. |
-| 68 | pending | Architecture | Remote Runner / Agent Mode | `prompts/68-remote-runner-agent-mode.md` |  |
+| 68 | done | Architecture | Remote Runner / Agent Mode | `prompts/68-remote-runner-agent-mode.md` | Documented remote runner architecture/security and added a deliberately disabled experimental executor/coordinator contract, pool matching tests, and provider health skeleton; Kubernetes Job remains the only default executor. |
 | 69 | pending | Multi-Tenancy | Organizations, Teams and Memberships | `prompts/69-organizations-teams-and-memberships.md` |  |
 | 70 | pending | Audit | Audit Export and Compliance Reports | `prompts/70-audit-export-and-compliance-reports.md` |  |
 | 71 | pending | API | OpenAPI, SDK and API Client Generation | `prompts/71-openapi-sdk-and-api-client-generation.md` |  |
