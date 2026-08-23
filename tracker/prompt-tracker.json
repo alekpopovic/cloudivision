@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-23T02:03:31Z",
-  "last_executed_prompt": 64,
-  "next_prompt": 65,
+  "updated_at": "2026-08-23T10:32:09Z",
+  "last_executed_prompt": 65,
+  "next_prompt": 66,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -602,8 +602,9 @@
       "title": "CRD v1beta1 API Implementation",
       "phase": "API Evolution",
       "file": "prompts/65-crd-v1beta1-api-implementation.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Added experimental v1beta1 types, loss-preserving alpha/beta conversions, round-trip tests, and API documentation; v1alpha1 remains the served storage version.",
+      "executed_at": "2026-08-23T10:32:09Z"
     },
     {
       "id": 66,

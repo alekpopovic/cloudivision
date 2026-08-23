@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-23T02:03:31Z`
-Last executed prompt: `64`
-Next prompt: `65`
+Updated at: `2026-08-23T10:32:09Z`
+Last executed prompt: `65`
+Next prompt: `66`
 
 ## How to update
 
@@ -93,7 +93,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 62 | done | Frontend | Angular First-Run and Onboarding Polish | `prompts/62-angular-first-run-and-onboarding-polish.md` | Polished eight-stage first-run wizard with empty detection, progress, catalog selection/install, optional webhook, first BuildRun trigger/log link, copyable API command, next-step docs, dashboard redirect, validation/error tests. |
 | 63 | done | CLI | CLI Packaging and Distribution | `prompts/63-cli-packaging-and-distribution.md` | Added version/commit/date metadata, bash/zsh/fish/PowerShell completions, Make targets, verified install script, GoReleaser config, six-platform CLI release artifacts, installation docs, and config/API/error/JSON tests. Full Go tests/vet and cross-compilation passed. Added version/commit/date metadata, bash/zsh/fish/PowerShell completions, Make targets, verified install script, GoReleaser config, six-platform CLI release artifacts, installation docs, and config/API/error/JSON tests. Full Go tests/vet and CLI builds passed. |
 | 64 | done | Installation | Helm Chart Production Hardening | `prompts/64-helm-chart-production-hardening.md` | Added production Helm scheduling and annotation controls, read-only runtime filesystems, startup probes, optional PDB/HPA/ServiceMonitor/TLS/NetworkPolicy customization, leader-election guidance, safe extra env/volume escape hatches, render matrix tests, and complete operator/value documentation. Helm lint/template matrix, security checks, rendered YAML parsing, and full Go tests passed. |
-| 65 | pending | API Evolution | CRD v1beta1 API Implementation | `prompts/65-crd-v1beta1-api-implementation.md` |  |
+| 65 | done | API Evolution | CRD v1beta1 API Implementation | `prompts/65-crd-v1beta1-api-implementation.md` | Added experimental v1beta1 types, loss-preserving alpha/beta conversions, round-trip tests, and API documentation; v1alpha1 remains the served storage version. |
 | 66 | pending | API Evolution | Admission Webhooks and Defaulting | `prompts/66-admission-webhooks-and-defaulting.md` |  |
 | 67 | pending | Architecture | Multi-Cluster Architecture | `prompts/67-multi-cluster-architecture.md` |  |
 | 68 | pending | Architecture | Remote Runner / Agent Mode | `prompts/68-remote-runner-agent-mode.md` |  |
