@@ -156,6 +156,14 @@ export interface PipelineTemplate {
   status?: { phase?: string; conditions?: Condition[] };
 }
 
+export interface CatalogPipelineTemplate {
+  name: string;
+  version: string;
+  description: string;
+  parameters?: Array<{ name: string; description?: string; default?: string; required: boolean }>;
+  spec: PipelineTemplate['spec'];
+}
+
 export interface PipelineStep {
   name: string;
   image: string;

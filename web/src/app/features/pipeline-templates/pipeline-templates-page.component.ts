@@ -4,7 +4,7 @@ import { FormArray, FormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { catchError, of, startWith, Subject, switchMap } from 'rxjs';
 
 import { ApiClient } from '../../api/client';
-import { ApiError } from '../../api/models';
+import { ApiError, CatalogPipelineTemplate } from '../../api/models';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { ErrorMessageComponent } from '../../shared/error-message.component';
 import { PageHeaderComponent } from '../../shared/page-header.component';
@@ -17,6 +17,16 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
   template: `
     <app-page-header title="Pipeline Templates" description="Reusable build definitions and image settings." />
     <app-error-message [error]="error" />
+    <section class="mb-6 rounded-md border border-slate-200 bg-white p-4">
+      <h2 class="text-sm font-semibold">Built-in catalog</h2>
+      <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4" *ngIf="catalog$ | async as catalog">
+        <article *ngFor="let item of catalog" class="rounded border border-slate-200 p-3">
+          <div class="flex justify-between gap-2"><strong class="text-sm">{{ item.name }}</strong><span class="text-xs text-slate-500">v{{ item.version }}</span></div>
+          <p class="mt-1 text-xs text-slate-600">{{ item.description }}</p>
+          <div class="mt-3 flex gap-2"><button type="button" class="rounded border border-slate-300 px-2 py-1 text-xs" (click)="importCatalog(item)">Edit</button><button type="button" class="rounded bg-blue-700 px-2 py-1 text-xs text-white" (click)="installCatalog(item)">Install</button></div>
+        </article>
+      </div>
+    </section>
     <section class="grid gap-6 xl:grid-cols-[1fr_30rem]">
       <div class="rounded-md border border-slate-200 bg-white">
         <div class="border-b border-slate-200 px-4 py-3 font-medium">Templates</div>
@@ -86,6 +96,7 @@ export class PipelineTemplatesPageComponent {
     startWith(undefined),
     switchMap(() => this.api.pipelineTemplates().pipe(catchError((error: ApiError) => { this.error = error; return of([]); })))
   );
+  readonly catalog$ = this.api.catalogPipelineTemplates().pipe(catchError((error: ApiError) => { this.error = error; return of([]); }));
   readonly form = this.fb.nonNullable.group({
     name: ['', Validators.required],
     projectRef: [''],
@@ -140,11 +151,23 @@ export class PipelineTemplatesPageComponent {
     }).subscribe({ next: () => { this.form.reset({ buildEnabled: true, builder: 'buildkit', dockerfile: 'Dockerfile', contextDir: '.' }); this.refresh$.next(); }, error: (error: ApiError) => (this.error = error) });
   }
 
-  private stepGroup() {
+  importCatalog(item: CatalogPipelineTemplate): void {
+    while (this.steps.length) this.steps.removeAt(0);
+    for (const step of item.spec.steps || []) this.steps.push(this.stepGroup(step));
+    this.form.patchValue({ name: item.name, projectRef: item.spec.projectRef || '', buildEnabled: item.spec.build?.enabled ?? false, builder: item.spec.build?.builder || 'none', dockerfile: item.spec.build?.dockerfile || 'Dockerfile', contextDir: item.spec.build?.contextDir || '.' });
+  }
+
+  installCatalog(item: CatalogPipelineTemplate): void {
+    this.error = null;
+    const projectRef = this.form.controls.projectRef.value || undefined;
+    this.api.installCatalogPipelineTemplate(item.name, { projectRef }).subscribe({ next: () => this.refresh$.next(), error: (error: ApiError) => this.error = error });
+  }
+
+  private stepGroup(step?: { name: string; image: string; command?: string[] }) {
     return this.fb.nonNullable.group({
-      name: ['', Validators.required],
-      image: ['', Validators.required],
-      command: ['', Validators.required]
+	  name: [step?.name || '', Validators.required],
+	  image: [step?.image || '', Validators.required],
+	  command: [(step?.command || []).join(' '), Validators.required]
     });
   }
 }

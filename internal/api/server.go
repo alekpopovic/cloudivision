@@ -72,6 +72,8 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/repositories", s.repositories)
 	mux.HandleFunc("GET /api/v1/pipeline-templates", s.pipelineTemplates)
 	mux.HandleFunc("POST /api/v1/pipeline-templates", s.pipelineTemplates)
+	mux.HandleFunc("GET /api/v1/catalog/pipeline-templates", s.catalogPipelineTemplates)
+	mux.HandleFunc("POST /api/v1/catalog/pipeline-templates/{name}/install", s.installCatalogPipelineTemplate)
 	mux.HandleFunc("GET /api/v1/build-runs", s.buildRuns)
 	mux.HandleFunc("POST /api/v1/build-runs", s.buildRuns)
 	mux.HandleFunc("GET /api/v1/build-runs/{namespace}/{name}", s.buildRun)

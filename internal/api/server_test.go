@@ -110,6 +110,36 @@ func TestPostBuildRunCreatesCR(t *testing.T) {
 	}
 }
 
+func TestCatalogLoadsAndInstallsTemplate(t *testing.T) {
+	server, k8sClient := newTestServer(t)
+	list := httptest.NewRecorder()
+	server.Handler().ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/v1/catalog/pipeline-templates", nil))
+	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), `"name":"go"`) {
+		t.Fatalf("list status=%d body=%s", list.Code, list.Body.String())
+	}
+	install := httptest.NewRecorder()
+	server.Handler().ServeHTTP(install, httptest.NewRequest(http.MethodPost, "/api/v1/catalog/pipeline-templates/go/install", bytes.NewBufferString(`{"namespace":"ci","projectRef":"demo","name":"go-ci"}`)))
+	if install.Code != http.StatusCreated {
+		t.Fatalf("install status=%d body=%s", install.Code, install.Body.String())
+	}
+	created := &cicdv1alpha1.PipelineTemplate{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: "ci", Name: "go-ci"}, created); err != nil {
+		t.Fatal(err)
+	}
+	if created.Spec.ProjectRef != "demo" || created.Annotations["cicd.cloudivision.io/catalog-version"] == "" {
+		t.Fatalf("created = %#v", created)
+	}
+}
+
+func TestCatalogInstallRejectsInvalidTemplateName(t *testing.T) {
+	server, _ := newTestServer(t)
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/catalog/pipeline-templates/not-real/install", bytes.NewBufferString(`{}`)))
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestPostBuildRunReturnsStructuredPolicyDenial(t *testing.T) {
 	server, _ := newTestServer(t)
 	server.PolicyEvaluator = denyPolicyEvaluator{}

@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, map, of, shareReplay, switchMap, throwError } from 'rxjs';
 
 import { environment } from '../../environments/environment';
-import { ApiError, ApprovalActionRequest, BuildRun, Environment, LogsResponse, Page, PipelineTemplate, Principal, Project, ProviderHealthResult, ProviderSummary, Release, ReleasePromoteRequest, ReleaseRollbackRequest, Repository } from './models';
+import { ApiError, ApprovalActionRequest, BuildRun, CatalogPipelineTemplate, Environment, LogsResponse, Page, PipelineTemplate, Principal, Project, ProviderHealthResult, ProviderSummary, Release, ReleasePromoteRequest, ReleaseRollbackRequest, Repository } from './models';
 
 interface RuntimeConfig {
   apiBaseUrl?: string;
@@ -58,6 +58,14 @@ export class ApiClient {
 
   createPipelineTemplate(body: { name: string; namespace?: string; spec: PipelineTemplate['spec'] }): Observable<PipelineTemplate> {
     return this.post<PipelineTemplate>('/api/v1/pipeline-templates', body);
+  }
+
+  catalogPipelineTemplates(): Observable<CatalogPipelineTemplate[]> {
+    return this.get<CatalogPipelineTemplate[]>('/api/v1/catalog/pipeline-templates');
+  }
+
+  installCatalogPipelineTemplate(catalogName: string, body: { name?: string; namespace?: string; projectRef?: string }): Observable<PipelineTemplate> {
+    return this.post<PipelineTemplate>(`/api/v1/catalog/pipeline-templates/${encodeURIComponent(catalogName)}/install`, body);
   }
 
   buildRuns(params?: Record<string, string>): Observable<BuildRun[]> {

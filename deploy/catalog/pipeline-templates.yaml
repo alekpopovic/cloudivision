@@ -1,0 +1,55 @@
+# Versioned examples matching GET /api/v1/catalog/pipeline-templates.
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: go, annotations: {cicd.cloudivision.io/catalog-version: 1.0.0}}
+spec: {steps: [{name: test, image: "golang:1.26", command: [go, test, ./...]}], build: {enabled: true, builder: buildkit, contextDir: ., dockerfile: Dockerfile, push: true}, security: {runAsNonRoot: true}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: node-npm, annotations: {cicd.cloudivision.io/catalog-version: 1.0.0}}
+spec: {steps: [{name: test, image: "node:24-alpine", command: [sh, -c, "npm ci && npm test"]}], build: {enabled: true, builder: buildkit, push: true}, security: {runAsNonRoot: true}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: node-pnpm, annotations: {cicd.cloudivision.io/catalog-version: 1.0.0}}
+spec: {steps: [{name: test, image: "node:24-alpine", command: [sh, -c, "corepack enable && pnpm install --frozen-lockfile && pnpm test"]}], build: {enabled: true, builder: buildkit, push: true}, security: {runAsNonRoot: true}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: angular, annotations: {cicd.cloudivision.io/catalog-version: 1.0.0}}
+spec: {steps: [{name: test, image: "node:24-alpine", command: [sh, -c, "npm ci && npm test -- --watch=false && npm run build"]}], build: {enabled: true, builder: buildkit, push: true}, security: {runAsNonRoot: true}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: react, annotations: {cicd.cloudivision.io/catalog-version: 1.0.0}}
+spec: {steps: [{name: test, image: "node:24-alpine", command: [sh, -c, "npm ci && npm test -- --watch=false && npm run build"]}], build: {enabled: true, builder: buildkit, push: true}, security: {runAsNonRoot: true}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: python, annotations: {cicd.cloudivision.io/catalog-version: 1.0.0}}
+spec: {steps: [{name: test, image: "python:3.14-slim", command: [sh, -c, "pip install -r requirements.txt && pytest"]}], build: {enabled: true, builder: buildkit, push: true}, security: {runAsNonRoot: true}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: java-maven, annotations: {cicd.cloudivision.io/catalog-version: 1.0.0}}
+spec: {steps: [{name: test, image: "maven:3.9-eclipse-temurin-21", command: [mvn, -B, verify]}], build: {enabled: true, builder: buildkit, push: true}, security: {runAsNonRoot: true}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: java-gradle, annotations: {cicd.cloudivision.io/catalog-version: 1.0.0}}
+spec: {steps: [{name: test, image: "gradle:9-jdk21", command: [gradle, check]}], build: {enabled: true, builder: buildkit, push: true}, security: {runAsNonRoot: true}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: dockerfile, annotations: {cicd.cloudivision.io/catalog-version: 1.0.0}}
+spec: {build: {enabled: true, builder: buildkit, contextDir: ., dockerfile: Dockerfile, push: true}, security: {runAsNonRoot: true}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: helm-chart, annotations: {cicd.cloudivision.io/catalog-version: 1.0.0}}
+spec: {steps: [{name: validate, image: "alpine/helm:3.18.4", command: [helm, lint, .]}], build: {enabled: false, builder: none, push: false}, security: {runAsNonRoot: true}}
+---
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: PipelineTemplate
+metadata: {name: kubernetes-manifests, annotations: {cicd.cloudivision.io/catalog-version: 1.0.0}}
+spec: {steps: [{name: validate, image: "ghcr.io/yannh/kubeconform:v0.7.0", command: [-summary, -strict, manifests]}], build: {enabled: false, builder: none, push: false}, security: {runAsNonRoot: true}}

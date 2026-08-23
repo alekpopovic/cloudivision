@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-23T01:30:35Z",
-  "last_executed_prompt": 59,
-  "next_prompt": 60,
+  "updated_at": "2026-08-23T01:46:29Z",
+  "last_executed_prompt": 60,
+  "next_prompt": 61,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -557,8 +557,9 @@
       "title": "Pipeline Template Catalog",
       "phase": "Templates",
       "file": "prompts/60-pipeline-template-catalog.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Added versioned 11-template pipeline catalog, deploy manifests and per-template docs, catalog list/install APIs, Angular catalog install/import UI, and backend/frontend tests.",
+      "executed_at": "2026-08-23T01:46:29Z"
     },
     {
       "id": 61,

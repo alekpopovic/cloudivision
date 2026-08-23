@@ -69,6 +69,12 @@ type PipelineTemplateResponse struct {
 	Status    cicdv1alpha1.PipelineTemplateStatus `json:"status"`
 }
 
+type CatalogInstallRequest struct {
+	Name       string `json:"name,omitempty"`
+	Namespace  string `json:"namespace,omitempty"`
+	ProjectRef string `json:"projectRef,omitempty"`
+}
+
 type BuildRunRequest struct {
 	Name      string                    `json:"name"`
 	Namespace string                    `json:"namespace,omitempty"`
