@@ -64,6 +64,23 @@ func TestProviderEndpointsExposeCapabilitiesAndHealth(t *testing.T) {
 	}
 }
 
+func TestClusterTargetsIncludeLocalAndExternal(t *testing.T) {
+	target := &cicdv1alpha1.ClusterTarget{ObjectMeta: metav1.ObjectMeta{Name: "edge", Namespace: "ci"}, Spec: cicdv1alpha1.ClusterTargetSpec{DisplayName: "Edge", Type: cicdv1alpha1.ClusterTargetTypeDeploy}, Status: cicdv1alpha1.ClusterTargetStatus{Phase: cicdv1alpha1.ClusterTargetPhaseReady, Reachable: true}}
+	server, _ := newTestServer(t, target)
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/cluster-targets?namespace=ci", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var response []ClusterTargetResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response) != 2 || response[0].Name != "local" || response[1].Name != "edge" {
+		t.Fatalf("response = %#v", response)
+	}
+}
+
 func TestProjectAPIResponseDoesNotExposeSecretValues(t *testing.T) {
 	project := &cicdv1alpha1.Project{ObjectMeta: metav1.ObjectMeta{Name: "project", Namespace: "ci"}, Spec: cicdv1alpha1.ProjectSpec{DisplayName: "Project", OwnerTeam: "team", Namespace: "ci", DefaultRegistry: "example.com", Isolation: cicdv1alpha1.ProjectIsolation{PodSecurityLevel: cicdv1alpha1.PodSecurityLevelRestricted}, Notifications: &cicdv1alpha1.ProjectNotificationSpec{Enabled: true, Provider: "webhook", SecretRef: &cicdv1alpha1.SecretKeyRef{Name: "notifications", Key: "url"}}}}
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "notifications", Namespace: "ci"}, Data: map[string][]byte{"url": []byte("https://notify.example/top-secret-token")}}

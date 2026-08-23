@@ -1,0 +1,12 @@
+apiVersion: cicd.cloudivision.io/v1alpha1
+kind: ClusterTarget
+metadata:
+  name: staging-cluster
+  namespace: cloudivision
+spec:
+  displayName: Staging cluster
+  type: deploy
+  defaultNamespace: staging
+  kubeconfigSecretRef:
+    name: staging-cluster-kubeconfig
+    key: kubeconfig

@@ -6,6 +6,7 @@ import (
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	cloudivisionadmission "github.com/cloudivision/cloudivision/internal/admission"
+	clusterprovider "github.com/cloudivision/cloudivision/internal/cluster"
 	cloudivisioncontroller "github.com/cloudivision/cloudivision/internal/controller"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	"github.com/cloudivision/cloudivision/internal/policy"
@@ -51,13 +52,18 @@ func main() {
 			CertDir: envOrDefault("CLOUDIVISION_WEBHOOK_CERT_DIR", "/tmp/k8s-webhook-server/serving-certs"),
 		})
 	}
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
+	clusterConfig := ctrl.GetConfigOrDie()
+	mgr, err := ctrl.NewManager(clusterConfig, options)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 	if webhooksEnabled {
 		cloudivisionadmission.Register(mgr)
+	}
+	if err := (&cloudivisioncontroller.ClusterTargetReconciler{Client: mgr.GetClient(), Checker: clusterprovider.KubernetesChecker{Reader: mgr.GetClient(), LocalConfig: clusterConfig}, MaxConcurrentReconciles: 2}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create ClusterTarget controller")
+		os.Exit(1)
 	}
 
 	if err := (&cloudivisioncontroller.ProjectReconciler{

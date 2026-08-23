@@ -7,10 +7,10 @@ metadata:
     app.kubernetes.io/component: controller
 rules:
   - apiGroups: ["cicd.cloudivision.io"]
-    resources: ["projects", "repositories", "pipelinetemplates", "buildruns", "environments", "releases"]
+    resources: ["projects", "repositories", "pipelinetemplates", "buildruns", "environments", "releases", "clustertargets"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
   - apiGroups: ["cicd.cloudivision.io"]
-    resources: ["projects/status", "buildruns/status", "releases/status"]
+    resources: ["projects/status", "buildruns/status", "releases/status", "clustertargets/status"]
     verbs: ["get", "update", "patch"]
   - apiGroups: ["cicd.cloudivision.io"]
     resources: ["buildruns/finalizers", "projects/finalizers", "releases/finalizers"]
@@ -74,7 +74,7 @@ metadata:
     app.kubernetes.io/component: api
 rules:
   - apiGroups: ["cicd.cloudivision.io"]
-    resources: ["projects", "repositories", "pipelinetemplates", "buildruns", "environments"]
+    resources: ["projects", "repositories", "pipelinetemplates", "buildruns", "environments", "clustertargets"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
   - apiGroups: ["cicd.cloudivision.io"]
     resources: ["buildruns/status"]
@@ -105,7 +105,7 @@ metadata:
     app.kubernetes.io/component: api
 rules:
   - apiGroups: ["cicd.cloudivision.io"]
-    resources: ["projects", "repositories", "pipelinetemplates", "buildruns", "environments"]
+    resources: ["projects", "repositories", "pipelinetemplates", "buildruns", "environments", "clustertargets"]
     verbs: ["get", "list", "watch", "create", "update", "patch"]
   - apiGroups: ["cicd.cloudivision.io"]
     resources: ["buildruns/status"]

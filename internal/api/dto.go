@@ -96,6 +96,13 @@ type EnvironmentResponse struct {
 	Status    cicdv1alpha1.EnvironmentStatus `json:"status"`
 }
 
+type ClusterTargetResponse struct {
+	Name      string                           `json:"name"`
+	Namespace string                           `json:"namespace"`
+	Spec      cicdv1alpha1.ClusterTargetSpec   `json:"spec"`
+	Status    cicdv1alpha1.ClusterTargetStatus `json:"status"`
+}
+
 type ReleaseResponse struct {
 	Name      string                     `json:"name"`
 	Namespace string                     `json:"namespace"`
@@ -183,6 +190,10 @@ func buildRunDTO(buildRun cicdv1alpha1.BuildRun) BuildRunResponse {
 
 func environmentDTO(environment cicdv1alpha1.Environment) EnvironmentResponse {
 	return EnvironmentResponse{Name: environment.Name, Namespace: environment.Namespace, Spec: environment.Spec, Status: environment.Status}
+}
+
+func clusterTargetDTO(target cicdv1alpha1.ClusterTarget) ClusterTargetResponse {
+	return ClusterTargetResponse{Name: target.Name, Namespace: target.Namespace, Spec: target.Spec, Status: target.Status}
 }
 
 func releaseDTO(release cicdv1alpha1.Release) ReleaseResponse {

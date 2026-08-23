@@ -85,6 +85,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/build-runs/{namespace}/{name}/artifacts", s.buildRunArtifacts)
 	mux.HandleFunc("GET /api/v1/build-runs/{namespace}/{name}/artifacts/{artifactName}", s.buildRunArtifact)
 	mux.HandleFunc("GET /api/v1/environments", s.environments)
+	mux.HandleFunc("GET /api/v1/cluster-targets", s.clusterTargets)
 	mux.HandleFunc("GET /api/v1/releases", s.releases)
 	mux.HandleFunc("POST /api/v1/releases/{namespace}/{name}/approve", s.approveRelease)
 	mux.HandleFunc("POST /api/v1/releases/{namespace}/{name}/reject", s.rejectRelease)
@@ -123,6 +124,25 @@ func (s Server) providerHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s.Providers.HealthCheckAll(r.Context()))
+}
+
+func (s Server) clusterTargets(w http.ResponseWriter, r *http.Request) {
+	var list cicdv1alpha1.ClusterTargetList
+	if err := s.list(r.Context(), r, &list); err != nil {
+		s.writeError(w, err)
+		return
+	}
+	items := make([]ClusterTargetResponse, 0, len(list.Items)+1)
+	items = append(items, ClusterTargetResponse{
+		Name:      "local",
+		Namespace: s.namespace(r.URL.Query().Get("namespace")),
+		Spec:      cicdv1alpha1.ClusterTargetSpec{DisplayName: "Local cluster", Type: cicdv1alpha1.ClusterTargetTypeBoth},
+		Status:    cicdv1alpha1.ClusterTargetStatus{Phase: cicdv1alpha1.ClusterTargetPhaseReady, Reachable: true},
+	})
+	for _, item := range list.Items {
+		items = append(items, clusterTargetDTO(item))
+	}
+	writeJSON(w, http.StatusOK, items)
 }
 
 func (s Server) projects(w http.ResponseWriter, r *http.Request) {

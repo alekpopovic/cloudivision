@@ -29,6 +29,8 @@ func init() {
 		&EnvironmentList{},
 		&Release{},
 		&ReleaseList{},
+		&ClusterTarget{},
+		&ClusterTargetList{},
 	)
 }
 
@@ -47,6 +49,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&EnvironmentList{},
 		&Release{},
 		&ReleaseList{},
+		&ClusterTarget{},
+		&ClusterTargetList{},
 	)
 	return nil
 }

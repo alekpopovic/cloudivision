@@ -88,6 +88,22 @@ rules:
 - apiGroups:
   - cicd.cloudivision.io
   resources:
+  - clustertargets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cicd.cloudivision.io
+  resources:
+  - clustertargets/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - cicd.cloudivision.io
+  resources:
   - environments
   - pipelinetemplates
   - repositories

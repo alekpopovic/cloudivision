@@ -947,3 +947,61 @@ type ReleaseList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Release `json:"items"`
 }
+
+type ClusterTargetType string
+
+const (
+	ClusterTargetTypeBuild  ClusterTargetType = "build"
+	ClusterTargetTypeDeploy ClusterTargetType = "deploy"
+	ClusterTargetTypeBoth   ClusterTargetType = "both"
+)
+
+type ClusterTargetPhase string
+
+const (
+	ClusterTargetPhasePending     ClusterTargetPhase = "Pending"
+	ClusterTargetPhaseReady       ClusterTargetPhase = "Ready"
+	ClusterTargetPhaseUnreachable ClusterTargetPhase = "Unreachable"
+)
+
+type ClusterTargetSpec struct {
+	DisplayName         string        `json:"displayName"`
+	KubeconfigSecretRef *SecretKeyRef `json:"kubeconfigSecretRef,omitempty"`
+	Context             string        `json:"context,omitempty"`
+	// +kubebuilder:validation:Enum=build;deploy;both
+	Type             ClusterTargetType `json:"type"`
+	DefaultNamespace string            `json:"defaultNamespace,omitempty"`
+	Labels           map[string]string `json:"labels,omitempty"`
+}
+
+type ClusterTargetStatus struct {
+	// +kubebuilder:validation:Enum=Pending;Ready;Unreachable
+	Phase              ClusterTargetPhase `json:"phase,omitempty"`
+	Version            string             `json:"version,omitempty"`
+	Reachable          bool               `json:"reachable"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty"`
+	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Type",type=string,JSONPath=`.spec.type`
+// +kubebuilder:printcolumn:name="Reachable",type=boolean,JSONPath=`.status.reachable`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+
+// ClusterTarget describes an experimental external cluster connection. It is
+// health-checked only; schedulers must not place builds on it yet.
+type ClusterTarget struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              ClusterTargetSpec   `json:"spec,omitempty"`
+	Status            ClusterTargetStatus `json:"status,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+type ClusterTargetList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ClusterTarget `json:"items"`
+}
