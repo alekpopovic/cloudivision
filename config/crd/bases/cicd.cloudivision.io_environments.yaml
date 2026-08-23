@@ -66,6 +66,12 @@ spec:
                     - flux
                     - generic
                     type: string
+                  resourceKind:
+                    description: ResourceKind selects the Flux Kustomization or HelmRelease reader. It is ignored by Argo CD.
+                    enum:
+                    - Kustomization
+                    - HelmRelease
+                    type: string
                 required:
                 - provider
                 type: object
@@ -77,6 +83,8 @@ spec:
                   allowLatest:
                     type: boolean
                   blockCriticalVulnerabilities:
+                    type: boolean
+                  failOnDegraded:
                     type: boolean
                   requireImageDigest:
                     type: boolean

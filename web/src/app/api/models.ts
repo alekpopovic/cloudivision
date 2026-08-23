@@ -220,7 +220,7 @@ export interface Environment {
     namespace: string;
     type: 'dev' | 'staging' | 'production' | 'custom';
     requiresApproval: boolean;
-    gitOps?: { provider?: 'argocd' | 'flux' | 'generic'; applicationName?: string; namespace?: string };
+    gitOps?: { provider?: 'argocd' | 'flux' | 'generic'; applicationName?: string; namespace?: string; resourceKind?: 'Kustomization' | 'HelmRelease' };
     policy?: {
       requireImageDigest?: boolean;
       allowLatest?: boolean;
@@ -262,7 +262,7 @@ export interface Release {
     phase?: string;
     gitCommit?: string;
 		failure?: { reason?: string; message?: string };
-    deployment?: { provider?: string; applicationName?: string; syncStatus?: string; healthStatus?: string };
+    deployment?: { provider?: string; applicationName?: string; syncStatus?: string; healthStatus?: string; operationPhase?: string; observedRevision?: string; observedAt?: string };
 		pullRequest?: {
 			provider?: string;
 			url?: string;

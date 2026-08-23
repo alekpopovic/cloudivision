@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-23T00:59:38Z",
-  "last_executed_prompt": 55,
-  "next_prompt": 56,
+  "updated_at": "2026-08-23T01:12:33Z",
+  "last_executed_prompt": 56,
+  "next_prompt": 57,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -521,8 +521,9 @@
       "title": "Argo CD and Flux Status Integration",
       "phase": "Release / GitOps",
       "file": "prompts/56-argo-cd-and-flux-status-integration.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Implemented unstructured Argo CD and Flux Kustomization/HelmRelease status readers, provider/resource absence conditions, deployment revision/time fields, UI, RBAC, tests, and docs.",
+      "executed_at": "2026-08-23T01:12:33Z"
     },
     {
       "id": 57,

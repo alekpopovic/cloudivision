@@ -34,7 +34,9 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
             { key: 'Git commit', value: vm.release.status?.gitCommit || 'Not committed' },
             { key: 'Provider', value: vm.release.status?.deployment?.provider || '-' },
             { key: 'Sync', value: vm.release.status?.deployment?.syncStatus || '-' },
-            { key: 'Health', value: vm.release.status?.deployment?.healthStatus || '-' }
+            { key: 'Health', value: vm.release.status?.deployment?.healthStatus || '-' },
+            { key: 'Observed revision', value: vm.release.status?.deployment?.observedRevision || '-' },
+            { key: 'Last observed', value: vm.release.status?.deployment?.observedAt || '-' }
           ]" />
           <div class="mt-3 flex flex-wrap gap-3 text-sm">
             <a *ngIf="commitUrl(vm.buildRun, vm.release) as url" [href]="url" target="_blank" rel="noopener noreferrer" class="font-medium text-blue-700 hover:underline">Open GitOps commit</a>

@@ -747,6 +747,10 @@ type EnvironmentGitOpsSpec struct {
 	ApplicationName string `json:"applicationName,omitempty"`
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
+	// ResourceKind selects the Flux Kustomization or HelmRelease reader. It is ignored by Argo CD.
+	// +optional
+	// +kubebuilder:validation:Enum=Kustomization;HelmRelease
+	ResourceKind string `json:"resourceKind,omitempty"`
 }
 
 type EnvironmentPolicySpec struct {
@@ -755,6 +759,7 @@ type EnvironmentPolicySpec struct {
 	RequireSignedImages          bool `json:"requireSignedImages,omitempty"`
 	RequireSBOM                  bool `json:"requireSBOM,omitempty"`
 	BlockCriticalVulnerabilities bool `json:"blockCriticalVulnerabilities,omitempty"`
+	FailOnDegraded               bool `json:"failOnDegraded,omitempty"`
 }
 
 // +kubebuilder:validation:XValidation:rule="self.type != 'production' || self.requiresApproval",message="production environments must require approval"
@@ -850,10 +855,13 @@ type ReleaseSpec struct {
 }
 
 type ReleaseDeploymentStatus struct {
-	Provider        string `json:"provider,omitempty"`
-	ApplicationName string `json:"applicationName,omitempty"`
-	SyncStatus      string `json:"syncStatus,omitempty"`
-	HealthStatus    string `json:"healthStatus,omitempty"`
+	Provider         string `json:"provider,omitempty"`
+	ApplicationName  string `json:"applicationName,omitempty"`
+	SyncStatus       string `json:"syncStatus,omitempty"`
+	HealthStatus     string `json:"healthStatus,omitempty"`
+	OperationPhase   string `json:"operationPhase,omitempty"`
+	ObservedRevision string `json:"observedRevision,omitempty"`
+	ObservedAt       string `json:"observedAt,omitempty"`
 }
 
 type ReleaseApprovalStatus struct {

@@ -15,6 +15,8 @@ import (
 )
 
 var ErrDeploymentStatusUnavailable = errors.New("deployment status unavailable")
+var ErrProviderUnavailable = errors.New("gitops provider unavailable")
+var ErrDeploymentResourceMissing = errors.New("gitops deployment resource missing")
 
 type Operation string
 
@@ -78,11 +80,15 @@ type DeploymentStatusRequest struct {
 	Provider        cicdv1alpha1.GitOpsProvider
 	ApplicationName string
 	Namespace       string
+	ResourceKind    string
 }
 
 type DeploymentStatus struct {
-	SyncStatus   string
-	HealthStatus string
+	SyncStatus       string
+	HealthStatus     string
+	OperationPhase   string
+	ObservedRevision string
+	ObservedAt       string
 }
 
 type Git interface {

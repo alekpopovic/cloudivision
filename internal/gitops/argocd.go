@@ -2,7 +2,6 @@ package gitops
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
@@ -23,7 +22,7 @@ func (r ArgoCDStatusReader) ReadDeploymentStatus(ctx context.Context, req Deploy
 		return nil, ErrDeploymentStatusUnavailable
 	}
 	if r.Client == nil {
-		return nil, fmt.Errorf("read Argo CD status: %w", ErrDeploymentStatusUnavailable)
+		return nil, fmt.Errorf("read Argo CD status: %w", ErrProviderUnavailable)
 	}
 	if req.ApplicationName == "" || req.Namespace == "" {
 		return nil, fmt.Errorf("read Argo CD status: application name and namespace are required")
@@ -35,15 +34,18 @@ func (r ArgoCDStatusReader) ReadDeploymentStatus(ctx context.Context, req Deploy
 		Kind:    "Application",
 	})
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: req.ApplicationName, Namespace: req.Namespace}, application); err != nil {
-		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
-			return nil, ErrDeploymentStatusUnavailable
+		if meta.IsNoMatchError(err) {
+			return nil, ErrProviderUnavailable
+		}
+		if apierrors.IsNotFound(err) {
+			return nil, ErrDeploymentResourceMissing
 		}
 		return nil, fmt.Errorf("read Argo CD Application %s/%s: %w", req.Namespace, req.ApplicationName, err)
 	}
 	syncStatus, _, _ := unstructured.NestedString(application.Object, "status", "sync", "status")
 	healthStatus, _, _ := unstructured.NestedString(application.Object, "status", "health", "status")
-	if syncStatus == "" && healthStatus == "" {
-		return nil, errors.Join(ErrDeploymentStatusUnavailable, errors.New("Argo CD Application status is empty"))
-	}
-	return &DeploymentStatus{SyncStatus: syncStatus, HealthStatus: healthStatus}, nil
+	operationPhase, _, _ := unstructured.NestedString(application.Object, "status", "operationState", "phase")
+	reconciledAt, _, _ := unstructured.NestedString(application.Object, "status", "reconciledAt")
+	revision, _, _ := unstructured.NestedString(application.Object, "status", "sync", "revision")
+	return &DeploymentStatus{SyncStatus: syncStatus, HealthStatus: healthStatus, OperationPhase: operationPhase, ObservedRevision: revision, ObservedAt: reconciledAt}, nil
 }

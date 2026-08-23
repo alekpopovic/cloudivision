@@ -45,6 +45,8 @@ type ReleaseReconciler struct {
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=environments,verbs=get;list;watch
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=buildruns,verbs=get;list;watch
 // +kubebuilder:rbac:groups=argoproj.io,resources=applications,verbs=get;list;watch
+// +kubebuilder:rbac:groups=kustomize.toolkit.fluxcd.io,resources=kustomizations,verbs=get;list;watch
+// +kubebuilder:rbac:groups=helm.toolkit.fluxcd.io,resources=helmreleases,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 func (r *ReleaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, err error) {
@@ -327,7 +329,7 @@ func (r *ReleaseReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.GitOpsProvider = gitops.GitRepositoryProvider{}
 	}
 	if r.StatusReader == nil {
-		r.StatusReader = gitops.ArgoCDStatusReader{Client: mgr.GetClient()}
+		r.StatusReader = gitops.ProviderStatusReader{ArgoCD: gitops.ArgoCDStatusReader{Client: mgr.GetClient()}, Flux: gitops.FluxStatusReader{Client: mgr.GetClient()}}
 	}
 	r.Recorder = mgr.GetEventRecorderFor("release-controller")
 	return ctrl.NewControllerManagedBy(mgr).
@@ -526,22 +528,36 @@ func (r *ReleaseReconciler) persistGitCommitCheckpoint(ctx context.Context, rele
 func (r *ReleaseReconciler) syncProviderStatus(ctx context.Context, release *cicdv1alpha1.Release, environment *cicdv1alpha1.Environment) (ctrl.Result, error) {
 	reader := r.StatusReader
 	if reader == nil {
-		reader = gitops.ArgoCDStatusReader{Client: r.Client}
+		reader = gitops.ProviderStatusReader{ArgoCD: gitops.ArgoCDStatusReader{Client: r.Client}, Flux: gitops.FluxStatusReader{Client: r.Client}}
 	}
 	status, err := reader.ReadDeploymentStatus(ctx, gitops.DeploymentStatusRequest{
 		Provider:        environment.Spec.GitOps.Provider,
 		ApplicationName: environment.Spec.GitOps.ApplicationName,
 		Namespace:       environment.Spec.GitOps.Namespace,
+		ResourceKind:    environment.Spec.GitOps.ResourceKind,
 	})
 	if err != nil {
+		conditionType, reason, message := "ProviderStatusUnavailable", "ApplicationUnavailable", "GitOps provider status is not available; keeping release in WaitingForSync phase."
+		if errors.Is(err, gitops.ErrProviderUnavailable) {
+			conditionType, reason, message = "ProviderUnavailable", "ProviderCRDMissing", "GitOps provider CRD is not installed or discoverable."
+		}
+		if errors.Is(err, gitops.ErrDeploymentResourceMissing) {
+			conditionType, reason, message = "DeploymentResourceMissing", "ResourceNotFound", "Configured GitOps deployment resource was not found."
+		}
 		if errors.Is(err, gitops.ErrDeploymentStatusUnavailable) {
 			domain.SetCondition(&release.Status.Conditions, metav1.Condition{
-				Type:               "ProviderStatusUnavailable",
+				Type:               conditionType,
 				Status:             metav1.ConditionTrue,
 				ObservedGeneration: release.Generation,
-				Reason:             "ApplicationUnavailable",
-				Message:            "GitOps provider status is not available; keeping release in WaitingForSync phase.",
+				Reason:             reason,
+				Message:            message,
 			})
+			if updateErr := r.updateReleaseStatus(ctx, release); updateErr != nil {
+				return ctrl.Result{}, updateErr
+			}
+			return ctrl.Result{RequeueAfter: externalStateRequeue}, nil
+		} else if errors.Is(err, gitops.ErrProviderUnavailable) || errors.Is(err, gitops.ErrDeploymentResourceMissing) {
+			domain.SetCondition(&release.Status.Conditions, metav1.Condition{Type: conditionType, Status: metav1.ConditionTrue, ObservedGeneration: release.Generation, Reason: reason, Message: message, LastTransitionTime: metav1.Now()})
 			if updateErr := r.updateReleaseStatus(ctx, release); updateErr != nil {
 				return ctrl.Result{}, updateErr
 			}
@@ -550,13 +566,22 @@ func (r *ReleaseReconciler) syncProviderStatus(ctx context.Context, release *cic
 		return ctrl.Result{}, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedProviderStatus, "ProviderStatusFailed", err.Error())
 	}
 	release.Status.Deployment = cicdv1alpha1.ReleaseDeploymentStatus{
-		Provider:        string(environment.Spec.GitOps.Provider),
-		ApplicationName: environment.Spec.GitOps.ApplicationName,
-		SyncStatus:      status.SyncStatus,
-		HealthStatus:    status.HealthStatus,
+		Provider:         string(environment.Spec.GitOps.Provider),
+		ApplicationName:  environment.Spec.GitOps.ApplicationName,
+		SyncStatus:       status.SyncStatus,
+		HealthStatus:     status.HealthStatus,
+		OperationPhase:   status.OperationPhase,
+		ObservedRevision: status.ObservedRevision,
+		ObservedAt:       status.ObservedAt,
 	}
 	if status.SyncStatus == "Synced" && status.HealthStatus == "Healthy" {
 		return ctrl.Result{}, r.markDeployed(ctx, release, "ApplicationHealthy", "GitOps application is synced and healthy.")
+	}
+	if strings.EqualFold(status.HealthStatus, "Degraded") {
+		if environment.Spec.Policy.FailOnDegraded {
+			return ctrl.Result{}, r.markFailed(ctx, release, cicdv1alpha1.ReleasePhaseFailedProviderStatus, "DeploymentDegraded", "GitOps provider reports a degraded deployment.")
+		}
+		domain.SetCondition(&release.Status.Conditions, metav1.Condition{Type: "DeploymentDegraded", Status: metav1.ConditionTrue, ObservedGeneration: release.Generation, Reason: "ProviderHealthDegraded", Message: "GitOps provider reports a degraded deployment; policy allows continued observation.", LastTransitionTime: metav1.Now()})
 	}
 	if err := r.updateReleaseStatus(ctx, release); err != nil {
 		return ctrl.Result{}, err
