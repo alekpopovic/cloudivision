@@ -100,6 +100,7 @@ export interface Repository {
     pipelineTemplateRef: string;
     webhook?: {
       enabled: boolean;
+      secretRef?: { name: string; key: string };
       events?: string[];
       branchFilters?: { include?: string[]; exclude?: string[] };
       tagFilters?: { include?: string[]; exclude?: string[] };

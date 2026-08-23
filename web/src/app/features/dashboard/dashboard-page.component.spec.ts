@@ -39,5 +39,6 @@ describe('DashboardPageComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Dashboard');
     expect(fixture.nativeElement.textContent).toContain('Projects');
     expect(fixture.nativeElement.textContent).toContain('Failed Builds');
+    expect(fixture.nativeElement.textContent).toContain('Start first-run setup');
   });
 });

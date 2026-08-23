@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-23T01:50:13Z`
-Last executed prompt: `61`
-Next prompt: `62`
+Updated at: `2026-08-23T01:53:42Z`
+Last executed prompt: `62`
+Next prompt: `63`
 
 ## How to update
 
@@ -90,7 +90,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 59 | done | Security | Secret Provider Integrations | `prompts/59-secret-provider-integrations.md` | Implemented selected-key Kubernetes Secret provider with namespace enforcement/redaction, integrated registry/webhook/notification resolution, minimal runner projections, External Secrets CRD health detection, Vault skeleton, tests, RBAC, UI presence, and docs. |
 | 60 | done | Templates | Pipeline Template Catalog | `prompts/60-pipeline-template-catalog.md` | Added versioned 11-template pipeline catalog, deploy manifests and per-template docs, catalog list/install APIs, Angular catalog install/import UI, and backend/frontend tests. |
 | 61 | done | Frontend | Angular Pipeline Editor Upgrade | `prompts/61-angular-pipeline-editor-upgrade.md` | Upgraded Angular PipelineTemplate editor with full step/build/security controls, reorder/remove, catalog import, YAML preview, duplicate and unsafe validation, backend create/update validation, API update endpoint, and tests. |
-| 62 | pending | Frontend | Angular First-Run and Onboarding Polish | `prompts/62-angular-first-run-and-onboarding-polish.md` |  |
+| 62 | done | Frontend | Angular First-Run and Onboarding Polish | `prompts/62-angular-first-run-and-onboarding-polish.md` | Polished eight-stage first-run wizard with empty detection, progress, catalog selection/install, optional webhook, first BuildRun trigger/log link, copyable API command, next-step docs, dashboard redirect, validation/error tests. |
 | 63 | pending | CLI | CLI Packaging and Distribution | `prompts/63-cli-packaging-and-distribution.md` |  |
 | 64 | pending | Installation | Helm Chart Production Hardening | `prompts/64-helm-chart-production-hardening.md` |  |
 | 65 | pending | API Evolution | CRD v1beta1 API Implementation | `prompts/65-crd-v1beta1-api-implementation.md` |  |

@@ -17,6 +17,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
     <app-page-header title="Dashboard" description="Current CI/CD activity across projects, builds and releases." />
     <ng-container *ngIf="vm$ | async as vm">
       <app-error-message [error]="vm.error" />
+      <a *ngIf="vm.empty" routerLink="/first-run" class="mb-6 block rounded-lg border border-blue-200 bg-blue-50 p-5 text-blue-900"><strong>Start first-run setup</strong><span class="mt-1 block text-sm">Create your first Project, Repository, catalog template and BuildRun.</span></a>
       <section class="grid gap-4 md:grid-cols-4">
         <div class="rounded-md border border-slate-200 bg-white p-4" *ngFor="let card of vm.cards">
           <p class="text-xs font-medium uppercase text-slate-500">{{ card.label }}</p>
@@ -70,6 +71,7 @@ export class DashboardPageComponent {
 				{ label: 'Releases In Progress', value: releases.filter((release) => this.releaseInProgress(release.status?.phase)).length }
       ],
       buildRuns: buildRuns.slice(0, 6),
+		empty: projects.length === 0 && buildRuns.length === 0,
 			releases: releases.filter((release) => this.releaseInProgress(release.status?.phase)).slice(0, 6)
     }))
   );
