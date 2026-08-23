@@ -34,6 +34,9 @@ var (
 		Name: "cloudivision_runner_job_failures_total",
 		Help: "Job executor failures observed by the BuildRun controller.",
 	})
+	QueuedBuildRuns      = prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "cloudivision_buildruns_queued", Help: "BuildRuns currently observed waiting for a project concurrency slot."}, []string{"project"})
+	QuotaDeniedBuildRuns = prometheus.NewCounter(prometheus.CounterOpts{Name: "cloudivision_buildruns_quota_denied_total", Help: "BuildRuns failed because a project queue quota was exceeded."})
+	ActiveBuildRuns      = prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "cloudivision_buildruns_active", Help: "Active executor workloads by project."}, []string{"project"})
 
 	ReleaseTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "cloudivision_release_status_updates_total",
@@ -101,6 +104,9 @@ func RegisterMetrics() {
 			BuildRunDuration,
 			BuildQueueDuration,
 			RunnerJobFailures,
+			QueuedBuildRuns,
+			QuotaDeniedBuildRuns,
+			ActiveBuildRuns,
 			ReleaseTotal,
 			ReleaseDeploymentDuration,
 			ReleaseInProgressStarted,

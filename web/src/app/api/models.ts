@@ -54,6 +54,15 @@ export interface Project {
       credentialSecretRef?: { name: string; key?: string };
     };
     imageTagPolicy?: { defaultTagTemplate?: string };
+    quotas?: {
+      maxConcurrentBuildRuns?: number;
+      maxQueuedBuildRuns?: number;
+      maxCPU?: string;
+      maxMemory?: string;
+      maxBuildDurationSeconds?: number;
+      maxArtifactsSize?: string;
+      maxLogSize?: string;
+    };
     isolation?: {
       createNamespace: boolean;
       podSecurityLevel: 'baseline' | 'restricted';

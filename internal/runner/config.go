@@ -3,6 +3,8 @@ package runner
 import (
 	"fmt"
 	"strconv"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 type Config struct {
@@ -23,6 +25,8 @@ type Config struct {
 	LogRoot                string
 	ArtifactBackend        string
 	ArtifactRoot           string
+	MaxArtifactsBytes      int64
+	MaxLogBytes            int64
 }
 
 func ConfigFromEnv(getenv func(string) string) (Config, error) {
@@ -43,6 +47,19 @@ func ConfigFromEnv(getenv func(string) string) (Config, error) {
 		LogRoot:                getenv("LOG_ROOT"),
 		ArtifactBackend:        getenv("ARTIFACT_BACKEND"),
 		ArtifactRoot:           getenv("ARTIFACT_ROOT"),
+	}
+	var err error
+	if value := getenv("PROJECT_MAX_ARTIFACTS_SIZE"); value != "" {
+		cfg.MaxArtifactsBytes, err = byteQuantity(value)
+		if err != nil {
+			return Config{}, fmt.Errorf("parse PROJECT_MAX_ARTIFACTS_SIZE: %w", err)
+		}
+	}
+	if value := getenv("PROJECT_MAX_LOG_SIZE"); value != "" {
+		cfg.MaxLogBytes, err = byteQuantity(value)
+		if err != nil {
+			return Config{}, fmt.Errorf("parse PROJECT_MAX_LOG_SIZE: %w", err)
+		}
 	}
 	if value := getenv("GITOPS_ENABLED"); value != "" {
 		parsed, err := strconv.ParseBool(value)
@@ -68,4 +85,16 @@ func ConfigFromEnv(getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("REVISION or BRANCH is required")
 	}
 	return cfg, nil
+}
+
+func byteQuantity(value string) (int64, error) {
+	quantity, err := resource.ParseQuantity(value)
+	if err != nil {
+		return 0, err
+	}
+	bytes := quantity.Value()
+	if bytes <= 0 {
+		return 0, fmt.Errorf("must be greater than zero")
+	}
+	return bytes, nil
 }

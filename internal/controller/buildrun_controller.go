@@ -43,6 +43,7 @@ type BuildRunReconciler struct {
 	Executors               map[cicdv1alpha1.ExecutorType]executor.PipelineExecutor
 	PolicyEvaluator         policy.Evaluator
 	MaxConcurrentReconciles int
+	QuotaRequeueAfter       time.Duration
 }
 
 // EventRecorder is the subset of Kubernetes event recording used by the reconciler.
@@ -120,6 +121,24 @@ func (r *BuildRunReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 	if !decision.Allowed {
 		return ctrl.Result{}, r.markPolicyDenied(ctx, buildRun, decision)
 	}
+	quota, err := r.evaluateProjectQuota(ctx, buildRun, project)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if quota.deny {
+		return ctrl.Result{}, r.markQuotaExceeded(ctx, buildRun, quota.queued, project.Spec.Quotas.MaxQueuedBuildRuns)
+	}
+	if quota.queue {
+		if err := r.markQuotaQueued(ctx, buildRun, quota.active, project.Spec.Quotas.MaxConcurrentBuildRuns); err != nil {
+			return ctrl.Result{}, err
+		}
+		delay := r.QuotaRequeueAfter
+		if delay <= 0 {
+			delay = 5 * time.Second
+		}
+		return ctrl.Result{RequeueAfter: delay}, nil
+	}
+	template = applyProjectWorkloadQuotas(template, project.Spec.Quotas)
 
 	pipelineExecutor, executorType, err := r.executorFor(buildRun)
 	if err != nil {

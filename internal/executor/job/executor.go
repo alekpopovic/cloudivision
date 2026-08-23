@@ -257,6 +257,14 @@ func runnerEnv(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, r
 			env = append(env, corev1.EnvVar{Name: "REGISTRY_CREDENTIALS_DIR", Value: RegistryCredentialsDir})
 		}
 	}
+	if project.Spec.Quotas != nil {
+		if project.Spec.Quotas.MaxArtifactsSize != "" {
+			env = append(env, corev1.EnvVar{Name: "PROJECT_MAX_ARTIFACTS_SIZE", Value: project.Spec.Quotas.MaxArtifactsSize})
+		}
+		if project.Spec.Quotas.MaxLogSize != "" {
+			env = append(env, corev1.EnvVar{Name: "PROJECT_MAX_LOG_SIZE", Value: project.Spec.Quotas.MaxLogSize})
+		}
+	}
 	if backend := os.Getenv("CLOU_DIVISION_LOG_BACKEND"); backend != "" {
 		env = append(env, corev1.EnvVar{Name: "LOG_BACKEND", Value: backend})
 	}

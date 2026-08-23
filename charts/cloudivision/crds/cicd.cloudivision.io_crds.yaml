@@ -1161,6 +1161,26 @@ spec:
                     - acr
                     type: string
                 type: object
+              quotas:
+                properties:
+                  maxArtifactsSize:
+                    type: string
+                  maxBuildDurationSeconds:
+                    minimum: 1
+                    type: integer
+                  maxCPU:
+                    type: string
+                  maxConcurrentBuildRuns:
+                    minimum: 1
+                    type: integer
+                  maxLogSize:
+                    type: string
+                  maxMemory:
+                    type: string
+                  maxQueuedBuildRuns:
+                    minimum: 1
+                    type: integer
+                type: object
               serviceAccountName:
                 type: string
             required:

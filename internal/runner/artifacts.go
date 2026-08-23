@@ -20,13 +20,14 @@ const maxArtifactBytes int64 = 100 << 20
 
 var artifactNameSanitizer = regexp.MustCompile(`[^a-zA-Z0-9_.-]+`)
 
-func (r Runner) collectArtifacts(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, template *cicdv1alpha1.PipelineTemplate, sourceDir string) ([]cicdv1alpha1.BuildRunArtifactStatus, error) {
+func (r Runner) collectArtifacts(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, template *cicdv1alpha1.PipelineTemplate, sourceDir string, maxTotalBytes int64) ([]cicdv1alpha1.BuildRunArtifactStatus, error) {
 	root, err := filepath.EvalSymlinks(sourceDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve source workspace: %w", err)
 	}
 	statuses := []cicdv1alpha1.BuildRunArtifactStatus{}
 	usedNames := map[string]int{}
+	totalBytes := int64(0)
 	for _, step := range template.Spec.Steps {
 		if step.Artifacts == nil {
 			continue
@@ -54,6 +55,10 @@ func (r Runner) collectArtifacts(ctx context.Context, buildRun *cicdv1alpha1.Bui
 				if int64(len(data)) > maxArtifactBytes {
 					return nil, fmt.Errorf("artifact %q exceeds the %d byte limit", file, maxArtifactBytes)
 				}
+				totalBytes += int64(len(data))
+				if maxTotalBytes > 0 && totalBytes > maxTotalBytes {
+					return nil, fmt.Errorf("project maxArtifactsSize of %d bytes exceeded", maxTotalBytes)
+				}
 				relative, _ := filepath.Rel(root, file)
 				name := uniqueArtifactName(step.Name+"-"+filepath.Base(file), usedNames)
 				digest := fmt.Sprintf("sha256:%x", sha256.Sum256(data))
@@ -71,6 +76,28 @@ func (r Runner) collectArtifacts(ctx context.Context, buildRun *cicdv1alpha1.Bui
 		}
 	}
 	return statuses, nil
+}
+
+type boundedWriter struct {
+	Writer    interface{ Write([]byte) (int, error) }
+	Remaining int64
+}
+
+func (w *boundedWriter) Write(data []byte) (int, error) {
+	original := len(data)
+	if w.Remaining <= 0 {
+		return original, nil
+	}
+	if int64(len(data)) > w.Remaining {
+		data = data[:w.Remaining]
+	}
+	if len(data) > 0 {
+		if _, err := w.Writer.Write(data); err != nil {
+			return 0, err
+		}
+		w.Remaining -= int64(len(data))
+	}
+	return original, nil
 }
 
 func validateArtifactPattern(pattern string) error {

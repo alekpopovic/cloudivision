@@ -131,6 +131,16 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 	}
 	r.configureSupplyChainAdapters(template.Spec.SupplyChain)
 	redactor := redact.FromEnv(secretValues(buildRun, repository, template))
+	if cfg.MaxLogBytes > 0 {
+		if stepRunner, ok := r.Steps.(steps.Runner); ok {
+			output := stepRunner.Output
+			if output == nil {
+				output = os.Stdout
+			}
+			stepRunner.Output = &boundedWriter{Writer: output, Remaining: cfg.MaxLogBytes}
+			r.Steps = stepRunner
+		}
+	}
 	var storedLogs logstore.LogStore
 	if r.LogStore != nil {
 		storedLogs = logstore.RedactingStore{Store: r.LogStore, Mask: redactor.Mask}
@@ -140,8 +150,13 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 		}
 		buildRun.Status.Log.Backend = backend
 		buildRun.Status.Log.Ref = buildRun.Namespace + "/" + buildRun.Name
+		storedBytes := int64(0)
 		if stepRunner, ok := r.Steps.(steps.Runner); ok {
 			stepRunner.Observe = func(step, output string) error {
+				storedBytes += int64(len(output))
+				if cfg.MaxLogBytes > 0 && storedBytes > cfg.MaxLogBytes {
+					return fmt.Errorf("project maxLogSize of %d bytes exceeded", cfg.MaxLogBytes)
+				}
 				lines := []logstore.LogLine{}
 				for _, message := range strings.Split(strings.TrimSuffix(output, "\n"), "\n") {
 					if message != "" {
@@ -188,7 +203,7 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 	}
 	r.setCondition(buildRun, ConditionStepsCompleted, metav1.ConditionTrue, "StepsCompleted", "Pipeline steps completed.")
 	if r.ArtifactStore != nil {
-		artifactStatuses, err := r.collectArtifacts(ctx, buildRun, template, sourceDir)
+		artifactStatuses, err := r.collectArtifacts(ctx, buildRun, template, sourceDir, cfg.MaxArtifactsBytes)
 		if err != nil {
 			return r.fail(ctx, buildRun, "ArtifactCollectionFailed", redactor.Mask(err.Error()))
 		}

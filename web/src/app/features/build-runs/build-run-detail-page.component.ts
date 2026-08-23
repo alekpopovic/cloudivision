@@ -28,6 +28,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
         <button type="button" class="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-800 disabled:opacity-40" [disabled]="!canRetry(vm.run) || actionInFlight" (click)="runAction(vm.run, 'retry')">Retry failed build</button>
         <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium disabled:opacity-40" [disabled]="!isTerminal(vm.run) || actionInFlight" (click)="runAction(vm.run, 'rerun')">Rerun same params</button>
       </div>
+			<p *ngIf="vm.run.status?.phase === 'Queued'" class="mb-4 rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{{ queueMessage(vm.run) }}</p>
 			<p *ngIf="relation(vm.run) as related" class="mb-4 text-xs text-slate-500">Created as {{ related.action }} of <a [routerLink]="['/build-runs', vm.run.namespace, related.name]" class="font-medium text-blue-700 hover:underline">{{ related.name }}</a>.</p>
 
       <section *ngIf="vm.run.status?.failure as failure" class="mb-5 rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
@@ -175,6 +176,10 @@ export class BuildRunDetailPageComponent {
     const seconds = Math.max(0, Math.round((end - new Date(run.status.startedAt).getTime()) / 1000));
     return `${seconds}s`;
   }
+
+	queueMessage(run: BuildRun): string {
+		return run.status?.conditions?.find((condition) => condition.type === 'Queued' && condition.status === 'True')?.message || 'BuildRun is waiting for an executor slot.';
+	}
 
   canCancel(run: BuildRun): boolean {
 		return !run.status?.phase || ['Pending', 'Queued', 'Running'].includes(run.status.phase);

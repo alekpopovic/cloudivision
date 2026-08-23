@@ -51,6 +51,99 @@ func TestBuildRunReconcileCreatesOneJob(t *testing.T) {
 	assertSecureJobSpec(t, &job)
 }
 
+func TestProjectConcurrencyQueuesThenStartsBuildRun(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+	setProjectQuotas(t, ctx, reconciler, &cicdv1alpha1.ProjectQuotaSpec{MaxConcurrentBuildRuns: 1, MaxQueuedBuildRuns: 2})
+	active := createBuildRunWithPhase(t, ctx, reconciler, "active-build", cicdv1alpha1.BuildRunPhaseRunning)
+	result, err := reconciler.Reconcile(ctx, requestFor(buildRun))
+	if err != nil || result.RequeueAfter <= 0 {
+		t.Fatalf("Reconcile() result=%#v err=%v", result, err)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := reconciler.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.BuildRunPhaseQueued || !hasConditionReason(updated.Status.Conditions, "Queued", "ConcurrencyQuotaReached") {
+		t.Fatalf("status = %#v", updated.Status)
+	}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: jobexecutor.NameForBuildRun(buildRun.Name), Namespace: buildRun.Namespace}, &batchv1.Job{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("queued Job error = %v, want NotFound", err)
+	}
+	active.Status.Phase = cicdv1alpha1.BuildRunPhaseSucceeded
+	if err := reconciler.Status().Update(ctx, active); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatal(err)
+	}
+	getRunnerJob(t, ctx, reconciler, buildRun)
+}
+
+func TestProjectQueueLimitFailsBuildRun(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+	setProjectQuotas(t, ctx, reconciler, &cicdv1alpha1.ProjectQuotaSpec{MaxConcurrentBuildRuns: 1, MaxQueuedBuildRuns: 1})
+	createBuildRunWithPhase(t, ctx, reconciler, "active-build", cicdv1alpha1.BuildRunPhaseRunning)
+	createBuildRunWithPhase(t, ctx, reconciler, "queued-build", cicdv1alpha1.BuildRunPhaseQueued)
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatal(err)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := reconciler.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status.Phase != cicdv1alpha1.BuildRunPhaseFailed || updated.Status.Failure.Reason != "QuotaExceeded" {
+		t.Fatalf("status = %#v", updated.Status)
+	}
+}
+
+func TestProjectQuotaAppliesStricterTimeout(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+	setProjectQuotas(t, ctx, reconciler, &cicdv1alpha1.ProjectQuotaSpec{MaxBuildDurationSeconds: 60, MaxCPU: "250m", MaxMemory: "256Mi"})
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatal(err)
+	}
+	job := getRunnerJob(t, ctx, reconciler, buildRun)
+	if job.Spec.ActiveDeadlineSeconds == nil || *job.Spec.ActiveDeadlineSeconds != 60 {
+		t.Fatalf("activeDeadlineSeconds = %#v", job.Spec.ActiveDeadlineSeconds)
+	}
+	limits := job.Spec.Template.Spec.Containers[0].Resources.Limits
+	if limits.Cpu().String() != "250m" || limits.Memory().String() != "256Mi" {
+		t.Fatalf("limits = %#v", limits)
+	}
+}
+
+func setProjectQuotas(t *testing.T, ctx context.Context, reconciler *BuildRunReconciler, quotas *cicdv1alpha1.ProjectQuotaSpec) {
+	t.Helper()
+	project := &cicdv1alpha1.Project{}
+	if err := reconciler.Get(ctx, types.NamespacedName{Name: "sample-project", Namespace: "ci"}, project); err != nil {
+		t.Fatal(err)
+	}
+	project.Spec.Quotas = quotas
+	if err := reconciler.Update(ctx, project); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func createBuildRunWithPhase(t *testing.T, ctx context.Context, reconciler *BuildRunReconciler, name string, phase cicdv1alpha1.BuildRunPhase) *cicdv1alpha1.BuildRun {
+	t.Helper()
+	buildRun := testBuildRun()
+	buildRun.Name = name
+	buildRun.ResourceVersion = ""
+	buildRun.UID = ""
+	buildRun.Status = cicdv1alpha1.BuildRunStatus{}
+	if err := reconciler.Create(ctx, buildRun); err != nil {
+		t.Fatal(err)
+	}
+	buildRun.Status.Phase = phase
+	if err := reconciler.Status().Update(ctx, buildRun); err != nil {
+		t.Fatal(err)
+	}
+	return buildRun
+}
+
 func TestBuildRunReconcileSetsPolicyDeniedBeforeCreatingJob(t *testing.T) {
 	ctx := context.Background()
 	reconciler, buildRun := newBuildRunReconciler(t)

@@ -23,7 +23,12 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
         { key: 'Runner namespace', value: project.spec.namespace },
         { key: 'Owner team', value: project.spec.ownerTeam },
         { key: 'Default registry', value: project.spec.defaultRegistry },
-        { key: 'ServiceAccount', value: project.spec.serviceAccountName || 'cloudivision-runner' }
+        { key: 'ServiceAccount', value: project.spec.serviceAccountName || 'cloudivision-runner' },
+        { key: 'Concurrent builds', value: quotaNumber(project.spec.quotas?.maxConcurrentBuildRuns, 'Unlimited') },
+        { key: 'Queued builds', value: quotaNumber(project.spec.quotas?.maxQueuedBuildRuns, 'Unlimited') },
+        { key: 'Maximum CPU / memory', value: (project.spec.quotas?.maxCPU || 'Unbounded') + ' / ' + (project.spec.quotas?.maxMemory || 'Unbounded') },
+        { key: 'Maximum duration', value: quotaNumber(project.spec.quotas?.maxBuildDurationSeconds, 'Unbounded', 's') },
+        { key: 'Artifact / log size', value: (project.spec.quotas?.maxArtifactsSize || 'Unbounded') + ' / ' + (project.spec.quotas?.maxLogSize || 'Unbounded') }
       ]" />
       <h2 class="mt-6 mb-3 text-sm font-semibold">Conditions</h2>
       <app-conditions-timeline [conditions]="project.status?.conditions || []" />
@@ -36,4 +41,8 @@ export class ProjectDetailPageComponent {
   readonly project$ = this.route.paramMap.pipe(
     switchMap((params) => this.api.project(params.get('name') || '', params.get('namespace') || undefined))
   );
+
+  quotaNumber(value: number | undefined, fallback: string, suffix = ''): string {
+    return value ? `${value}${suffix}` : fallback;
+  }
 }

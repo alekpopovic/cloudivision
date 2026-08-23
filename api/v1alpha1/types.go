@@ -208,6 +208,23 @@ type ProjectImageTagPolicySpec struct {
 	DefaultTagTemplate string `json:"defaultTagTemplate,omitempty"`
 }
 
+type ProjectQuotaSpec struct {
+	// +kubebuilder:validation:Minimum=1
+	MaxConcurrentBuildRuns int `json:"maxConcurrentBuildRuns,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	MaxQueuedBuildRuns int `json:"maxQueuedBuildRuns,omitempty"`
+	// +optional
+	MaxCPU string `json:"maxCPU,omitempty"`
+	// +optional
+	MaxMemory string `json:"maxMemory,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	MaxBuildDurationSeconds int `json:"maxBuildDurationSeconds,omitempty"`
+	// +optional
+	MaxArtifactsSize string `json:"maxArtifactsSize,omitempty"`
+	// +optional
+	MaxLogSize string `json:"maxLogSize,omitempty"`
+}
+
 type ProjectSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	DisplayName string `json:"displayName"`
@@ -228,6 +245,8 @@ type ProjectSpec struct {
 	Registry *ProjectRegistrySpec `json:"registry,omitempty"`
 	// +optional
 	ImageTagPolicy *ProjectImageTagPolicySpec `json:"imageTagPolicy,omitempty"`
+	// +optional
+	Quotas *ProjectQuotaSpec `json:"quotas,omitempty"`
 }
 
 type ProjectStatus struct {
