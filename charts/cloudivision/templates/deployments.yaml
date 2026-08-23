@@ -14,6 +14,11 @@ spec:
       app.kubernetes.io/component: controller
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       labels:
         {{- include "cloudivision.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: controller
@@ -25,6 +30,7 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "cloudivision.podScheduling" . | nindent 6 }}
       containers:
         - name: controller
           image: {{ include "cloudivision.image" (list . .Values.controller.image) }}
@@ -32,6 +38,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "cloudivision.fullname" . }}-config
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: metrics
               containerPort: 8080
@@ -45,10 +55,30 @@ spec:
             httpGet:
               path: /readyz
               port: health
+          {{- if .Values.controller.startupProbe.enabled }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            failureThreshold: {{ .Values.controller.startupProbe.failureThreshold }}
+            periodSeconds: {{ .Values.controller.startupProbe.periodSeconds }}
+          {{- end }}
+          volumeMounts:
+            - name: runtime-tmp
+              mountPath: /tmp
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           resources:
             {{- toYaml .Values.controller.resources | nindent 12 }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
+      volumes:
+        - name: runtime-tmp
+          emptyDir: {}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -59,13 +89,20 @@ metadata:
     {{- include "cloudivision.labels" . | nindent 4 }}
     app.kubernetes.io/component: api
 spec:
+  {{- if not .Values.api.autoscaling.enabled }}
   replicas: {{ .Values.api.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "cloudivision.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: api
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       labels:
         {{- include "cloudivision.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: api
@@ -77,6 +114,7 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "cloudivision.podScheduling" . | nindent 6 }}
       containers:
         - name: api
           image: {{ include "cloudivision.image" (list . .Values.api.image) }}
@@ -84,18 +122,25 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "cloudivision.fullname" . }}-config
-          {{- if or (eq .Values.audit.backend "postgres") .Values.database.externalUrlSecret.name }}
+          {{- if or (eq .Values.audit.backend "postgres") .Values.database.externalUrlSecret.name .Values.extraEnv }}
           env:
+            {{- if or (eq .Values.audit.backend "postgres") .Values.database.externalUrlSecret.name }}
             - name: CLOU_DIVISION_DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: {{ default (printf "%s-database" (include "cloudivision.fullname" .)) .Values.database.externalUrlSecret.name }}
                   key: {{ .Values.database.externalUrlSecret.key | default "database-url" }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- end }}
           ports:
             - name: http
               containerPort: 8080
           volumeMounts:
+            - name: runtime-tmp
+              mountPath: /tmp
             - name: auth-config
               mountPath: /etc/cloudivision/auth/groups.yaml
               subPath: groups.yaml
@@ -112,6 +157,9 @@ spec:
             - name: dependency-cache
               mountPath: {{ .Values.cache.local.root }}
             {{- end }}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -120,11 +168,21 @@ spec:
             httpGet:
               path: /readyz
               port: http
+          {{- if .Values.api.startupProbe.enabled }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: {{ .Values.api.startupProbe.failureThreshold }}
+            periodSeconds: {{ .Values.api.startupProbe.periodSeconds }}
+          {{- end }}
           resources:
             {{- toYaml .Values.api.resources | nindent 12 }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
       volumes:
+        - name: runtime-tmp
+          emptyDir: {}
         - name: auth-config
           configMap:
             name: {{ include "cloudivision.fullname" . }}-config
@@ -146,6 +204,9 @@ spec:
           persistentVolumeClaim:
             claimName: {{ .Values.cache.local.existingClaim }}
         {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -156,36 +217,58 @@ metadata:
     {{- include "cloudivision.labels" . | nindent 4 }}
     app.kubernetes.io/component: web
 spec:
+  {{- if not .Values.web.autoscaling.enabled }}
   replicas: {{ .Values.web.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "cloudivision.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: web
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       labels:
         {{- include "cloudivision.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: web
     spec:
       serviceAccountName: {{ include "cloudivision.fullname" . }}-web
+      automountServiceAccountToken: false
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "cloudivision.podScheduling" . | nindent 6 }}
       containers:
         - name: web
           image: {{ include "cloudivision.image" (list . .Values.web.image) }}
           imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: http
               containerPort: 8080
           volumeMounts:
+            - name: runtime-tmp
+              mountPath: /tmp
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
             - name: web-config
               mountPath: /usr/share/nginx/html/assets/config.json
               subPath: web-config.json
               readOnly: true
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /
@@ -194,14 +277,31 @@ spec:
             httpGet:
               path: /
               port: http
+          {{- if .Values.web.startupProbe.enabled }}
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            failureThreshold: {{ .Values.web.startupProbe.failureThreshold }}
+            periodSeconds: {{ .Values.web.startupProbe.periodSeconds }}
+          {{- end }}
           resources:
             {{- toYaml .Values.web.resources | nindent 12 }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
       volumes:
+        - name: runtime-tmp
+          emptyDir: {}
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
         - name: web-config
           configMap:
             name: {{ include "cloudivision.fullname" . }}-config
             items:
               - key: web-config.json
                 path: web-config.json
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}

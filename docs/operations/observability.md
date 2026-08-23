@@ -1,6 +1,6 @@
 # Observability
 
-cloudivision exposes Prometheus metrics from the controller on port 8080 and from the API at `/metrics` when `api.metrics.enabled=true`. The Helm chart creates `cloudivision-controller-metrics` and `cloudivision-api` Services; configure your Prometheus installation with a ServiceMonitor or equivalent scrape configuration for both. The chart does not install Prometheus, Grafana, kube-state-metrics, or the Prometheus Operator.
+cloudivision exposes Prometheus metrics from the controller on port 8080 and from the API at `/metrics` when `api.metrics.enabled=true`. The Helm chart creates `cloudivision-controller-metrics` and `cloudivision-api` Services. Set `serviceMonitor.enabled=true` when Prometheus Operator CRDs are already installed, or configure equivalent scrape discovery for both Services. The chart does not install Prometheus, Grafana, kube-state-metrics, or the Prometheus Operator.
 
 Import `deploy/observability/grafana-dashboard.json` into Grafana and select the Prometheus datasource. Apply `deploy/observability/prometheus-rules.yaml` only when the `monitoring.coreos.com/v1` PrometheusRule CRD is installed:
 

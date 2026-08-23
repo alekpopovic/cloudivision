@@ -1,0 +1,79 @@
+controller:
+  replicaCount: 2
+  leaderElection: true
+  podDisruptionBudget:
+    enabled: true
+api:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+  podDisruptionBudget:
+    enabled: true
+web:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+  podDisruptionBudget:
+    enabled: true
+database:
+  enabled: true
+  externalUrlSecret:
+    name: cloudivision-database
+    key: database-url
+audit:
+  backend: postgres
+ingress:
+  enabled: true
+  className: nginx
+  tls:
+    - secretName: cloudivision-tls
+      hosts:
+        - cloudivision.example.com
+networkPolicy:
+  enabled: true
+  additionalEgress:
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
+serviceMonitor:
+  enabled: true
+  labels:
+    prometheus: platform
+imagePullSecrets:
+  - name: registry-credentials
+podAnnotations:
+  example.com/owner: platform
+nodeSelector:
+  kubernetes.io/os: linux
+tolerations:
+  - key: dedicated
+    operator: Equal
+    value: platform
+    effect: NoSchedule
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution: []
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: cloudivision
+priorityClassName: platform-medium
+extraEnv:
+  - name: CLOUDIVISION_DEPLOYMENT_PROFILE
+    value: production
+extraVolumes:
+  - name: organization-ca
+    configMap:
+      name: organization-ca
+extraVolumeMounts:
+  - name: organization-ca
+    mountPath: /etc/organization-ca
+    readOnly: true

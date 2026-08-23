@@ -20,6 +20,13 @@ controller:
   metricsBindAddress: ":8080"
   healthProbeBindAddress: ":8081"
   leaderElection: false
+  startupProbe:
+    enabled: true
+    failureThreshold: 30
+    periodSeconds: 2
+  podDisruptionBudget:
+    enabled: false
+    maxUnavailable: 1
   resources:
     requests:
       cpu: 100m
@@ -47,6 +54,18 @@ api:
     groupMappings: []
   metrics:
     enabled: true
+  startupProbe:
+    enabled: true
+    failureThreshold: 30
+    periodSeconds: 2
+  podDisruptionBudget:
+    enabled: false
+    maxUnavailable: 1
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
   defaultNamespace: default
   cors:
     allowedOrigins:
@@ -77,6 +96,18 @@ web:
     port: 80
   config:
     apiBaseUrl: ""
+  startupProbe:
+    enabled: true
+    failureThreshold: 30
+    periodSeconds: 2
+  podDisruptionBudget:
+    enabled: false
+    maxUnavailable: 1
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
   resources:
     requests:
       cpu: 50m
@@ -130,6 +161,15 @@ ingress:
 
 networkPolicy:
   enabled: false
+  # Appended verbatim to the baseline same-namespace ingress/egress rules.
+  additionalIngress: []
+  additionalEgress: []
+
+serviceMonitor:
+  enabled: false
+  labels: {}
+  interval: 30s
+  scrapeTimeout: 10s
 
 tekton:
   enabled: false
@@ -145,10 +185,25 @@ podSecurityContext:
 securityContext:
   allowPrivilegeEscalation: false
   privileged: false
+  readOnlyRootFilesystem: true
   capabilities:
     drop:
       - ALL
 
 imagePullSecrets: []
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+priorityClassName: ""
+extraEnv: []
+
+# SECURITY WARNING: values below are rendered verbatim into every platform Pod.
+# Review them for hostPath, socket, device, Secret, writable-path, and privilege
+# exposure. They are intentionally empty and must never carry unsafe defaults.
+extraVolumes: []
+extraVolumeMounts: []
+
 nameOverride: ""
 fullnameOverride: ""

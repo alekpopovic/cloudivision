@@ -1,0 +1,28 @@
+{{- range $component := list "api" "web" }}
+{{- $values := index $.Values $component }}
+{{- if $values.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "cloudivision.fullname" $ }}-{{ $component }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "cloudivision.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "cloudivision.fullname" $ }}-{{ $component }}
+  minReplicas: {{ $values.autoscaling.minReplicas }}
+  maxReplicas: {{ $values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $values.autoscaling.targetCPUUtilizationPercentage }}
+---
+{{- end }}
+{{- end }}

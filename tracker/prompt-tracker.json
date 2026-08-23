@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-23T01:58:27Z",
-  "last_executed_prompt": 63,
-  "next_prompt": 64,
+  "updated_at": "2026-08-23T02:03:31Z",
+  "last_executed_prompt": 64,
+  "next_prompt": 65,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -593,8 +593,9 @@
       "title": "Helm Chart Production Hardening",
       "phase": "Installation",
       "file": "prompts/64-helm-chart-production-hardening.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Added production Helm scheduling and annotation controls, read-only runtime filesystems, startup probes, optional PDB/HPA/ServiceMonitor/TLS/NetworkPolicy customization, leader-election guidance, safe extra env/volume escape hatches, render matrix tests, and complete operator/value documentation. Helm lint/template matrix, security checks, rendered YAML parsing, and full Go tests passed.",
+      "executed_at": "2026-08-23T02:03:31Z"
     },
     {
       "id": 65,

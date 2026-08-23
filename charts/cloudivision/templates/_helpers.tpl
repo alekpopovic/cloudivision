@@ -29,3 +29,25 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- $registry := trimSuffix "/" $root.Values.global.imageRegistry -}}
 {{- if $registry -}}{{ $registry }}/{{ end -}}{{ $image.repository }}:{{ $image.tag }}
 {{- end -}}
+
+{{- define "cloudivision.podScheduling" -}}
+{{- with .Values.nodeSelector }}
+nodeSelector:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .Values.affinity }}
+affinity:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .Values.tolerations }}
+tolerations:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .Values.topologySpreadConstraints }}
+topologySpreadConstraints:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .Values.priorityClassName }}
+priorityClassName: {{ . | quote }}
+{{- end }}
+{{- end -}}

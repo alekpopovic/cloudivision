@@ -1,4 +1,4 @@
-.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all conformance upgrade-test scale-test security-check release-local vet lint build build-cli install-cli-local cli-completions run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate sync-chart-crds install uninstall helm-template
+.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all conformance upgrade-test scale-test security-check release-local vet lint build build-cli install-cli-local cli-completions run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate sync-chart-crds install uninstall helm-template helm-test
 
 IMAGE_REGISTRY ?= ghcr.io/alekpopovic/cloudivision
 IMAGE_TAG ?= dev
@@ -32,6 +32,7 @@ help:
 	@echo "  make manifests     Regenerate CRDs and RBAC with controller-gen"
 	@echo "  make sync-chart-crds Refresh the Helm CRD bundle from generated bases"
 	@echo "  make helm-template Render and security-check the Helm chart"
+	@echo "  make helm-test     Test default and production chart value combinations"
 	@echo "  make install       Install manifests into the current kubectl context"
 	@echo "  make uninstall     Remove manifests from the current kubectl context"
 	@echo "  make test-e2e      Run the kind smoke-test entrypoint"
@@ -173,7 +174,10 @@ install: manifests
 uninstall:
 	kubectl delete -k config/default --ignore-not-found
 
-helm-template:
+helm-test:
+	./test/helm/render-matrix.sh
+
+helm-template: helm-test
 	helm template cloudivision charts/cloudivision --include-crds
 	@if helm template cloudivision charts/cloudivision --include-crds | grep -q "privileged: true"; then \
 		echo "Rendered chart contains privileged: true"; \
