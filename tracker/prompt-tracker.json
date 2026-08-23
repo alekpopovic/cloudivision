@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-23T10:32:09Z",
-  "last_executed_prompt": 65,
-  "next_prompt": 66,
+  "updated_at": "2026-08-23T10:35:32Z",
+  "last_executed_prompt": 66,
+  "next_prompt": 67,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -611,8 +611,9 @@
       "title": "Admission Webhooks and Defaulting",
       "phase": "API Evolution",
       "file": "prompts/66-admission-webhooks-and-defaulting.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Added optional TLS-backed mutating/validating webhooks, six-resource defaulting and validation, unit tests, Helm cert-manager/existing-secret support, and operations documentation.",
+      "executed_at": "2026-08-23T10:35:32Z"
     },
     {
       "id": 67,

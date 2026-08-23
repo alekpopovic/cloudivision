@@ -14,6 +14,25 @@ spec:
     - name: metrics
       port: 8080
       targetPort: metrics
+{{- if .Values.admissionWebhooks.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cloudivision.fullname" . }}-webhook
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "cloudivision.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+spec:
+  selector:
+    {{- include "cloudivision.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: controller
+  ports:
+    - name: webhook
+      port: 443
+      targetPort: webhook
+{{- end }}
 ---
 apiVersion: v1
 kind: Service

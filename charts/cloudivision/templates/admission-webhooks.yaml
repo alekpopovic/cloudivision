@@ -1,0 +1,94 @@
+{{- if .Values.admissionWebhooks.enabled }}
+{{- if and (not .Values.admissionWebhooks.certManager.enabled) (or (not .Values.admissionWebhooks.existingSecret) (not .Values.admissionWebhooks.caBundle)) }}
+{{- fail "admissionWebhooks requires certManager.enabled=true or both existingSecret and caBundle" }}
+{{- end }}
+{{- $fullname := include "cloudivision.fullname" . }}
+{{- $service := printf "%s-webhook" $fullname }}
+{{- $resources := list "projects" "repositories" "pipelinetemplates" "buildruns" "environments" "releases" }}
+{{- $singular := list "project" "repository" "pipelinetemplate" "buildrun" "environment" "release" }}
+{{- if .Values.admissionWebhooks.certManager.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $fullname }}-webhook-selfsigned
+  namespace: {{ .Release.Namespace }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $fullname }}-webhook
+  namespace: {{ .Release.Namespace }}
+spec:
+  secretName: {{ $fullname }}-webhook-tls
+  issuerRef:
+    name: {{ $fullname }}-webhook-selfsigned
+  dnsNames:
+    - {{ $service }}.{{ .Release.Namespace }}.svc
+    - {{ $service }}.{{ .Release.Namespace }}.svc.cluster.local
+---
+{{- end }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ $fullname }}
+  {{- if .Values.admissionWebhooks.certManager.enabled }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ $fullname }}-webhook
+  {{- end }}
+webhooks:
+{{- range $index, $resource := $resources }}
+  - name: default.{{ $resource }}.cicd.cloudivision.io
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: {{ $.Values.admissionWebhooks.failurePolicy }}
+    timeoutSeconds: {{ $.Values.admissionWebhooks.timeoutSeconds }}
+    reinvocationPolicy: IfNeeded
+    clientConfig:
+      service:
+        name: {{ $service }}
+        namespace: {{ $.Release.Namespace }}
+        path: /mutate-cicd-cloudivision-io-v1alpha1-{{ index $singular $index }}
+      {{- if not $.Values.admissionWebhooks.certManager.enabled }}
+      caBundle: {{ $.Values.admissionWebhooks.caBundle | quote }}
+      {{- end }}
+    rules:
+      - apiGroups: ["cicd.cloudivision.io"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: [{{ $resource | quote }}]
+        scope: Namespaced
+{{- end }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ $fullname }}
+  {{- if .Values.admissionWebhooks.certManager.enabled }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ $fullname }}-webhook
+  {{- end }}
+webhooks:
+{{- range $index, $resource := $resources }}
+  - name: validate.{{ $resource }}.cicd.cloudivision.io
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: {{ $.Values.admissionWebhooks.failurePolicy }}
+    timeoutSeconds: {{ $.Values.admissionWebhooks.timeoutSeconds }}
+    clientConfig:
+      service:
+        name: {{ $service }}
+        namespace: {{ $.Release.Namespace }}
+        path: /validate-cicd-cloudivision-io-v1alpha1-{{ index $singular $index }}
+      {{- if not $.Values.admissionWebhooks.certManager.enabled }}
+      caBundle: {{ $.Values.admissionWebhooks.caBundle | quote }}
+      {{- end }}
+    rules:
+      - apiGroups: ["cicd.cloudivision.io"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: [{{ $resource | quote }}]
+        scope: Namespaced
+{{- end }}
+{{- end }}

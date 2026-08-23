@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	cloudivisionadmission "github.com/cloudivision/cloudivision/internal/admission"
 	cloudivisioncontroller "github.com/cloudivision/cloudivision/internal/controller"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	"github.com/cloudivision/cloudivision/internal/policy"
@@ -15,6 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	ctrlwebhook "sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 func main() {
@@ -33,7 +35,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	options := ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: envOrDefault("CLOUDIVISION_METRICS_BIND_ADDRESS", ":8080"),
@@ -41,10 +43,21 @@ func main() {
 		HealthProbeBindAddress: envOrDefault("CLOUDIVISION_HEALTH_PROBE_BIND_ADDRESS", ":8081"),
 		LeaderElection:         envBool("CLOUDIVISION_LEADER_ELECTION", false),
 		LeaderElectionID:       "cloudivision-controller.cicd.cloudivision.io",
-	})
+	}
+	webhooksEnabled := envBool("CLOUDIVISION_ADMISSION_WEBHOOKS_ENABLED", false)
+	if webhooksEnabled {
+		options.WebhookServer = ctrlwebhook.NewServer(ctrlwebhook.Options{
+			Port:    envInt("CLOUDIVISION_WEBHOOK_PORT", 9443),
+			CertDir: envOrDefault("CLOUDIVISION_WEBHOOK_CERT_DIR", "/tmp/k8s-webhook-server/serving-certs"),
+		})
+	}
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
+	}
+	if webhooksEnabled {
+		cloudivisionadmission.Register(mgr)
 	}
 
 	if err := (&cloudivisioncontroller.ProjectReconciler{

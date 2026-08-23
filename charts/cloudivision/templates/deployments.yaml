@@ -47,6 +47,10 @@ spec:
               containerPort: 8080
             - name: health
               containerPort: 8081
+            {{- if .Values.admissionWebhooks.enabled }}
+            - name: webhook
+              containerPort: {{ .Values.admissionWebhooks.port }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -66,6 +70,11 @@ spec:
           volumeMounts:
             - name: runtime-tmp
               mountPath: /tmp
+            {{- if .Values.admissionWebhooks.enabled }}
+            - name: webhook-certs
+              mountPath: /var/run/cloudivision/webhook-certs
+              readOnly: true
+            {{- end }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -76,6 +85,11 @@ spec:
       volumes:
         - name: runtime-tmp
           emptyDir: {}
+        {{- if .Values.admissionWebhooks.enabled }}
+        - name: webhook-certs
+          secret:
+            secretName: {{ default (printf "%s-webhook-tls" (include "cloudivision.fullname" .)) .Values.admissionWebhooks.existingSecret }}
+        {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

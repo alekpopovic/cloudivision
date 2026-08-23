@@ -35,6 +35,18 @@ controller:
       cpu: 500m
       memory: 512Mi
 
+admissionWebhooks:
+  # Optional because a TLS certificate lifecycle is required.
+  enabled: false
+  port: 9443
+  failurePolicy: Fail
+  timeoutSeconds: 10
+  certManager:
+    enabled: false
+  existingSecret: ""
+  # Required with existingSecret; PEM-encoded CA bundle, base64 encoded.
+  caBundle: ""
+
 api:
   replicaCount: 1
   image:

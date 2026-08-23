@@ -12,6 +12,9 @@ data:
   CLOUDIVISION_RELEASE_CONCURRENCY: {{ .Values.controller.concurrency.release | quote }}
   CLOUDIVISION_HEALTH_PROBE_BIND_ADDRESS: {{ .Values.controller.healthProbeBindAddress | quote }}
   CLOUDIVISION_LEADER_ELECTION: {{ .Values.controller.leaderElection | quote }}
+  CLOUDIVISION_ADMISSION_WEBHOOKS_ENABLED: {{ .Values.admissionWebhooks.enabled | quote }}
+  CLOUDIVISION_WEBHOOK_PORT: {{ .Values.admissionWebhooks.port | quote }}
+  CLOUDIVISION_WEBHOOK_CERT_DIR: "/var/run/cloudivision/webhook-certs"
   CLOU_DIVISION_DEFAULT_NAMESPACE: {{ .Values.api.defaultNamespace | quote }}
   CLOU_DIVISION_AUTH_MODE: {{ .Values.api.auth.mode | quote }}
   CLOU_DIVISION_OIDC_ISSUER_URL: {{ .Values.api.auth.oidc.issuerUrl | quote }}
