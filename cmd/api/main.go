@@ -85,6 +85,13 @@ func main() {
 		logger.Error("configure provider registry", "error", err)
 		os.Exit(1)
 	}
+	organizationDirectory := auth.OrganizationDirectory(auth.NewDevelopmentDirectory())
+	if authMode != "disabled" {
+		organizationDirectory = &auth.MemoryDirectory{}
+		if postgres, ok := auditRecorder.(audit.PostgresRecorder); ok {
+			organizationDirectory = auth.PostgresDirectory{DB: postgres.DB}
+		}
+	}
 	configuredLogStore, err := configureLogStore()
 	if err != nil {
 		logger.Error("configure log backend", "error", err)
@@ -119,6 +126,7 @@ func main() {
 		Providers:        providerRegistry,
 		PolicyEvaluator:  policy.NewDefaultEvaluator(),
 		Notifier:         providernotifications.KubernetesDispatcher{Client: k8sClient},
+		Organizations:    organizationDirectory,
 	}
 
 	addr := envOrDefault("CLOU_DIVISION_API_ADDR", envOrDefault("CLOUDIVISION_API_ADDR", ":8080"))

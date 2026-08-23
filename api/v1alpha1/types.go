@@ -242,6 +242,10 @@ type ProjectNotificationSpec struct {
 }
 
 type ProjectSpec struct {
+	// OrganizationRef binds the project to a product organization. Empty means
+	// the compatibility/default organization.
+	// +optional
+	OrganizationRef string `json:"organizationRef,omitempty"`
 	// +kubebuilder:validation:MinLength=1
 	DisplayName string `json:"displayName"`
 	// +optional

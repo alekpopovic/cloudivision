@@ -4,6 +4,7 @@ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { catchError, of } from 'rxjs';
 
 import { ApiClient } from './api/client';
+import { OrganizationContext } from './core/organization-context.service';
 
 @Component({
   selector: 'app-root',
@@ -13,12 +14,17 @@ import { ApiClient } from './api/client';
 })
 export class AppComponent {
   private readonly api = inject(ApiClient);
+  private readonly organizationContext = inject(OrganizationContext);
   readonly currentUser$ = this.api.currentUser().pipe(catchError(() => of(null)));
+  readonly organizations$ = this.api.organizations().pipe(catchError(() => of([])));
+
+  selectOrganization(id: string): void { this.organizationContext.select(id); }
 
   readonly nav = [
     { label: 'Dashboard', path: '/dashboard', icon: 'observe' },
     { label: 'First Run', path: '/first-run', icon: 'pipeline' },
     { label: 'Projects', path: '/projects', icon: 'platform' },
+    { label: 'Organization', path: '/organization', icon: 'platform' },
     { label: 'Repositories', path: '/repositories', icon: 'source' },
     { label: 'Pipeline Templates', path: '/pipeline-templates', icon: 'pipeline' },
     { label: 'Providers', path: '/providers', icon: 'platform' },

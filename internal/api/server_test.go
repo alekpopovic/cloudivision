@@ -81,6 +81,18 @@ func TestClusterTargetsIncludeLocalAndExternal(t *testing.T) {
 	}
 }
 
+func TestOrganizationDirectoryEndpoints(t *testing.T) {
+	server, _ := newTestServer(t)
+	server.Organizations = auth.NewDevelopmentDirectory()
+	for _, path := range []string{"/api/v1/organizations", "/api/v1/organizations/default/teams", "/api/v1/organizations/default/members", "/api/v1/organizations/default/project-access"} {
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s status=%d body=%s", path, recorder.Code, recorder.Body.String())
+		}
+	}
+}
+
 func TestProjectAPIResponseDoesNotExposeSecretValues(t *testing.T) {
 	project := &cicdv1alpha1.Project{ObjectMeta: metav1.ObjectMeta{Name: "project", Namespace: "ci"}, Spec: cicdv1alpha1.ProjectSpec{DisplayName: "Project", OwnerTeam: "team", Namespace: "ci", DefaultRegistry: "example.com", Isolation: cicdv1alpha1.ProjectIsolation{PodSecurityLevel: cicdv1alpha1.PodSecurityLevelRestricted}, Notifications: &cicdv1alpha1.ProjectNotificationSpec{Enabled: true, Provider: "webhook", SecretRef: &cicdv1alpha1.SecretKeyRef{Name: "notifications", Key: "url"}}}}
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "notifications", Namespace: "ci"}, Data: map[string][]byte{"url": []byte("https://notify.example/top-secret-token")}}

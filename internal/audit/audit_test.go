@@ -131,6 +131,7 @@ func applyTestSchema(t *testing.T, ctx context.Context, db *sql.DB) {
 		"migrations/0002_webhook_events.sql",
 		"migrations/0003_webhook_events_optional_build_run.sql",
 		"migrations/0004_audit_event_delivery_id.sql",
+		"migrations/0005_audit_organization.sql",
 	} {
 		data, err := os.ReadFile(path)
 		if err != nil {

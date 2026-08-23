@@ -1,9 +1,10 @@
-import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, map, of, shareReplay, switchMap, throwError } from 'rxjs';
 
 import { environment } from '../../environments/environment';
-import { ApiError, ApprovalActionRequest, BuildRun, CatalogPipelineTemplate, Environment, LogsResponse, Page, PipelineTemplate, Principal, Project, ProviderHealthResult, ProviderSummary, Release, ReleasePromoteRequest, ReleaseRollbackRequest, Repository } from './models';
+import { OrganizationContext } from '../core/organization-context.service';
+import { ApiError, ApprovalActionRequest, BuildRun, CatalogPipelineTemplate, Environment, LogsResponse, Membership, Organization, Page, PipelineTemplate, Principal, Project, ProjectAccess, ProviderHealthResult, ProviderSummary, Release, ReleasePromoteRequest, ReleaseRollbackRequest, Repository, Team } from './models';
 
 interface RuntimeConfig {
   apiBaseUrl?: string;
@@ -12,6 +13,7 @@ interface RuntimeConfig {
 @Injectable({ providedIn: 'root' })
 export class ApiClient {
   private readonly http = inject(HttpClient);
+  private readonly organizationContext = inject(OrganizationContext);
   // TODO(observability): add an Angular HttpInterceptor for trace context propagation when backend tracing is enabled.
   private readonly config$ = this.http.get<RuntimeConfig>('/assets/config.json').pipe(
     catchError(() => of({} as RuntimeConfig)),
@@ -28,6 +30,11 @@ export class ApiClient {
   currentUser(): Observable<Principal> {
     return this.get<Principal>('/api/v1/auth/me');
   }
+
+  organizations(): Observable<Organization[]> { return this.get<Organization[]>('/api/v1/organizations'); }
+  organizationTeams(organization: string): Observable<Team[]> { return this.get<Team[]>(`/api/v1/organizations/${encodeURIComponent(organization)}/teams`); }
+  organizationMembers(organization: string): Observable<Membership[]> { return this.get<Membership[]>(`/api/v1/organizations/${encodeURIComponent(organization)}/members`); }
+  organizationProjectAccess(organization: string): Observable<ProjectAccess[]> { return this.get<ProjectAccess[]>(`/api/v1/organizations/${encodeURIComponent(organization)}/project-access`); }
 
   createProject(body: { name: string; namespace?: string; spec: Project['spec'] }): Observable<Project> {
     return this.post<Project>('/api/v1/projects', body);
@@ -145,21 +152,23 @@ export class ApiClient {
 
   private get<T>(path: string, params?: Record<string, string>): Observable<T> {
     return this.config$.pipe(
-      switchMap((config) => this.http.get<T>(`${config.apiBaseUrl}${path}`, { params: new HttpParams({ fromObject: params ?? {} }) })),
+      switchMap((config) => this.http.get<T>(`${config.apiBaseUrl}${path}`, { params: new HttpParams({ fromObject: params ?? {} }), headers: this.organizationHeaders() })),
       catchError((error) => throwError(() => this.toApiError(error)))
     );
   }
 
   private post<T>(path: string, body: unknown): Observable<T> {
     return this.config$.pipe(
-      switchMap((config) => this.http.post<T>(`${config.apiBaseUrl}${path}`, body)),
+      switchMap((config) => this.http.post<T>(`${config.apiBaseUrl}${path}`, body, { headers: this.organizationHeaders() })),
       catchError((error) => throwError(() => this.toApiError(error)))
     );
   }
 
   private put<T>(path: string, body: unknown): Observable<T> {
-    return this.config$.pipe(switchMap((config) => this.http.put<T>(`${config.apiBaseUrl}${path}`, body)), catchError((error) => throwError(() => this.toApiError(error))));
+    return this.config$.pipe(switchMap((config) => this.http.put<T>(`${config.apiBaseUrl}${path}`, body, { headers: this.organizationHeaders() })), catchError((error) => throwError(() => this.toApiError(error))));
   }
+
+  private organizationHeaders(): HttpHeaders { const id = this.organizationContext.value; return id ? new HttpHeaders({ 'X-Cloudivision-Organization': id }) : new HttpHeaders(); }
 
   private queryString(values: Record<string, string | undefined>): string {
     const params = new URLSearchParams();

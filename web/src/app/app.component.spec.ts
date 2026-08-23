@@ -6,6 +6,7 @@ import { ApiClient } from './api/client';
 import { AppComponent } from './app.component';
 
 class FakeApiClient {
+	organizations() { return of([{ id: 'default', name: 'Default organization' }]); }
   currentUser() {
     return of({ subject: 'dev-user', displayName: 'Development User', roles: ['admin'], devMode: true });
   }

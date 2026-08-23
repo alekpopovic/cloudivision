@@ -1354,6 +1354,8 @@ spec:
               ownerTeam:
                 minLength: 1
                 type: string
+              organizationRef:
+                type: string
               notifications:
                 description: Notifications routes selected controller events without exposing provider credentials.
                 properties:

@@ -9,9 +9,11 @@ type Role string
 
 const (
 	RoleAdmin        Role = "admin"
+	RoleOrgAdmin     Role = "org-admin"
 	RoleProjectAdmin Role = "project-admin"
 	RoleDeveloper    Role = "developer"
 	RoleViewer       Role = "viewer"
+	RoleAuditor      Role = "auditor"
 )
 
 type Scope string
@@ -35,6 +37,7 @@ type Authenticator interface {
 }
 
 type contextKey struct{}
+type organizationContextKey struct{}
 
 func WithPrincipal(ctx context.Context, principal *Principal) context.Context {
 	return context.WithValue(ctx, contextKey{}, principal)
@@ -43,6 +46,14 @@ func WithPrincipal(ctx context.Context, principal *Principal) context.Context {
 func PrincipalFromContext(ctx context.Context) (*Principal, bool) {
 	principal, ok := ctx.Value(contextKey{}).(*Principal)
 	return principal, ok && principal != nil
+}
+
+func WithOrganization(ctx context.Context, organization string) context.Context {
+	return context.WithValue(ctx, organizationContextKey{}, organization)
+}
+func OrganizationFromContext(ctx context.Context) string {
+	value, _ := ctx.Value(organizationContextKey{}).(string)
+	return value
 }
 
 func ActorFromContext(ctx context.Context, fallback string) string {

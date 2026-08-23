@@ -20,7 +20,12 @@ export interface ApprovalActionRequest {
 export interface ReleasePromoteRequest { targetEnvironmentRef: string; actor?: string; }
 export interface ReleaseRollbackRequest { targetReleaseRef: string; actor?: string; reason?: string; }
 
-export type Role = 'admin' | 'project-admin' | 'developer' | 'viewer';
+export type Role = 'admin' | 'org-admin' | 'project-admin' | 'developer' | 'viewer' | 'auditor';
+
+export interface Organization { id: string; name: string; }
+export interface Team { id: string; organizationId: string; name: string; }
+export interface Membership { organizationId: string; userSubject: string; teamId?: string; role: Role; }
+export interface ProjectAccess { organizationId: string; project: string; teamId: string; role: Role; }
 
 export interface Principal {
   subject: string;
@@ -51,6 +56,7 @@ export interface Project {
   name: string;
   namespace: string;
   spec: {
+	organizationRef?: string;
     displayName: string;
     description?: string;
     ownerTeam: string;

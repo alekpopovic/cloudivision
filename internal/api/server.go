@@ -54,6 +54,7 @@ type Server struct {
 	Providers        *provider.Registry
 	PolicyEvaluator  policy.Evaluator
 	Notifier         providernotifications.Dispatcher
+	Organizations    auth.OrganizationDirectory
 }
 
 func (s Server) Handler() http.Handler {
@@ -64,6 +65,10 @@ func (s Server) Handler() http.Handler {
 		mux.Handle("GET /metrics", observability.MetricsHandler())
 	}
 	mux.HandleFunc("GET /api/v1/auth/me", s.currentUser)
+	mux.HandleFunc("GET /api/v1/organizations", s.organizations)
+	mux.HandleFunc("GET /api/v1/organizations/{organization}/teams", s.organizationTeams)
+	mux.HandleFunc("GET /api/v1/organizations/{organization}/members", s.organizationMembers)
+	mux.HandleFunc("GET /api/v1/organizations/{organization}/project-access", s.organizationProjectAccess)
 	mux.HandleFunc("GET /api/v1/projects", s.projects)
 	mux.HandleFunc("POST /api/v1/projects", s.projects)
 	mux.HandleFunc("GET /api/v1/projects/{name}", s.project)
@@ -108,6 +113,71 @@ func (s Server) health(w http.ResponseWriter, _ *http.Request) {
 func (s Server) currentUser(w http.ResponseWriter, r *http.Request) {
 	principal, _ := auth.PrincipalFromContext(r.Context())
 	writeJSON(w, http.StatusOK, principalDTO(principal))
+}
+
+func (s Server) organizations(w http.ResponseWriter, r *http.Request) {
+	if s.Organizations == nil {
+		writeJSON(w, http.StatusOK, []auth.Organization{})
+		return
+	}
+	principal, _ := auth.PrincipalFromContext(r.Context())
+	items, err := s.Organizations.ListOrganizations(r.Context(), principal.Subject)
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (s Server) organizationTeams(w http.ResponseWriter, r *http.Request) {
+	if !s.requireOrganizationRead(w, r) {
+		return
+	}
+	items, err := s.Organizations.ListTeams(r.Context(), r.PathValue("organization"))
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+func (s Server) organizationMembers(w http.ResponseWriter, r *http.Request) {
+	if !s.requireOrganizationRead(w, r) {
+		return
+	}
+	items, err := s.Organizations.ListMemberships(r.Context(), r.PathValue("organization"))
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+func (s Server) organizationProjectAccess(w http.ResponseWriter, r *http.Request) {
+	if !s.requireOrganizationRead(w, r) {
+		return
+	}
+	items, err := s.Organizations.ListProjectAccess(r.Context(), r.PathValue("organization"))
+	if err != nil {
+		s.writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+func (s Server) requireOrganizationRead(w http.ResponseWriter, r *http.Request) bool {
+	if s.Organizations == nil {
+		s.writeError(w, apiError{status: http.StatusServiceUnavailable, code: "organizations_unavailable", message: "organization directory is not configured"})
+		return false
+	}
+	principal, _ := auth.PrincipalFromContext(r.Context())
+	allowed, err := s.Organizations.Allowed(r.Context(), principal, r.PathValue("organization"), "", auth.PermissionRead)
+	if err != nil {
+		s.writeError(w, err)
+		return false
+	}
+	if !allowed {
+		s.writeError(w, apiError{status: http.StatusForbidden, code: "forbidden", message: "organization access denied"})
+		return false
+	}
+	return true
 }
 
 func (s Server) providers(w http.ResponseWriter, _ *http.Request) {
@@ -1020,6 +1090,9 @@ func (s Server) recordWebhookAudit(ctx context.Context, eventType string, provid
 }
 
 func (s Server) recordAudit(ctx context.Context, event audit.Event) {
+	if event.Organization == "" {
+		event.Organization = auth.OrganizationFromContext(ctx)
+	}
 	recorder := s.Audit
 	if recorder == nil {
 		recorder = audit.LoggerRecorder{Logger: s.Logger}
@@ -1150,7 +1223,24 @@ func (s Server) auth(next http.Handler) http.Handler {
 			writeError(w, http.StatusForbidden, "forbidden", "principal does not have permission "+string(permission))
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), principal)))
+		organization := strings.TrimSpace(r.Header.Get("X-Cloudivision-Organization"))
+		if organization == "" && principal.DevMode {
+			organization = "default"
+		}
+		if organization != "" && s.Organizations != nil && !principal.DevMode {
+			allowed, directoryErr := s.Organizations.Allowed(r.Context(), principal, organization, strings.TrimSpace(r.Header.Get("X-Cloudivision-Project")), permission)
+			if directoryErr != nil {
+				s.writeError(w, directoryErr)
+				return
+			}
+			if !allowed {
+				writeError(w, http.StatusForbidden, "forbidden", "organization membership does not grant permission "+string(permission))
+				return
+			}
+		}
+		ctx := auth.WithPrincipal(r.Context(), principal)
+		ctx = auth.WithOrganization(ctx, organization)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -1171,7 +1261,7 @@ func (s Server) cors(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Cloudivision-Organization,X-Cloudivision-Project")
 			w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID")
 		}
 		if r.Method == http.MethodOptions {

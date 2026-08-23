@@ -23,7 +23,7 @@ func copyJSON[To any, From any](in From) (To, error) {
 func ProjectToV1Beta1(in *alpha.Project) (*beta.Project, error) {
 	out := &beta.Project{TypeMeta: in.TypeMeta, ObjectMeta: *in.ObjectMeta.DeepCopy()}
 	out.TypeMeta.APIVersion = beta.GroupVersion.String()
-	out.Spec = beta.ProjectSpec{DisplayName: in.Spec.DisplayName, Description: in.Spec.Description, OwnerTeam: in.Spec.OwnerTeam, WorkloadNamespace: in.Spec.Namespace, DefaultRegistry: in.Spec.DefaultRegistry, DefaultBranch: in.Spec.DefaultBranch, ServiceAccountName: in.Spec.ServiceAccountName, Isolation: in.Spec.Isolation}
+	out.Spec = beta.ProjectSpec{OrganizationRef: in.Spec.OrganizationRef, DisplayName: in.Spec.DisplayName, Description: in.Spec.Description, OwnerTeam: in.Spec.OwnerTeam, WorkloadNamespace: in.Spec.Namespace, DefaultRegistry: in.Spec.DefaultRegistry, DefaultBranch: in.Spec.DefaultBranch, ServiceAccountName: in.Spec.ServiceAccountName, Isolation: in.Spec.Isolation}
 	var err error
 	if out.Spec.Registry, err = copyJSON[*beta.ProjectRegistrySpec](in.Spec.Registry); err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func ProjectToV1Beta1(in *alpha.Project) (*beta.Project, error) {
 func ProjectToV1Alpha1(in *beta.Project) (*alpha.Project, error) {
 	out := &alpha.Project{TypeMeta: in.TypeMeta, ObjectMeta: *in.ObjectMeta.DeepCopy()}
 	out.TypeMeta.APIVersion = alpha.GroupVersion.String()
-	out.Spec = alpha.ProjectSpec{DisplayName: in.Spec.DisplayName, Description: in.Spec.Description, OwnerTeam: in.Spec.OwnerTeam, Namespace: in.Spec.WorkloadNamespace, DefaultRegistry: in.Spec.DefaultRegistry, DefaultBranch: in.Spec.DefaultBranch, ServiceAccountName: in.Spec.ServiceAccountName, Isolation: in.Spec.Isolation}
+	out.Spec = alpha.ProjectSpec{OrganizationRef: in.Spec.OrganizationRef, DisplayName: in.Spec.DisplayName, Description: in.Spec.Description, OwnerTeam: in.Spec.OwnerTeam, Namespace: in.Spec.WorkloadNamespace, DefaultRegistry: in.Spec.DefaultRegistry, DefaultBranch: in.Spec.DefaultBranch, ServiceAccountName: in.Spec.ServiceAccountName, Isolation: in.Spec.Isolation}
 	var err error
 	if out.Spec.Registry, err = copyJSON[*alpha.ProjectRegistrySpec](in.Spec.Registry); err != nil {
 		return nil, err

@@ -12,6 +12,7 @@ const (
 	PermissionTriggerBuild   Permission = "trigger-build"
 	PermissionManageProjects Permission = "manage-projects"
 	PermissionApproveRelease Permission = "approve-release"
+	PermissionAuditExport    Permission = "audit-export"
 	PermissionAdmin          Permission = "admin"
 )
 
@@ -42,12 +43,12 @@ func Allowed(principal *Principal, permission Permission) bool {
 		return false
 	}
 	for _, role := range principal.Roles {
-		if role == RoleAdmin {
+		if role == RoleAdmin || role == RoleOrgAdmin {
 			return true
 		}
 		switch permission {
 		case PermissionRead:
-			if role == RoleViewer || role == RoleDeveloper || role == RoleProjectAdmin {
+			if role == RoleViewer || role == RoleDeveloper || role == RoleProjectAdmin || role == RoleAuditor {
 				return true
 			}
 		case PermissionTriggerBuild, PermissionApproveRelease:
@@ -56,6 +57,10 @@ func Allowed(principal *Principal, permission Permission) bool {
 			}
 		case PermissionManageProjects:
 			if role == RoleProjectAdmin {
+				return true
+			}
+		case PermissionAuditExport:
+			if role == RoleAuditor || role == RoleProjectAdmin {
 				return true
 			}
 		}

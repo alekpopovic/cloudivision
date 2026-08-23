@@ -15,25 +15,27 @@ import (
 )
 
 type Event struct {
-	ID         string          `json:"id,omitempty"`
-	Type       string          `json:"type"`
-	Actor      string          `json:"actor,omitempty"`
-	Project    string          `json:"project,omitempty"`
-	Repository string          `json:"repository,omitempty"`
-	BuildRun   string          `json:"buildRun,omitempty"`
-	Release    string          `json:"release,omitempty"`
-	Message    string          `json:"message,omitempty"`
-	Metadata   json.RawMessage `json:"metadata,omitempty"`
-	CreatedAt  time.Time       `json:"createdAt,omitempty"`
-	EventID    string          `json:"eventID,omitempty"`
+	ID           string          `json:"id,omitempty"`
+	Type         string          `json:"type"`
+	Actor        string          `json:"actor,omitempty"`
+	Organization string          `json:"organization,omitempty"`
+	Project      string          `json:"project,omitempty"`
+	Repository   string          `json:"repository,omitempty"`
+	BuildRun     string          `json:"buildRun,omitempty"`
+	Release      string          `json:"release,omitempty"`
+	Message      string          `json:"message,omitempty"`
+	Metadata     json.RawMessage `json:"metadata,omitempty"`
+	CreatedAt    time.Time       `json:"createdAt,omitempty"`
+	EventID      string          `json:"eventID,omitempty"`
 }
 
 type EventFilter struct {
-	Project    string
-	Repository string
-	BuildRun   string
-	Release    string
-	Type       string
+	Organization string
+	Project      string
+	Repository   string
+	BuildRun     string
+	Release      string
+	Type         string
 }
 
 type Recorder interface {
@@ -79,6 +81,7 @@ func (r LogRecorder) Record(_ context.Context, event Event) error {
 		"id", redact.MaskString(event.ID),
 		"type", redact.MaskString(event.Type),
 		"actor", redact.MaskString(event.Actor),
+		"organization", redact.MaskString(event.Organization),
 		"project", redact.MaskString(event.Project),
 		"repository", redact.MaskString(event.Repository),
 		"buildRun", redact.MaskString(event.BuildRun),
@@ -113,13 +116,14 @@ func (r PostgresRecorder) Record(ctx context.Context, event Event) error {
 	}
 	_, err := r.DB.ExecContext(ctx, `
 insert into audit_events (
-  id, type, actor, project, repository, build_run, release, event_id, message, metadata, created_at
+  id, type, actor, organization, project, repository, build_run, release, event_id, message, metadata, created_at
 ) values (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12
 )`,
 		event.ID,
 		event.Type,
 		nullString(event.Actor),
+		nullString(event.Organization),
 		nullString(event.Project),
 		nullString(event.Repository),
 		nullString(event.BuildRun),
@@ -140,16 +144,18 @@ func (r PostgresRecorder) ListEvents(ctx context.Context, filter EventFilter) ([
 		return nil, errors.New("postgres audit lister requires a database")
 	}
 	rows, err := r.DB.QueryContext(ctx, `
-select id, type, coalesce(actor, ''), coalesce(project, ''), coalesce(repository, ''),
+select id, type, coalesce(actor, ''), coalesce(organization, ''), coalesce(project, ''), coalesce(repository, ''),
        coalesce(build_run, ''), coalesce(release, ''), coalesce(event_id, ''), coalesce(message, ''),
        metadata, created_at
 from audit_events
-where ($1 = '' or project = $1)
-  and ($2 = '' or repository = $2)
-  and ($3 = '' or build_run = $3)
-  and ($4 = '' or release = $4)
-  and ($5 = '' or type = $5)
+where ($1 = '' or organization = $1)
+  and ($2 = '' or project = $2)
+  and ($3 = '' or repository = $3)
+  and ($4 = '' or build_run = $4)
+  and ($5 = '' or release = $5)
+  and ($6 = '' or type = $6)
 order by created_at desc`,
+		filter.Organization,
 		filter.Project,
 		filter.Repository,
 		filter.BuildRun,
@@ -169,6 +175,7 @@ order by created_at desc`,
 			&event.ID,
 			&event.Type,
 			&event.Actor,
+			&event.Organization,
 			&event.Project,
 			&event.Repository,
 			&event.BuildRun,

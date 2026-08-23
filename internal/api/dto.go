@@ -146,17 +146,18 @@ type WebhookResponse struct {
 }
 
 type AuditEventResponse struct {
-	ID         string          `json:"id,omitempty"`
-	Type       string          `json:"type"`
-	Actor      string          `json:"actor,omitempty"`
-	Project    string          `json:"project,omitempty"`
-	Repository string          `json:"repository,omitempty"`
-	BuildRun   string          `json:"buildRun,omitempty"`
-	Release    string          `json:"release,omitempty"`
-	EventID    string          `json:"eventID,omitempty"`
-	Message    string          `json:"message,omitempty"`
-	Metadata   json.RawMessage `json:"metadata,omitempty"`
-	CreatedAt  metav1.Time     `json:"createdAt,omitempty"`
+	ID           string          `json:"id,omitempty"`
+	Type         string          `json:"type"`
+	Actor        string          `json:"actor,omitempty"`
+	Organization string          `json:"organization,omitempty"`
+	Project      string          `json:"project,omitempty"`
+	Repository   string          `json:"repository,omitempty"`
+	BuildRun     string          `json:"buildRun,omitempty"`
+	Release      string          `json:"release,omitempty"`
+	EventID      string          `json:"eventID,omitempty"`
+	Message      string          `json:"message,omitempty"`
+	Metadata     json.RawMessage `json:"metadata,omitempty"`
+	CreatedAt    metav1.Time     `json:"createdAt,omitempty"`
 }
 
 type HealthResponse struct {
@@ -203,17 +204,18 @@ func releaseDTO(release cicdv1alpha1.Release) ReleaseResponse {
 func auditEventDTO(event audit.Event) AuditEventResponse {
 	createdAt := metav1.NewTime(event.CreatedAt)
 	return AuditEventResponse{
-		ID:         event.ID,
-		Type:       event.Type,
-		Actor:      event.Actor,
-		Project:    event.Project,
-		Repository: event.Repository,
-		BuildRun:   event.BuildRun,
-		Release:    event.Release,
-		EventID:    event.EventID,
-		Message:    event.Message,
-		Metadata:   event.Metadata,
-		CreatedAt:  createdAt,
+		ID:           event.ID,
+		Type:         event.Type,
+		Actor:        event.Actor,
+		Organization: event.Organization,
+		Project:      event.Project,
+		Repository:   event.Repository,
+		BuildRun:     event.BuildRun,
+		Release:      event.Release,
+		EventID:      event.EventID,
+		Message:      event.Message,
+		Metadata:     event.Metadata,
+		CreatedAt:    createdAt,
 	}
 }
 

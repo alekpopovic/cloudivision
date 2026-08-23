@@ -38,6 +38,10 @@
           <a *ngFor="let item of nav" [routerLink]="item.path" routerLinkActive="bg-brand-50 text-brand-700" class="whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-600">{{ item.label }}</a>
         </nav>
         <div class="flex items-center gap-3 text-xs text-slate-600" *ngIf="currentUser$ | async as currentUser; else anonymous">
+          <select *ngIf="organizations$ | async as organizations" aria-label="Organization" class="rounded-md border border-slate-200 bg-white px-2 py-1" (change)="selectOrganization($any($event.target).value)">
+            <option value="" disabled selected>Organization</option>
+            <option *ngFor="let organization of organizations" [value]="organization.id">{{ organization.name }}</option>
+          </select>
           <span class="font-medium">{{ currentUser.displayName || currentUser.email || currentUser.subject }}</span>
           <span class="rounded-full bg-amber-100 px-2.5 py-1 font-semibold text-amber-800 ring-1 ring-amber-200" *ngIf="currentUser.devMode">development auth</span>
         </div>

@@ -21,4 +21,21 @@ central API can read project CRs and pod logs and get (but not list or watch)
 named Secrets only in those namespaces. Require OIDC in production and audit
 cross-project requests.
 
-Limitations: there is no built-in user/team persistence, service-account token exchange, fine-grained per-resource policy UI, or external authorization webhook. Group mapping file changes require deployment/config rollout.
+Product authorization now supports organizations, teams, memberships and
+project grants. The permission order is `org-admin`, `project-admin`,
+`developer`, `viewer`, and the read/audit-focused `auditor`; global `admin`
+remains a platform role. A viewer cannot trigger builds, a developer can trigger
+builds, and project admins can configure repositories. PostgreSQL-backed
+directories use stable OIDC subjects, never mutable display names or email, as
+membership identity.
+
+Kubernetes RBAC remains an independent enforcement layer. Organization access
+must never grant cross-namespace Secret access, and team labels or OIDC groups
+must not be accepted as project grants without an explicit mapping. Audit events
+carry an optional organization field and exports must scope it before returning
+tenant data.
+
+Limitations: management endpoints are currently read-only; invitations,
+service-account token exchange, and an external authorization webhook remain
+future work. Group mapping and membership changes require configuration or
+database updates.

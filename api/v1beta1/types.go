@@ -48,6 +48,7 @@ type (
 const ExecutorTypeJob = alpha.ExecutorTypeJob
 
 type ProjectSpec struct {
+	OrganizationRef    string                     `json:"organizationRef,omitempty"`
 	DisplayName        string                     `json:"displayName"`
 	Description        string                     `json:"description,omitempty"`
 	OwnerTeam          string                     `json:"ownerTeam"`
