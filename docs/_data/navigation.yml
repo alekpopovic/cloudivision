@@ -98,6 +98,8 @@
 
 - title: Project
   items:
+    - title: v0.2.0 release notes
+      url: /releases/v0.2.0.html
     - title: v0.1 final gate
       url: /readiness/v0.1-final-gate.html
     - title: v0.2 final gate

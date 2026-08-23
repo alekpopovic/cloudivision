@@ -37,6 +37,8 @@ guarantees documented in `docs/api/compatibility-policy.md`.
 
 ### Fixes
 
+- Wired `cloudivision release rollback` to the v0.2 API with explicit target,
+  actor, and reason fields instead of returning the stale v0.1 error.
 - Made scalar list CRD fields atomic so Kubernetes 1.36 does not reject their
   schemas for quadratic `uniqueItems` validation cost.
 - Made conformance fail immediately on unexpected terminal BuildRun phases and

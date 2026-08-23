@@ -7,14 +7,22 @@ Release binaries are statically linked and published for Linux, macOS, and Windo
 The installer detects the operating system and architecture, verifies the checksum, and installs to `/usr/local/bin`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/alekpopovic/cloudivision/main/scripts/install-cli.sh | bash
+curl -fsSL https://raw.githubusercontent.com/alekpopovic/cloudivision/v0.2.0/scripts/install-cli.sh | \
+  CLOUDIVISION_CLI_VERSION=0.2.0 bash
 cloudivision version
 ```
+
+Pin both the installer source and `CLOUDIVISION_CLI_VERSION` to the same release.
+Using the `main` installer with `latest` is convenient for evaluation but is not a
+reproducible installation.
 
 Use a pinned release and a user-owned destination when desired:
 
 ```sh
-CLOUDIVISION_CLI_VERSION=0.2.0 CLOUDIVISION_CLI_INSTALL_DIR="$HOME/.local/bin" ./scripts/install-cli.sh
+curl -fsSLO https://raw.githubusercontent.com/alekpopovic/cloudivision/v0.2.0/scripts/install-cli.sh
+CLOUDIVISION_CLI_VERSION=0.2.0 \
+CLOUDIVISION_CLI_INSTALL_DIR="$HOME/.local/bin" \
+  bash install-cli.sh
 ```
 
 For a manual install, download `cloudivision-cli_VERSION_OS_ARCH.tar.gz`, verify it with `sha256sum -c SHA256SUMS`, extract it, and move `cloudivision` to a directory on `PATH`.
@@ -53,3 +61,6 @@ PowerShell users can add the output of `cloudivision completion powershell` to t
 Tagged releases run the release workflow and attach CLI archives for every supported platform alongside checksums. `.goreleaser.yaml` mirrors the CLI build matrix for maintainers who use GoReleaser. The repository release builder also includes these archives in `dist/release/vVERSION`.
 
 After installation, run `cloudivision doctor` with the API URL and credentials to validate connectivity. Tokens should come from `CLOU_DIVISION_TOKEN` or the mode-0600 CLI config, not shell history.
+
+The complete platform assets, upgrade impact, and known issues are recorded in
+the [v0.2.0 release notes](../releases/v0.2.0.md).

@@ -6,9 +6,13 @@ VERSION_VALUE="${1:-$(tr -d '[:space:]' <"${ROOT_DIR}/VERSION")}"
 OUTPUT_ROOT="${RELEASE_OUTPUT_DIR:-${ROOT_DIR}/dist/release}"
 RELEASE_DIR="${OUTPUT_ROOT}/v${VERSION_VALUE}"
 REGISTRY="${RELEASE_IMAGE_REGISTRY:-ghcr.io/alekpopovic/cloudivision}"
+SYFT_COMMAND="${RELEASE_SYFT_COMMAND:-syft}"
 
 fail() { echo "release: $*" >&2; exit 1; }
 require() { command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"; }
+command_available() {
+  if [[ "$1" == */* ]]; then [[ -x "$1" ]]; else command -v "$1" >/dev/null 2>&1; fi
+}
 
 [[ "${VERSION_VALUE}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]] || fail "version must be semantic (got ${VERSION_VALUE})"
 require git
@@ -19,7 +23,7 @@ require tar
 require sha256sum
 
 CHART_VERSION="$(awk '$1 == "version:" {print $2}' "${ROOT_DIR}/charts/cloudivision/Chart.yaml")"
-APP_VERSION="$(awk '$1 == "appVersion:" {gsub(/\"/, "", $2); print $2}' "${ROOT_DIR}/charts/cloudivision/Chart.yaml")"
+APP_VERSION="$(awk '$1 == "appVersion:" {gsub(/"/, "", $2); print $2}' "${ROOT_DIR}/charts/cloudivision/Chart.yaml")"
 [[ "${CHART_VERSION}" == "${VERSION_VALUE}" ]] || fail "Chart.yaml version ${CHART_VERSION} does not match ${VERSION_VALUE}"
 [[ "${APP_VERSION}" == "${VERSION_VALUE}" ]] || fail "Chart.yaml appVersion ${APP_VERSION} does not match ${VERSION_VALUE}"
 
@@ -94,9 +98,9 @@ printf '%s\n' \
   "sha_tag=sha-${SHORT_SHA}" \
   >"${RELEASE_DIR}/cloudivision-${VERSION_VALUE}.manifest"
 
-if [[ "${RELEASE_GENERATE_SBOM:-auto}" == "true" ]] || { [[ "${RELEASE_GENERATE_SBOM:-auto}" == "auto" ]] && command -v syft >/dev/null 2>&1; }; then
-  require syft
-  syft "dir:${ROOT_DIR}" -o "spdx-json=${RELEASE_DIR}/cloudivision-${VERSION_VALUE}.source.spdx.json"
+if [[ "${RELEASE_GENERATE_SBOM:-auto}" == "true" ]] || { [[ "${RELEASE_GENERATE_SBOM:-auto}" == "auto" ]] && command_available "${SYFT_COMMAND}"; }; then
+  command_available "${SYFT_COMMAND}" || fail "required command not found: ${SYFT_COMMAND}"
+  "${SYFT_COMMAND}" "dir:${ROOT_DIR}" -o "spdx-json=${RELEASE_DIR}/cloudivision-${VERSION_VALUE}.source.spdx.json"
 else
   echo "release: SKIP source SBOM (install syft or set RELEASE_GENERATE_SBOM=true)"
 fi

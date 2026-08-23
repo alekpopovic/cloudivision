@@ -1,5 +1,6 @@
 # Image tagging and immutable releases
 
+{% raw %}
 cloudivision generates a safe image tag when a `BuildRun` does not provide one.
 The default template is `{{ .Branch }}-{{ .ShortSHA }}`. The generated value is
 written to both `spec.image.tag` and `status.image.tag`, so execution and audit
@@ -30,6 +31,7 @@ Templates may use `.Branch`, `.CommitSHA`, `.ShortSHA`, `.BuildRunName`, and
 - `{{ .Branch }}-{{ .ShortSHA }}` for human-readable branch builds.
 - `{{ .BuildRunName }}` for a direct Kubernetes audit trail.
 - `{{ .Timestamp }}-{{ .ShortSHA }}` for time-ordered builds.
+{% endraw %}
 
 An empty branch becomes `detached`, an empty commit becomes `unknown`, and an
 empty timestamp uses the Unix epoch. Values are lower-cased, unsafe characters

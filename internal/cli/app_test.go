@@ -128,6 +128,35 @@ func TestBuildLifecycleActionCallsAPI(t *testing.T) {
 	}
 }
 
+func TestReleaseRollbackCallsAPI(t *testing.T) {
+	var received struct {
+		TargetReleaseRef string `json:"targetReleaseRef"`
+		Actor            string `json:"actor"`
+		Reason           string `json:"reason"`
+	}
+	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/releases/ci/release-bad/rollback" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+			t.Fatal(err)
+		}
+		return jsonResponse(http.StatusCreated, `{"name":"release-bad-rollback-release-good","namespace":"ci","spec":{},"status":{}}`), nil
+	})
+	app, stdout, stderr := testApp(t)
+	app.HTTP.Transport = transport
+	code := app.Run([]string{"--api-url", "https://api.test", "--namespace", "ci", "release", "rollback", "release-bad", "--target-release", "release-good", "--actor", "operator@example.com", "--reason", "health regression"})
+	if code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	if received.TargetReleaseRef != "release-good" || received.Actor != "operator@example.com" || received.Reason != "health regression" {
+		t.Fatalf("request=%#v", received)
+	}
+	if !strings.Contains(stdout.String(), "release-bad-rollback-release-good rollback created") {
+		t.Fatalf("stdout=%q", stdout.String())
+	}
+}
+
 func TestBuildWatchExitsForSuccessAndFailure(t *testing.T) {
 	for _, test := range []struct {
 		name  string

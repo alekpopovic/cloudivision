@@ -35,9 +35,14 @@ cloudivision -n ci release list
 cloudivision -n ci release get RELEASE_NAME --output json
 cloudivision -n ci release approve RELEASE_NAME --actor alice --comment "change approved"
 cloudivision -n ci release reject RELEASE_NAME --actor alice --comment "rollback required"
+cloudivision -n ci release rollback FAILED_RELEASE \
+  --target-release PREVIOUS_DEPLOYED_RELEASE \
+  --actor alice --reason "health regression"
 ```
 
-The v0.2 HTTP API supports rollback, but the CLI `release rollback` command has not yet been wired to it. Use the API or revert through GitOps and create an auditable replacement Release; the CLI does not apply manifests directly.
+Rollback creates a new auditable Release that restores the selected previously
+deployed image. It remains subject to environment approval, digest, and signature
+policy; the CLI never applies application manifests directly.
 
 Run `cloudivision doctor` to check API health, authentication, provider/GitOps health and, when `kubectl` is available, CRDs, deployments, runner image configuration, and Job RBAC. `WARN` means an optional Kubernetes check could not run; `FAIL` makes doctor exit non-zero.
 

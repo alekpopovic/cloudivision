@@ -23,6 +23,8 @@ Generated Go and TypeScript clients are committed under `sdk/`; see
 | `/api/v1/releases` | `GET` | List releases |
 | `/api/v1/releases/{namespace}/{name}/approve` | `POST` | Approve a release |
 | `/api/v1/releases/{namespace}/{name}/reject` | `POST` | Reject a release |
+| `/api/v1/releases/{namespace}/{name}/promote` | `POST` | Create a Release for another Environment |
+| `/api/v1/releases/{namespace}/{name}/rollback` | `POST` | Create a Release restoring a previously deployed image |
 | `/api/v1/audit/events` | `GET` | List audit events |
 | `/api/v1/audit/events/export` | `GET` | Export filtered audit events as JSON or CSV |
 | `/api/v1/reports/builds` | `GET` | Build outcome and duration report |

@@ -513,7 +513,31 @@ func (a *App) release(ctx context.Context, client apiClient, config Config, outp
 		}
 		return a.printValue(item, item.Name+" "+args[0]+"d", output)
 	case "rollback":
-		return a.fail(fmt.Errorf("rollback is not available in the v0.1 API; revert the GitOps change and create an auditable replacement Release"))
+		actionArgs := args[1:]
+		name := ""
+		if len(actionArgs) > 0 && !strings.HasPrefix(actionArgs[0], "-") {
+			name, actionArgs = actionArgs[0], actionArgs[1:]
+		}
+		fs := newFlags("release rollback", a.Err)
+		target := fs.String("target-release", "", "previously deployed release to restore")
+		actor := fs.String("actor", "cloudivision-cli", "actor")
+		reason := fs.String("reason", "", "rollback reason")
+		if err := fs.Parse(actionArgs); err != nil {
+			return 2
+		}
+		if name == "" && fs.NArg() == 1 {
+			name = fs.Arg(0)
+		}
+		if name == "" || *target == "" || fs.NArg() > 0 {
+			return a.fail(fmt.Errorf("usage: cloudivision release rollback NAME --target-release RELEASE [--actor ACTOR] [--reason TEXT]"))
+		}
+		var item release
+		path := fmt.Sprintf("/api/v1/releases/%s/%s/rollback", url.PathEscape(config.Namespace), url.PathEscape(name))
+		body := map[string]string{"targetReleaseRef": *target, "actor": *actor, "reason": *reason}
+		if err := client.do(ctx, http.MethodPost, path, body, &item); err != nil {
+			return a.fail(err)
+		}
+		return a.printValue(item, item.Name+" rollback created", output)
 	default:
 		return a.fail(fmt.Errorf("unknown release command %q", args[0]))
 	}

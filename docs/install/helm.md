@@ -1,5 +1,11 @@
 # Helm install
 
+For the published chart, download and verify the assets from the
+[v0.2.0 GitHub release](https://github.com/alekpopovic/cloudivision/releases/tag/v0.2.0).
+The commands on this page use a source checkout; see the current
+[installation runbook](../operations/install-helm.md) for pinned release commands,
+CRD handling, and production hardening.
+
 Install cloudivision into a namespace:
 
 ```sh

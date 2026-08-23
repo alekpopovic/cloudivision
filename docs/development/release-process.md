@@ -18,22 +18,25 @@ image digests keylessly with Cosign.
 
 1. Start from a clean, protected `main` and choose `X.Y.Z-rc.N`.
 2. Move relevant `Unreleased` entries in `CHANGELOG.md` into the version section.
-3. Update `VERSION` plus Chart `version` and `appVersion`; document CRD changes.
+3. Update `VERSION` plus Chart `version` and `appVersion`; add
+   `docs/releases/vX.Y.Z.md` with install, artifact, compatibility, upgrade, and
+   known-issue sections; document CRD changes.
 4. Run the final gate, including live conformance and upgrade on a disposable kind
    cluster. Triage dependency and container scan findings.
 5. Produce local evidence:
 
 ```sh
-./scripts/release/build-local.sh 0.2.0
-sha256sum -c dist/release/v0.2.0/SHA256SUMS
-helm install cloudivision dist/release/v0.2.0/cloudivision-0.2.0.tgz \
+RELEASE_VERSION="$(tr -d '[:space:]' < VERSION)"
+./scripts/release/build-local.sh "$RELEASE_VERSION"
+sha256sum -c "dist/release/v${RELEASE_VERSION}/SHA256SUMS"
+helm install cloudivision "dist/release/v${RELEASE_VERSION}/cloudivision-${RELEASE_VERSION}.tgz" \
   --namespace cloudivision --create-namespace --dry-run
 ```
 
 To include local images without pushing:
 
 ```sh
-RELEASE_BUILD_IMAGES=true ./scripts/release/build-local.sh 0.2.0
+RELEASE_BUILD_IMAGES=true ./scripts/release/build-local.sh "$RELEASE_VERSION"
 ```
 
 Use `RELEASE_GENERATE_SBOM=true` to require Syft. Use a protected
@@ -41,7 +44,7 @@ Use `RELEASE_GENERATE_SBOM=true` to require Syft. Use a protected
 Conformance is opt-in because it targets a Kubernetes context:
 
 ```sh
-RELEASE_RUN_CONFORMANCE=true ./scripts/release/build-local.sh 0.2.0
+RELEASE_RUN_CONFORMANCE=true ./scripts/release/build-local.sh "$RELEASE_VERSION"
 ```
 
 ## Publish
@@ -50,12 +53,14 @@ After RC installation, build, webhook, GitOps release, production approval,
 rollback, upgrade and uninstall-retention tests pass:
 
 ```sh
-git tag -s v0.2.0 -m "cloudivision v0.2.0"
-git push origin v0.2.0
+git tag -s "v${RELEASE_VERSION}" -m "cloudivision v${RELEASE_VERSION}"
+git push origin "v${RELEASE_VERSION}"
 ```
 
-The tag workflow validates the version, reruns checks, pushes four GHCR images,
-packages local artifacts, signs image digests and creates a GitHub Release. Verify
+The tag workflow validates the version and matching release-notes file, reruns
+checks, pushes four GHCR images, packages local artifacts, generates a source
+SBOM, signs image digests and creates a GitHub Release using the reviewed notes.
+Verify
 the release is not published until all required jobs and environment approvals
 pass. Download artifacts into a clean directory, verify checksums/signatures, and
 install the packaged chart against the immutable version tags.

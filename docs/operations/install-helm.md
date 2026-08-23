@@ -1,5 +1,26 @@
 # Install with Helm
 
+## Install the v0.2.0 release
+
+Download `cloudivision-0.2.0.tgz`, `cloudivision-crds_0.2.0.yaml`, and
+`SHA256SUMS` from the
+[GitHub release](https://github.com/alekpopovic/cloudivision/releases/tag/v0.2.0).
+Verify the assets, apply CRDs explicitly, and pin every component image:
+
+```sh
+sha256sum --check --ignore-missing SHA256SUMS
+kubectl apply -f cloudivision-crds_0.2.0.yaml
+helm upgrade --install cloudivision cloudivision-0.2.0.tgz \
+  --namespace cloudivision --create-namespace \
+  --set controller.image.tag=0.2.0 \
+  --set api.image.tag=0.2.0 \
+  --set runner.image.tag=0.2.0 \
+  --set web.image.tag=0.2.0
+```
+
+Use immutable image digests in reviewed production values. The commands below
+that reference `charts/cloudivision` are for a source checkout.
+
 Render and inspect first, then install:
 
 ```sh
