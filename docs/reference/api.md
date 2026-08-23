@@ -4,6 +4,9 @@ The API is served below `/api/v1`. The machine-readable contract is
 [`docs/openapi.yaml`](../openapi.yaml). Health and readiness are available at
 `/healthz` and `/readyz`.
 
+Generated Go and TypeScript clients are committed under `sdk/`; see
+[API client generation](../development/api-client-generation.md).
+
 ## Resources
 
 | Route | Methods | Purpose |

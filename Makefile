@@ -1,4 +1,4 @@
-.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all conformance upgrade-test scale-test security-check release-local vet lint build build-cli install-cli-local cli-completions run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate sync-chart-crds install uninstall helm-template helm-test
+.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all conformance upgrade-test scale-test security-check release-local vet lint build build-cli install-cli-local cli-completions run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate sync-chart-crds install uninstall helm-template helm-test openapi-generate sdk-generate sdk-check
 
 IMAGE_REGISTRY ?= ghcr.io/alekpopovic/cloudivision
 IMAGE_TAG ?= dev
@@ -41,6 +41,8 @@ help:
 	@echo "  make scale-test    Generate a limited scale fixture (set SCALE_TEST_LIVE=true to apply)"
 	@echo "  make security-check Check the rendered chart runner security baseline"
 	@echo "  make release-local  Build local versioned release artifacts"
+	@echo "  make sdk-generate   Regenerate Go and TypeScript API clients"
+	@echo "  make sdk-check      Verify generated API clients are current and compile"
 
 fmt:
 	gofmt -w ./api ./cmd ./internal
@@ -92,6 +94,16 @@ release-local:
 	./scripts/release/build-local.sh
 
 test-all: fmt test-unit test-controller test-api test-web vet build helm-template
+
+openapi-generate:
+	go run ./cmd/sdkgen -spec docs/openapi.yaml -go-out sdk/go/client.gen.go -ts-out sdk/typescript/client.gen.ts
+
+sdk-generate: openapi-generate
+
+sdk-check:
+	go run ./cmd/sdkgen -check -spec docs/openapi.yaml -go-out sdk/go/client.gen.go -ts-out sdk/typescript/client.gen.ts
+	go test ./sdk/go
+	web/node_modules/.bin/tsc -p sdk/typescript/tsconfig.json
 
 vet:
 	@mkdir -p $(GOTMPDIR)

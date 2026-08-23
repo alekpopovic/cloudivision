@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-23T10:57:32Z",
-  "last_executed_prompt": 70,
-  "next_prompt": 71,
+  "updated_at": "2026-08-23T11:12:16Z",
+  "last_executed_prompt": 71,
+  "next_prompt": 72,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -656,8 +656,9 @@
       "title": "OpenAPI, SDK and API Client Generation",
       "phase": "API",
       "file": "prompts/71-openapi-sdk-and-api-client-generation.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Completed route-parity OpenAPI coverage and deterministic Go/TypeScript client generation with Make/CI stale checks, compilation tests, shared error/pagination documentation, and migration guidance.",
+      "executed_at": "2026-08-23T11:12:16Z"
     },
     {
       "id": 72,

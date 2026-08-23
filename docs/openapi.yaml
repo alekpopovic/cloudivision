@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: cloudivision API
   version: 0.1.0
-  description: Thin HTTP API over cloudivision Kubernetes CRDs.
+  description: Thin HTTP API over cloudivision Kubernetes CRDs. Bearer authentication is required outside explicitly documented development auth-disabled mode; provider webhooks use signatures instead.
 paths:
   /healthz:
     get:
@@ -24,6 +24,29 @@ paths:
       responses:
         "200":
           description: Return the authenticated principal and resolved roles.
+  /api/v1/organizations:
+    get:
+      responses:
+        "200": {description: Organizations available to the current principal.}
+  /api/v1/organizations/{organization}/teams:
+    get:
+      parameters:
+        - {name: organization, in: path, required: true, schema: {type: string}}
+      responses:
+        "200": {description: Teams in the organization.}
+        "403": {description: Organization membership does not grant read access.}
+  /api/v1/organizations/{organization}/members:
+    get:
+      parameters:
+        - {name: organization, in: path, required: true, schema: {type: string}}
+      responses:
+        "200": {description: Organization memberships.}
+  /api/v1/organizations/{organization}/project-access:
+    get:
+      parameters:
+        - {name: organization, in: path, required: true, schema: {type: string}}
+      responses:
+        "200": {description: Team-to-project permission grants.}
   /api/v1/projects:
     get:
       responses:
@@ -78,6 +101,16 @@ paths:
       responses:
         "201":
           description: Create a PipelineTemplate resource.
+  /api/v1/catalog/pipeline-templates:
+    get:
+      responses:
+        "200": {description: List built-in pipeline template catalog entries.}
+  /api/v1/catalog/pipeline-templates/{name}/install:
+    post:
+      parameters:
+        - {name: name, in: path, required: true, schema: {type: string}}
+      responses:
+        "201": {description: Install a catalog PipelineTemplate in a namespace.}
   /api/v1/pipeline-templates/{namespace}/{name}:
     put:
       parameters:
@@ -206,6 +239,10 @@ paths:
       responses:
         "200":
           description: List Environment resources.
+  /api/v1/cluster-targets:
+    get:
+      responses:
+        "200": {description: List the implicit local cluster and experimental ClusterTargets.}
   /api/v1/releases:
     get:
       parameters:
@@ -529,6 +566,21 @@ components:
         requestId:
           type: string
           description: Request ID for correlating API errors with server logs.
+        violations:
+          type: array
+          items:
+            type: object
+            required: [policy, severity, message]
+            properties:
+              policy: {type: string}
+              severity: {type: string}
+              message: {type: string}
+              fieldPath: {type: string}
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
     ReleaseApprovalRequest:
       type: object
       required:
