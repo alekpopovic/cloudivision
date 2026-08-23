@@ -9,7 +9,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -248,21 +247,18 @@ func (s Server) buildRuns(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, err)
 			return
 		}
-		filtered, total, limit, offset, err := filterAndPageBuildRuns(r, list.Items)
+		options, err := parsePageOptions(r, map[string]bool{"createdAt": true, "name": true, "phase": true})
 		if err != nil {
 			s.writeError(w, badRequest(err.Error()))
 			return
 		}
-		w.Header().Set("X-Total-Count", strconv.Itoa(total))
-		w.Header().Set("X-Limit", strconv.Itoa(limit))
-		if offset+len(filtered) < total {
-			w.Header().Set("X-Next-Offset", strconv.Itoa(offset+len(filtered)))
-		}
-		items := make([]BuildRunResponse, 0, len(filtered))
-		for _, item := range filtered {
+		filtered := filterSortBuildRuns(r, list.Items, options)
+		page, next := paginate(filtered, options)
+		items := make([]BuildRunResponse, 0, len(page))
+		for _, item := range page {
 			items = append(items, buildRunDTO(item))
 		}
-		writeJSON(w, http.StatusOK, items)
+		writeJSON(w, http.StatusOK, PageResponse[BuildRunResponse]{Items: items, NextPageToken: next, TotalCount: len(filtered), Limit: options.limit})
 	case http.MethodPost:
 		var req BuildRunRequest
 		if !s.decode(w, r, &req) {
@@ -391,11 +387,18 @@ func (s Server) releases(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, err)
 		return
 	}
-	items := make([]ReleaseResponse, 0, len(list.Items))
-	for _, item := range list.Items {
+	options, err := parsePageOptions(r, map[string]bool{"createdAt": true, "name": true, "phase": true})
+	if err != nil {
+		s.writeError(w, badRequest(err.Error()))
+		return
+	}
+	filtered := filterSortReleases(r, list.Items, options)
+	page, next := paginate(filtered, options)
+	items := make([]ReleaseResponse, 0, len(page))
+	for _, item := range page {
 		items = append(items, releaseDTO(item))
 	}
-	writeJSON(w, http.StatusOK, items)
+	writeJSON(w, http.StatusOK, PageResponse[ReleaseResponse]{Items: items, NextPageToken: next, TotalCount: len(filtered), Limit: options.limit})
 }
 
 func (s Server) approveRelease(w http.ResponseWriter, r *http.Request) {
@@ -577,6 +580,11 @@ func (s Server) releaseRequiresApproval(ctx context.Context, release *cicdv1alph
 }
 
 func (s Server) auditEvents(w http.ResponseWriter, r *http.Request) {
+	options, err := parsePageOptions(r, map[string]bool{"createdAt": true, "type": true})
+	if err != nil {
+		s.writeError(w, badRequest(err.Error()))
+		return
+	}
 	lister := s.AuditEvents
 	if lister == nil {
 		if cast, ok := s.Audit.(audit.EventLister); ok {
@@ -584,24 +592,27 @@ func (s Server) auditEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if lister == nil {
-		writeJSON(w, http.StatusOK, []AuditEventResponse{})
+		writeJSON(w, http.StatusOK, PageResponse[AuditEventResponse]{Items: []AuditEventResponse{}, Limit: options.limit})
 		return
 	}
 	events, err := lister.ListEvents(r.Context(), audit.EventFilter{
-		Project:  r.URL.Query().Get("project"),
-		BuildRun: r.URL.Query().Get("buildRun"),
-		Release:  r.URL.Query().Get("release"),
-		Type:     r.URL.Query().Get("type"),
+		Project:    r.URL.Query().Get("project"),
+		Repository: r.URL.Query().Get("repository"),
+		BuildRun:   r.URL.Query().Get("buildRun"),
+		Release:    r.URL.Query().Get("release"),
+		Type:       r.URL.Query().Get("type"),
 	})
 	if err != nil {
 		s.writeError(w, err)
 		return
 	}
-	items := make([]AuditEventResponse, 0, len(events))
-	for _, event := range events {
+	filtered := filterSortAuditEvents(events, options)
+	page, next := paginate(filtered, options)
+	items := make([]AuditEventResponse, 0, len(page))
+	for _, event := range page {
 		items = append(items, auditEventDTO(event))
 	}
-	writeJSON(w, http.StatusOK, items)
+	writeJSON(w, http.StatusOK, PageResponse[AuditEventResponse]{Items: items, NextPageToken: next, TotalCount: len(filtered), Limit: options.limit})
 }
 
 func (s Server) webhook(provider webhook.Provider) http.HandlerFunc {
@@ -924,58 +935,6 @@ func (s Server) listBuildRuns(ctx context.Context, r *http.Request, list *cicdv1
 	return s.Client.List(ctx, list, client.InNamespace(s.namespace(namespace)))
 }
 
-func filterAndPageBuildRuns(r *http.Request, source []cicdv1alpha1.BuildRun) ([]cicdv1alpha1.BuildRun, int, int, int, error) {
-	query := r.URL.Query()
-	limit, err := boundedInt(query.Get("limit"), 100, 1, 500)
-	if err != nil {
-		return nil, 0, 0, 0, fmt.Errorf("limit: %w", err)
-	}
-	offset, err := boundedInt(query.Get("offset"), 0, 0, 1_000_000_000)
-	if err != nil {
-		return nil, 0, 0, 0, fmt.Errorf("offset: %w", err)
-	}
-	after, err := optionalTime(query.Get("createdAfter"))
-	if err != nil {
-		return nil, 0, 0, 0, fmt.Errorf("createdAfter: %w", err)
-	}
-	before, err := optionalTime(query.Get("createdBefore"))
-	if err != nil {
-		return nil, 0, 0, 0, fmt.Errorf("createdBefore: %w", err)
-	}
-	filtered := make([]cicdv1alpha1.BuildRun, 0, len(source))
-	for _, item := range source {
-		if phase := query.Get("phase"); phase != "" && !strings.EqualFold(string(item.Status.Phase), phase) {
-			continue
-		}
-		if project := query.Get("project"); project != "" && item.Spec.ProjectRef != project {
-			continue
-		}
-		if repository := query.Get("repository"); repository != "" && item.Spec.RepositoryRef != repository {
-			continue
-		}
-		created := item.CreationTimestamp.Time
-		if after != nil && created.Before(*after) {
-			continue
-		}
-		if before != nil && created.After(*before) {
-			continue
-		}
-		filtered = append(filtered, item)
-	}
-	sort.SliceStable(filtered, func(i, j int) bool {
-		return filtered[i].CreationTimestamp.After(filtered[j].CreationTimestamp.Time)
-	})
-	total := len(filtered)
-	if offset >= total {
-		return []cicdv1alpha1.BuildRun{}, total, limit, offset, nil
-	}
-	end := offset + limit
-	if end > total {
-		end = total
-	}
-	return filtered[offset:end], total, limit, offset, nil
-}
-
 func boundedInt(value string, fallback, minimum, maximum int) (int, error) {
 	if value == "" {
 		return fallback, nil
@@ -1082,7 +1041,7 @@ func (s Server) cors(next http.Handler) http.Handler {
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization")
-			w.Header().Set("Access-Control-Expose-Headers", "X-Total-Count,X-Limit,X-Next-Offset,X-Request-ID")
+			w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

@@ -69,9 +69,23 @@ paths:
           description: Create a PipelineTemplate resource.
   /api/v1/build-runs:
     get:
+      parameters:
+        - {$ref: "#/components/parameters/ListLimit"}
+        - {$ref: "#/components/parameters/PageToken"}
+        - {$ref: "#/components/parameters/NamespaceFilter"}
+        - {$ref: "#/components/parameters/ProjectFilter"}
+        - {$ref: "#/components/parameters/RepositoryFilter"}
+        - {$ref: "#/components/parameters/PhaseFilter"}
+        - {$ref: "#/components/parameters/FromFilter"}
+        - {$ref: "#/components/parameters/ToFilter"}
+        - {$ref: "#/components/parameters/SortFilter"}
+        - {$ref: "#/components/parameters/OrderFilter"}
       responses:
         "200":
           description: List BuildRun resources and status.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PaginatedResponse"}
     post:
       responses:
         "201":
@@ -170,9 +184,23 @@ paths:
           description: List Environment resources.
   /api/v1/releases:
     get:
+      parameters:
+        - {$ref: "#/components/parameters/ListLimit"}
+        - {$ref: "#/components/parameters/PageToken"}
+        - {$ref: "#/components/parameters/NamespaceFilter"}
+        - {$ref: "#/components/parameters/ProjectFilter"}
+        - {$ref: "#/components/parameters/RepositoryFilter"}
+        - {$ref: "#/components/parameters/PhaseFilter"}
+        - {$ref: "#/components/parameters/FromFilter"}
+        - {$ref: "#/components/parameters/ToFilter"}
+        - {$ref: "#/components/parameters/SortFilter"}
+        - {$ref: "#/components/parameters/OrderFilter"}
       responses:
         "200":
           description: List Release resources.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PaginatedResponse"}
   /api/v1/releases/{namespace}/{name}/approve:
     post:
       parameters:
@@ -224,6 +252,13 @@ paths:
   /api/v1/audit/events:
     get:
       parameters:
+        - {$ref: "#/components/parameters/ListLimit"}
+        - {$ref: "#/components/parameters/PageToken"}
+        - {$ref: "#/components/parameters/RepositoryFilter"}
+        - {$ref: "#/components/parameters/FromFilter"}
+        - {$ref: "#/components/parameters/ToFilter"}
+        - {$ref: "#/components/parameters/SortFilter"}
+        - {$ref: "#/components/parameters/OrderFilter"}
         - name: project
           in: query
           required: false
@@ -246,7 +281,10 @@ paths:
             type: string
       responses:
         "200":
-          description: List audit events from the configured audit event store. Returns an empty list when no event lister is configured.
+          description: List a page of audit events from the configured audit event store.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PaginatedResponse"}
   /api/v1/providers:
     get:
       responses:
@@ -332,7 +370,57 @@ paths:
         "201":
           description: Create a BuildRun from a verified generic push event.
 components:
+  parameters:
+    ListLimit:
+      name: limit
+      in: query
+      schema: {type: integer, default: 50, minimum: 1, maximum: 200}
+    PageToken:
+      name: pageToken
+      in: query
+      description: Opaque continuation token from nextPageToken. The continue alias is also accepted.
+      schema: {type: string}
+    NamespaceFilter:
+      name: namespace
+      in: query
+      schema: {type: string}
+    ProjectFilter:
+      name: project
+      in: query
+      schema: {type: string}
+    RepositoryFilter:
+      name: repository
+      in: query
+      schema: {type: string}
+    PhaseFilter:
+      name: phase
+      in: query
+      schema: {type: string}
+    FromFilter:
+      name: from
+      in: query
+      schema: {type: string, format: date-time}
+    ToFilter:
+      name: to
+      in: query
+      schema: {type: string, format: date-time}
+    SortFilter:
+      name: sort
+      in: query
+      schema: {type: string, default: createdAt}
+    OrderFilter:
+      name: order
+      in: query
+      schema: {type: string, enum: [asc, desc], default: desc}
   schemas:
+    PaginatedResponse:
+      type: object
+      required: [items, totalCount, limit]
+      properties:
+        items: {type: array, items: {type: object}}
+        nextPageToken: {type: string}
+        totalCount: {type: integer, minimum: 0}
+        limit: {type: integer, minimum: 1, maximum: 200}
     ErrorResponse:
       type: object
       required:

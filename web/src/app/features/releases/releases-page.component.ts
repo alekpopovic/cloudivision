@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { Subject, catchError, of, startWith, switchMap } from 'rxjs';
+import { BehaviorSubject, Subject, catchError, combineLatest, map, of, startWith, switchMap } from 'rxjs';
 
 import { ApiClient } from '../../api/client';
 import { ApiError, Principal, Release } from '../../api/models';
@@ -59,6 +59,13 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
         </div>
       </div>
       <ng-template #empty><app-empty-state title="No releases" message="Successful GitOps-enabled builds create Release CRs." /></ng-template>
+      <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-xs text-slate-600">
+        <span>{{ totalCount }} matching Releases</span>
+        <span class="flex gap-2">
+          <button type="button" class="rounded border border-slate-300 px-3 py-1 disabled:opacity-40" [disabled]="pageIndex === 0" (click)="previousPage()">Previous</button>
+          <button type="button" class="rounded border border-slate-300 px-3 py-1 disabled:opacity-40" [disabled]="!nextPageToken" (click)="nextPage()">Next</button>
+        </span>
+      </div>
     </div>
   `
 })
@@ -67,15 +74,26 @@ export class ReleasesPageComponent {
   private readonly auth = inject(AuthService);
   private readonly fb = inject(FormBuilder);
   private readonly refresh$ = new Subject<void>();
+  private readonly pageToken$ = new BehaviorSubject('');
+  private pageTokens = [''];
   error: ApiError | null = null;
   actionInFlight: string | null = null;
+  pageIndex = 0;
+  nextPageToken = '';
+  totalCount = 0;
   approvalForm = this.fb.nonNullable.group({
     actor: ['developer', Validators.required],
     comment: ['']
   });
-  readonly releases$ = this.refresh$.pipe(
-    startWith(undefined),
-    switchMap(() => this.api.releases().pipe(catchError((error: ApiError) => { this.error = error; return of([]); })))
+  readonly releases$ = combineLatest([this.refresh$.pipe(startWith(undefined)), this.pageToken$]).pipe(
+    switchMap(([, pageToken]) => this.api.releasePage({ limit: '50', ...(pageToken ? { pageToken } : {}) }).pipe(
+      catchError((error: ApiError) => { this.error = error; return of({ items: [] as Release[], nextPageToken: '', totalCount: 0, limit: 50 }); })
+    )),
+    map((page) => {
+      this.nextPageToken = page.nextPageToken ?? '';
+      this.totalCount = page.totalCount;
+      return page.items;
+    })
   );
   readonly currentUser$ = this.api.currentUser().pipe(catchError(() => of(null)));
 
@@ -89,6 +107,19 @@ export class ReleasesPageComponent {
 
   reject(release: Release): void {
     this.submitApproval(release, 'reject');
+  }
+
+  nextPage(): void {
+    if (!this.nextPageToken) return;
+    this.pageIndex++;
+    this.pageTokens[this.pageIndex] = this.nextPageToken;
+    this.pageToken$.next(this.nextPageToken);
+  }
+
+  previousPage(): void {
+    if (this.pageIndex === 0) return;
+    this.pageIndex--;
+    this.pageToken$.next(this.pageTokens[this.pageIndex]);
   }
 
   private submitApproval(release: Release, action: 'approve' | 'reject'): void {

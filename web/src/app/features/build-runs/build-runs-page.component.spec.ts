@@ -8,10 +8,12 @@ import { BuildRunsPageComponent } from './build-runs-page.component';
 class FakeApiClient {
   buildRunsCalls = 0;
   createBuildRunCalls = 0;
+  lastBuildRunParams: Record<string, string> = {};
 
-  buildRuns() {
+  buildRunPage(params: Record<string, string>) {
     this.buildRunsCalls++;
-    return of([]);
+		this.lastBuildRunParams = params;
+		return of({ items: [], totalCount: 0, limit: 50 });
   }
 
   createBuildRun() {
@@ -40,6 +42,7 @@ describe('BuildRunsPageComponent', () => {
     fixture.detectChanges();
     tick(201);
     expect(api.buildRunsCalls).toBeGreaterThan(0);
+		expect(api.lastBuildRunParams['limit']).toBe('50');
   }));
 
   it('keeps manual trigger form invalid until required fields are filled', () => {

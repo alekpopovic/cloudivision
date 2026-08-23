@@ -111,6 +111,12 @@ type release struct {
 	Spec            cicdv1alpha1.ReleaseSpec
 	Status          cicdv1alpha1.ReleaseStatus
 }
+type page[T any] struct {
+	Items         []T    `json:"items"`
+	NextPageToken string `json:"nextPageToken,omitempty"`
+	TotalCount    int    `json:"totalCount"`
+	Limit         int    `json:"limit"`
+}
 
 func (a *App) project(ctx context.Context, client apiClient, config Config, output string, args []string) int {
 	if len(args) == 0 {
@@ -251,12 +257,15 @@ func (a *App) build(ctx context.Context, client apiClient, config Config, output
 		phase := fs.String("phase", "", "phase")
 		project := fs.String("project", "", "project")
 		repository := fs.String("repository", "", "repository")
-		limit := fs.Int("limit", 100, "page size")
-		offset := fs.Int("offset", 0, "offset")
+		limit := fs.Int("limit", 50, "page size (maximum 200)")
+		pageToken := fs.String("page-token", "", "opaque token returned by the previous page")
 		if err := fs.Parse(args[1:]); err != nil {
 			return 2
 		}
-		values := url.Values{"namespace": {config.Namespace}, "limit": {strconv.Itoa(*limit)}, "offset": {strconv.Itoa(*offset)}}
+		values := url.Values{"namespace": {config.Namespace}, "limit": {strconv.Itoa(*limit)}}
+		if *pageToken != "" {
+			values.Set("pageToken", *pageToken)
+		}
 		if *phase != "" {
 			values.Set("phase", *phase)
 		}
@@ -266,19 +275,22 @@ func (a *App) build(ctx context.Context, client apiClient, config Config, output
 		if *repository != "" {
 			values.Set("repository", *repository)
 		}
-		var items []buildRun
-		if err := client.do(ctx, http.MethodGet, query("/api/v1/build-runs", values), nil, &items); err != nil {
+		var response page[buildRun]
+		if err := client.do(ctx, http.MethodGet, query("/api/v1/build-runs", values), nil, &response); err != nil {
 			return a.fail(err)
 		}
 		if output == "json" {
-			_ = writeJSON(a.Out, items)
+			_ = writeJSON(a.Out, response)
 			return 0
 		}
 		rows := [][]string{}
-		for _, item := range items {
+		for _, item := range response.Items {
 			rows = append(rows, []string{item.Namespace, item.Name, item.Spec.ProjectRef, item.Spec.RepositoryRef, string(item.Status.Phase)})
 		}
 		printTable(a.Out, []string{"NAMESPACE", "NAME", "PROJECT", "REPOSITORY", "PHASE"}, rows)
+		if response.NextPageToken != "" {
+			fmt.Fprintf(a.Out, "NEXT_PAGE_TOKEN\t%s\n", response.NextPageToken)
+		}
 		return 0
 	case "get":
 		if len(args) != 2 {
@@ -408,39 +420,59 @@ func (a *App) release(ctx context.Context, client apiClient, config Config, outp
 	if len(args) == 0 {
 		return a.fail(fmt.Errorf("release requires list, get, approve, reject, or rollback"))
 	}
-	list := func() ([]release, error) {
-		var items []release
-		err := client.do(ctx, http.MethodGet, query("/api/v1/releases", url.Values{"namespace": {config.Namespace}}), nil, &items)
-		return items, err
+	list := func(limit int, token string) (page[release], error) {
+		var response page[release]
+		values := url.Values{"namespace": {config.Namespace}, "limit": {strconv.Itoa(limit)}}
+		if token != "" {
+			values.Set("pageToken", token)
+		}
+		err := client.do(ctx, http.MethodGet, query("/api/v1/releases", values), nil, &response)
+		return response, err
 	}
 	switch args[0] {
 	case "list":
-		items, err := list()
+		fs := newFlags("release list", a.Err)
+		limit := fs.Int("limit", 50, "page size (maximum 200)")
+		pageToken := fs.String("page-token", "", "opaque token returned by the previous page")
+		if err := fs.Parse(args[1:]); err != nil {
+			return 2
+		}
+		response, err := list(*limit, *pageToken)
 		if err != nil {
 			return a.fail(err)
 		}
 		if output == "json" {
-			_ = writeJSON(a.Out, items)
+			_ = writeJSON(a.Out, response)
 			return 0
 		}
 		rows := [][]string{}
-		for _, item := range items {
+		for _, item := range response.Items {
 			rows = append(rows, []string{item.Namespace, item.Name, item.Spec.EnvironmentRef, string(item.Status.Phase)})
 		}
 		printTable(a.Out, []string{"NAMESPACE", "NAME", "ENVIRONMENT", "PHASE"}, rows)
+		if response.NextPageToken != "" {
+			fmt.Fprintf(a.Out, "NEXT_PAGE_TOKEN\t%s\n", response.NextPageToken)
+		}
 		return 0
 	case "get":
 		if len(args) != 2 {
 			return a.fail(fmt.Errorf("usage: cloudivision release get NAME"))
 		}
-		items, err := list()
-		if err != nil {
-			return a.fail(err)
-		}
-		for _, item := range items {
-			if item.Name == args[1] {
-				return a.printValue(item, fmt.Sprintf("%s\t%s\n", item.Name, item.Status.Phase), output)
+		token := ""
+		for {
+			response, err := list(200, token)
+			if err != nil {
+				return a.fail(err)
 			}
+			for _, item := range response.Items {
+				if item.Name == args[1] {
+					return a.printValue(item, fmt.Sprintf("%s\t%s\n", item.Name, item.Status.Phase), output)
+				}
+			}
+			if response.NextPageToken == "" {
+				break
+			}
+			token = response.NextPageToken
 		}
 		return a.fail(fmt.Errorf("release %q not found", args[1]))
 	case "approve", "reject":

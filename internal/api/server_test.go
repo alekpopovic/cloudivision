@@ -133,12 +133,12 @@ func TestListBuildRuns(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	var items []BuildRunResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &items); err != nil {
+	var page PageResponse[BuildRunResponse]
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
 		t.Fatalf("decode BuildRuns: %v", err)
 	}
-	if len(items) != 1 || items[0].Name != "build-1" {
-		t.Fatalf("items = %#v, want build-1", items)
+	if len(page.Items) != 1 || page.Items[0].Name != "build-1" || page.Limit != defaultPageLimit {
+		t.Fatalf("page = %#v, want build-1 with default limit", page)
 	}
 }
 
@@ -161,30 +161,76 @@ func TestListBuildRunsPaginatesAndFilters(t *testing.T) {
 
 	recorder := httptest.NewRecorder()
 	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/build-runs?namespace=ci", nil))
-	var firstPage []BuildRunResponse
+	var firstPage PageResponse[BuildRunResponse]
 	if err := json.Unmarshal(recorder.Body.Bytes(), &firstPage); err != nil {
 		t.Fatal(err)
 	}
-	if len(firstPage) != 100 || recorder.Header().Get("X-Total-Count") != "125" || recorder.Header().Get("X-Next-Offset") != "100" {
-		t.Fatalf("page len=%d total=%q next=%q", len(firstPage), recorder.Header().Get("X-Total-Count"), recorder.Header().Get("X-Next-Offset"))
+	if len(firstPage.Items) != defaultPageLimit || firstPage.TotalCount != 125 || firstPage.NextPageToken == "" {
+		t.Fatalf("page = %#v", firstPage)
 	}
-	if firstPage[0].Name != "build-124" {
-		t.Fatalf("first item = %q, want newest build-124", firstPage[0].Name)
+	if firstPage.Items[0].Name != "build-124" {
+		t.Fatalf("first item = %q, want newest build-124", firstPage.Items[0].Name)
 	}
 
 	recorder = httptest.NewRecorder()
-	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/build-runs?namespace=ci&phase=Succeeded&project=project-a&limit=10&offset=10", nil))
-	var filtered []BuildRunResponse
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/build-runs?namespace=ci&phase=Succeeded&project=project-a&limit=10", nil))
+	var filtered PageResponse[BuildRunResponse]
 	if err := json.Unmarshal(recorder.Body.Bytes(), &filtered); err != nil {
 		t.Fatal(err)
 	}
-	if len(filtered) != 10 || recorder.Header().Get("X-Total-Count") != "62" {
-		t.Fatalf("filtered len=%d total=%q", len(filtered), recorder.Header().Get("X-Total-Count"))
+	if len(filtered.Items) != 10 || filtered.TotalCount != 62 {
+		t.Fatalf("filtered = %#v", filtered)
 	}
-	for _, item := range filtered {
+	for _, item := range filtered.Items {
 		if item.Spec.ProjectRef != "project-a" || item.Status.Phase != cicdv1alpha1.BuildRunPhaseSucceeded {
 			t.Fatalf("unexpected filtered item %#v", item)
 		}
+	}
+	recorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/build-runs?namespace=ci&phase=Succeeded&project=project-a&limit=10&pageToken="+filtered.NextPageToken, nil))
+	var secondPage PageResponse[BuildRunResponse]
+	if err := json.Unmarshal(recorder.Body.Bytes(), &secondPage); err != nil {
+		t.Fatal(err)
+	}
+	if len(secondPage.Items) != 10 || secondPage.Items[0].Name == filtered.Items[0].Name {
+		t.Fatalf("second page = %#v", secondPage)
+	}
+}
+
+func TestListBuildRunsRejectsInvalidPagination(t *testing.T) {
+	server, _ := newTestServer(t)
+	for _, query := range []string{"limit=201", "limit=nope", "pageToken=not-base64", "sort=unknown", "order=sideways", "from=bad-time"} {
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/build-runs?"+query, nil))
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("query %q status = %d, body = %s", query, recorder.Code, recorder.Body.String())
+		}
+	}
+}
+
+func TestListReleasesPaginatesAndFilters(t *testing.T) {
+	objects := make([]client.Object, 0, 4)
+	for i := 0; i < 4; i++ {
+		release := testRelease(fmt.Sprintf("release-%d", i))
+		release.CreationTimestamp = metav1.NewTime(time.Unix(int64(i), 0))
+		release.Status.Phase = cicdv1alpha1.ReleasePhaseDeployed
+		if i == 0 {
+			release.Spec.ProjectRef = "other"
+		}
+		objects = append(objects, release)
+	}
+	server, _ := newTestServer(t, objects...)
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/releases?namespace=ci&project=project&phase=Deployed&repository=ghcr.io/cloudivision/app&limit=2", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var response PageResponse[ReleaseResponse]
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Items) != 2 || response.TotalCount != 3 || response.NextPageToken == "" {
+		t.Fatalf("response = %#v", response)
 	}
 }
 
@@ -648,12 +694,12 @@ func TestAuditEventsEndpointUsesConfiguredLister(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	var events []AuditEventResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &events); err != nil {
+	var page PageResponse[AuditEventResponse]
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
 		t.Fatalf("decode audit events: %v", err)
 	}
-	if len(events) != 1 || events[0].ID != "audit-1" {
-		t.Fatalf("events = %#v", events)
+	if len(page.Items) != 1 || page.Items[0].ID != "audit-1" {
+		t.Fatalf("events = %#v", page.Items)
 	}
 }
 

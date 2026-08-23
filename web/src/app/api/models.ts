@@ -5,6 +5,13 @@ export interface ApiError {
   violations?: Array<{ policy: string; severity: string; message: string; fieldPath?: string }>;
 }
 
+export interface Page<T> {
+  items: T[];
+  nextPageToken?: string;
+  totalCount: number;
+  limit: number;
+}
+
 export interface ApprovalActionRequest {
   actor: string;
   comment?: string;

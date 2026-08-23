@@ -17,6 +17,13 @@ type ErrorResponse struct {
 	Violations []policy.Violation `json:"violations,omitempty"`
 }
 
+type PageResponse[T any] struct {
+	Items         []T    `json:"items"`
+	NextPageToken string `json:"nextPageToken,omitempty"`
+	TotalCount    int    `json:"totalCount"`
+	Limit         int    `json:"limit"`
+}
+
 type ProjectRequest struct {
 	Name      string                   `json:"name"`
 	Namespace string                   `json:"namespace,omitempty"`

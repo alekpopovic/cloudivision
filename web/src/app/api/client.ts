@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, map, of, shareReplay, switchMap, throwError } from 'rxjs';
 
 import { environment } from '../../environments/environment';
-import { ApiError, ApprovalActionRequest, BuildRun, Environment, LogsResponse, PipelineTemplate, Principal, Project, ProviderHealthResult, ProviderSummary, Release, Repository } from './models';
+import { ApiError, ApprovalActionRequest, BuildRun, Environment, LogsResponse, Page, PipelineTemplate, Principal, Project, ProviderHealthResult, ProviderSummary, Release, Repository } from './models';
 
 interface RuntimeConfig {
   apiBaseUrl?: string;
@@ -54,7 +54,11 @@ export class ApiClient {
   }
 
   buildRuns(params?: Record<string, string>): Observable<BuildRun[]> {
-    return this.get<BuildRun[]>('/api/v1/build-runs', params);
+    return this.buildRunPage(params).pipe(map((page) => page.items));
+  }
+
+  buildRunPage(params?: Record<string, string>): Observable<Page<BuildRun>> {
+    return this.get<Page<BuildRun>>('/api/v1/build-runs', { limit: '50', ...(params ?? {}) });
   }
 
   createBuildRun(body: { name: string; namespace?: string; spec: BuildRun['spec'] }): Observable<BuildRun> {
@@ -85,7 +89,11 @@ export class ApiClient {
   }
 
   releases(): Observable<Release[]> {
-    return this.get<Release[]>('/api/v1/releases');
+    return this.releasePage().pipe(map((page) => page.items));
+  }
+
+  releasePage(params?: Record<string, string>): Observable<Page<Release>> {
+    return this.get<Page<Release>>('/api/v1/releases', { limit: '50', ...(params ?? {}) });
   }
 
 	providers(): Observable<ProviderSummary[]> {

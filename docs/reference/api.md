@@ -24,10 +24,39 @@ The API is served below `/api/v1`. The machine-readable contract is
 | `/api/v1/providers/health` | `GET` | Read provider health |
 | `/api/v1/webhooks/{provider}/{repository}` | `POST` | Receive a signed webhook |
 
-BuildRun listing accepts `limit` (default 100, maximum 500), `offset`, `phase`,
-`project`, `repository`, `namespace`, `createdAfter`, and `createdBefore`. Responses
-include `X-Total-Count`, `X-Limit`, and, when another page exists,
-`X-Next-Offset`.
+## Pagination and filtering
+
+BuildRun, Release, and audit-event lists return a page envelope:
+
+```json
+{
+  "items": [],
+  "nextPageToken": "eyJ2IjoxLCJvIjo1MH0",
+  "totalCount": 240,
+  "limit": 50
+}
+```
+
+The default limit is 50 and the maximum is 200. Pass the opaque
+`nextPageToken` value back as `pageToken` (or `continue`) to request the next
+page. Tokens must not be parsed by clients. The older numeric `offset` query is
+accepted temporarily for v0.1 client compatibility, but new clients should use
+tokens.
+
+Common parameters are `limit`, `pageToken`, `namespace`, `project`,
+`repository`, `phase`, `from`, `to`, `sort`, and `order`. Times use RFC3339 and
+are inclusive. `order` is `asc` or `desc`. BuildRuns and Releases support
+`createdAt`, `name`, and `phase` sorting; audit events support `createdAt` and
+`type`. BuildRuns also accept the deprecated `createdAfter` and
+`createdBefore` aliases. Filters that do not apply to a resource are ignored.
+
+Examples:
+
+```sh
+curl -fsS 'http://localhost:8080/api/v1/build-runs?namespace=ci&project=payments&phase=Failed&limit=50'
+curl -fsS 'http://localhost:8080/api/v1/releases?project=payments&sort=createdAt&order=desc&limit=25'
+curl -fsS 'http://localhost:8080/api/v1/audit/events?repository=checkout&from=2026-08-01T00:00:00Z&limit=100'
+```
 
 ## Authentication and errors
 

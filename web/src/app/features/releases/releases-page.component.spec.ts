@@ -25,8 +25,8 @@ class FakeApiClient {
     }
   ];
 
-  releases() {
-    return of(this.releasesResponse);
+  releasePage() {
+		return of({ items: this.releasesResponse, totalCount: this.releasesResponse.length, limit: 50 });
   }
 
   currentUser() {

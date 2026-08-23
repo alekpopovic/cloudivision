@@ -29,10 +29,11 @@ type Event struct {
 }
 
 type EventFilter struct {
-	Project  string
-	BuildRun string
-	Release  string
-	Type     string
+	Project    string
+	Repository string
+	BuildRun   string
+	Release    string
+	Type       string
 }
 
 type Recorder interface {
@@ -144,12 +145,13 @@ select id, type, coalesce(actor, ''), coalesce(project, ''), coalesce(repository
        metadata, created_at
 from audit_events
 where ($1 = '' or project = $1)
-  and ($2 = '' or build_run = $2)
-  and ($3 = '' or release = $3)
-  and ($4 = '' or type = $4)
-order by created_at desc
-limit 200`,
+  and ($2 = '' or repository = $2)
+  and ($3 = '' or build_run = $3)
+  and ($4 = '' or release = $4)
+  and ($5 = '' or type = $5)
+order by created_at desc`,
 		filter.Project,
+		filter.Repository,
 		filter.BuildRun,
 		filter.Release,
 		filter.Type,
