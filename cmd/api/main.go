@@ -19,6 +19,7 @@ import (
 	cloudivisionapi "github.com/cloudivision/cloudivision/internal/api"
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
+	"github.com/cloudivision/cloudivision/internal/logstore"
 	"github.com/cloudivision/cloudivision/internal/policy"
 	"github.com/cloudivision/cloudivision/internal/provider"
 	providerbuild "github.com/cloudivision/cloudivision/internal/provider/build"
@@ -82,10 +83,16 @@ func main() {
 		logger.Error("configure provider registry", "error", err)
 		os.Exit(1)
 	}
+	configuredLogStore, err := configureLogStore()
+	if err != nil {
+		logger.Error("configure log backend", "error", err)
+		os.Exit(1)
+	}
 
 	apiServer := cloudivisionapi.Server{
 		Client:           k8sClient,
 		LogReader:        cloudivisionapi.KubernetesPodLogReader{Client: clientset},
+		LogStore:         configuredLogStore,
 		Logger:           logger,
 		Audit:            auditRecorder,
 		AuditEvents:      auditEvents,
@@ -127,6 +134,25 @@ func main() {
 	}
 
 	logger.Info("api server stopped")
+}
+
+func configureLogStore() (logstore.LogStore, error) {
+	switch strings.ToLower(envOrDefault("CLOU_DIVISION_LOG_BACKEND", "kubernetes-pod-logs")) {
+	case "", "kubernetes-pod-logs":
+		return nil, nil
+	case "local":
+		root := os.Getenv("CLOU_DIVISION_LOG_ROOT")
+		if root == "" {
+			return nil, errors.New("CLOU_DIVISION_LOG_ROOT is required for the local log backend")
+		}
+		return logstore.LocalStore{Root: root}, nil
+	case "object":
+		return logstore.ObjectStore{}, nil
+	case "loki":
+		return logstore.LokiStore{}, nil
+	default:
+		return nil, fmt.Errorf("unsupported CLOU_DIVISION_LOG_BACKEND")
+	}
 }
 
 func configureProviderRegistry() (*provider.Registry, error) {

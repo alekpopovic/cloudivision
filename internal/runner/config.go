@@ -19,6 +19,8 @@ type Config struct {
 	RegistryImagePrefix    string
 	RegistryCredentialsDir string
 	GitOpsEnabled          bool
+	LogBackend             string
+	LogRoot                string
 }
 
 func ConfigFromEnv(getenv func(string) string) (Config, error) {
@@ -35,6 +37,8 @@ func ConfigFromEnv(getenv func(string) string) (Config, error) {
 		RegistryProvider:       getenv("REGISTRY_PROVIDER"),
 		RegistryImagePrefix:    getenv("REGISTRY_IMAGE_PREFIX"),
 		RegistryCredentialsDir: getenv("REGISTRY_CREDENTIALS_DIR"),
+		LogBackend:             getenv("LOG_BACKEND"),
+		LogRoot:                getenv("LOG_ROOT"),
 	}
 	if value := getenv("GITOPS_ENABLED"); value != "" {
 		parsed, err := strconv.ParseBool(value)

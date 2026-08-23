@@ -92,6 +92,8 @@ type ReleaseApprovalRequest struct {
 type LogsResponse struct {
 	Namespace string   `json:"namespace"`
 	BuildRun  string   `json:"buildRun"`
+	Backend   string   `json:"backend,omitempty"`
+	Ref       string   `json:"ref,omitempty"`
 	PodName   string   `json:"podName,omitempty"`
 	Lines     []string `json:"lines"`
 }

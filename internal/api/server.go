@@ -20,6 +20,7 @@ import (
 	buildlogic "github.com/cloudivision/cloudivision/internal/build"
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/kube"
+	"github.com/cloudivision/cloudivision/internal/logstore"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	"github.com/cloudivision/cloudivision/internal/policy"
 	"github.com/cloudivision/cloudivision/internal/provider"
@@ -35,6 +36,7 @@ import (
 type Server struct {
 	Client           client.Client
 	LogReader        PodLogReader
+	LogStore         logstore.LogStore
 	Logger           *slog.Logger
 	Audit            audit.Recorder
 	AuditEvents      audit.EventLister
@@ -308,6 +310,34 @@ func (s Server) buildRunLogs(w http.ResponseWriter, r *http.Request) {
 	tailLines, err := parseTailLines(r.URL.Query().Get("tailLines"))
 	if err != nil {
 		s.writeError(w, badRequest(err.Error()))
+		return
+	}
+	if s.LogStore != nil {
+		tail := 0
+		if tailLines != nil {
+			tail = int(*tailLines)
+		}
+		result, readErr := s.LogStore.Read(r.Context(), logstore.ReadLogRequest{Namespace: namespace, BuildRun: name, TailLines: tail, Step: r.URL.Query().Get("step")})
+		if readErr != nil {
+			if errors.Is(readErr, logstore.ErrNotFound) {
+				s.writeError(w, notFound("stored logs not found"))
+			} else {
+				s.writeError(w, fmt.Errorf("read stored logs: %w", readErr))
+			}
+			return
+		}
+		lines := make([]string, 0, len(result.Lines))
+		for _, line := range result.Lines {
+			prefix := ""
+			if !line.Timestamp.IsZero() {
+				prefix = line.Timestamp.UTC().Format(time.RFC3339Nano) + " "
+			}
+			if line.Step != "" {
+				prefix += "[step:" + line.Step + "] "
+			}
+			lines = append(lines, prefix+line.Message)
+		}
+		writeJSON(w, http.StatusOK, LogsResponse{Namespace: namespace, BuildRun: name, Backend: result.Backend, Ref: result.Ref, Lines: lines})
 		return
 	}
 	var pods corev1.PodList

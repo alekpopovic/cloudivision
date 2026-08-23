@@ -164,6 +164,10 @@ func buildJob(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, re
 		})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: registryCredentialsVolume, MountPath: RegistryCredentialsDir, ReadOnly: true})
 	}
+	if os.Getenv("CLOU_DIVISION_LOG_BACKEND") == "local" && os.Getenv("CLOU_DIVISION_LOG_PVC") != "" {
+		volumes = append(volumes, corev1.Volume{Name: "stored-logs", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: os.Getenv("CLOU_DIVISION_LOG_PVC")}}})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "stored-logs", MountPath: defaultString(os.Getenv("CLOU_DIVISION_LOG_ROOT"), "/var/lib/cloudivision/logs")})
+	}
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      NameForBuildRun(buildRun.Name),
@@ -248,6 +252,12 @@ func runnerEnv(buildRun *cicdv1alpha1.BuildRun, project *cicdv1alpha1.Project, r
 		if project.Spec.Registry.CredentialSecretRef != nil && project.Spec.Registry.CredentialSecretRef.Name != "" {
 			env = append(env, corev1.EnvVar{Name: "REGISTRY_CREDENTIALS_DIR", Value: RegistryCredentialsDir})
 		}
+	}
+	if backend := os.Getenv("CLOU_DIVISION_LOG_BACKEND"); backend != "" {
+		env = append(env, corev1.EnvVar{Name: "LOG_BACKEND", Value: backend})
+	}
+	if root := os.Getenv("CLOU_DIVISION_LOG_ROOT"); root != "" {
+		env = append(env, corev1.EnvVar{Name: "LOG_ROOT", Value: root})
 	}
 	return env
 }

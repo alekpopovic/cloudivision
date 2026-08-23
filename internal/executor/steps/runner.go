@@ -16,8 +16,9 @@ import (
 )
 
 type Runner struct {
-	Output io.Writer
-	Logger *slog.Logger
+	Output  io.Writer
+	Logger  *slog.Logger
+	Observe func(step, output string) error
 }
 
 func (r Runner) Run(ctx context.Context, sourceDir string, pipelineSteps []cicdv1alpha1.PipelineStep, redactor redact.Redactor) error {
@@ -75,6 +76,11 @@ func (r Runner) runStep(ctx context.Context, sourceDir string, step cicdv1alpha1
 	redacted := redactor.Mask(output.String())
 	if r.Output != nil && redacted != "" {
 		_, _ = r.Output.Write([]byte(redacted))
+	}
+	if r.Observe != nil && redacted != "" {
+		if observeErr := r.Observe(step.Name, redacted); observeErr != nil {
+			return fmt.Errorf("persist logs for step %q: %w", step.Name, observeErr)
+		}
 	}
 	if err != nil {
 		logger.Warn("pipeline step failed", "step", step.Name, "durationMs", time.Since(started).Milliseconds(), "exitCode", exitCode)

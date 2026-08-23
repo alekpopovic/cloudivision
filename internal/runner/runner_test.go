@@ -13,6 +13,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/build"
 	"github.com/cloudivision/cloudivision/internal/executor/steps"
 	cloudivisiongit "github.com/cloudivision/cloudivision/internal/git"
+	"github.com/cloudivision/cloudivision/internal/logstore"
 	"github.com/cloudivision/cloudivision/internal/supplychain"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -102,6 +103,35 @@ func TestRunnerMarksBuildRunFailedOnCommandFailure(t *testing.T) {
 	}
 	if strings.Contains(updated.Status.Failure.Message, "very-secret") {
 		t.Fatalf("status failure leaked secret: %#v", updated.Status.Failure)
+	}
+}
+
+func TestRunnerPersistsRedactedStepLogs(t *testing.T) {
+	ctx := context.Background()
+	repo := createGitRepository(t)
+	buildRun := testBuildRun(repo)
+	template := testPipelineTemplate([]cicdv1alpha1.PipelineStep{{Name: "test", Command: []string{"sh"}, Args: []string{"-c", "echo $SECRET_TOKEN"}, Env: []corev1.EnvVar{{Name: "SECRET_TOKEN", Value: "very-secret"}}}})
+	k8sClient := newFakeRunnerClient(t, buildRun, testRepository(repo), template)
+	store := logstore.NewMemoryStore()
+	cfg := testConfig(repo)
+	cfg.LogBackend = "memory"
+	buildRunner := Runner{Client: k8sClient, Git: cloudivisiongit.ExecClient{}, Steps: steps.Runner{}, Builder: failBuilder{}, Workspace: filepath.Join(t.TempDir(), "workspace"), LogStore: store}
+	if err := buildRunner.Run(ctx, cfg); err != nil {
+		t.Fatal(err)
+	}
+	result, err := store.Read(ctx, logstore.ReadLogRequest{Namespace: buildRun.Namespace, BuildRun: buildRun.Name, Step: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Lines) != 1 || strings.Contains(result.Lines[0].Message, "very-secret") || !strings.Contains(result.Lines[0].Message, "[REDACTED]") {
+		t.Fatalf("stored lines = %#v", result.Lines)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Status.Log.Backend != "memory" || updated.Status.Log.Ref == "" {
+		t.Fatalf("log status = %#v", updated.Status.Log)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
@@ -16,6 +17,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/executor/steps"
 	cloudivisiongit "github.com/cloudivision/cloudivision/internal/git"
 	"github.com/cloudivision/cloudivision/internal/kube"
+	"github.com/cloudivision/cloudivision/internal/logstore"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	providerregistry "github.com/cloudivision/cloudivision/internal/provider/registry"
 	"github.com/cloudivision/cloudivision/internal/redact"
@@ -54,6 +56,7 @@ type Runner struct {
 	Provenance supplychain.ProvenanceWriter
 	Workspace  string
 	Logger     *slog.Logger
+	LogStore   logstore.LogStore
 }
 
 func New(k8sClient client.Client, logger *slog.Logger) Runner {
@@ -126,6 +129,31 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 	}
 	r.configureSupplyChainAdapters(template.Spec.SupplyChain)
 	redactor := redact.FromEnv(secretValues(buildRun, repository, template))
+	var storedLogs logstore.LogStore
+	if r.LogStore != nil {
+		storedLogs = logstore.RedactingStore{Store: r.LogStore, Mask: redactor.Mask}
+		backend := cfg.LogBackend
+		if backend == "" {
+			backend = "configured"
+		}
+		buildRun.Status.Log.Backend = backend
+		buildRun.Status.Log.Ref = buildRun.Namespace + "/" + buildRun.Name
+		if stepRunner, ok := r.Steps.(steps.Runner); ok {
+			stepRunner.Observe = func(step, output string) error {
+				lines := []logstore.LogLine{}
+				for _, message := range strings.Split(strings.TrimSuffix(output, "\n"), "\n") {
+					if message != "" {
+						lines = append(lines, logstore.LogLine{Timestamp: time.Now().UTC(), Step: step, Message: message})
+					}
+				}
+				return storedLogs.Append(ctx, logstore.AppendLogRequest{Namespace: buildRun.Namespace, BuildRun: buildRun.Name, Lines: lines})
+			}
+			r.Steps = stepRunner
+		}
+		if err := storedLogs.Append(ctx, logstore.AppendLogRequest{Namespace: buildRun.Namespace, BuildRun: buildRun.Name, Lines: []logstore.LogLine{{Timestamp: time.Now().UTC(), Message: "Build runner started."}}}); err != nil {
+			return r.fail(ctx, buildRun, "LogStoreWriteFailed", redactor.Mask(err.Error()))
+		}
+	}
 
 	now := metav1.Now()
 	if err := domain.MarkBuildRunStarted(buildRun, now); err != nil {
@@ -287,6 +315,11 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 		}
 	}
 
+	if storedLogs != nil {
+		if err := storedLogs.Append(ctx, logstore.AppendLogRequest{Namespace: buildRun.Namespace, BuildRun: buildRun.Name, Lines: []logstore.LogLine{{Timestamp: time.Now().UTC(), Message: "Build runner completed successfully."}}}); err != nil {
+			return r.fail(ctx, buildRun, "LogStoreWriteFailed", redactor.Mask(err.Error()))
+		}
+	}
 	completed := metav1.Now()
 	if err := domain.MarkBuildRunSucceeded(buildRun, completed, cicdv1alpha1.ImageRef{
 		Repository: result.ImageRepository,

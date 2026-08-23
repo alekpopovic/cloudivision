@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
+	"github.com/cloudivision/cloudivision/internal/logstore"
 	"github.com/cloudivision/cloudivision/internal/policy"
 	"github.com/cloudivision/cloudivision/internal/provider"
 	"github.com/cloudivision/cloudivision/internal/webhook"
@@ -475,6 +477,28 @@ func TestBuildRunLogsReadsPodLogs(t *testing.T) {
 	}
 	if logs.PodName != "runner-pod" || len(logs.Lines) != 2 {
 		t.Fatalf("logs response = %#v", logs)
+	}
+}
+
+func TestBuildRunLogsReadsConfiguredStoreBeforePods(t *testing.T) {
+	store := logstore.NewMemoryStore()
+	if err := store.Append(context.Background(), logstore.AppendLogRequest{Namespace: "ci", BuildRun: "build-1", Lines: []logstore.LogLine{{Timestamp: time.Unix(10, 0), Step: "test", Message: "stored"}}}); err != nil {
+		t.Fatal(err)
+	}
+	server, _ := newTestServer(t)
+	server.LogStore = store
+	server.LogReader = fakeLogReader{err: errors.New("pod logs must not be read")}
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/build-runs/ci/build-1/logs?tailLines=1&step=test", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body.String())
+	}
+	var response LogsResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Backend != "memory" || len(response.Lines) != 1 || !strings.Contains(response.Lines[0], "[step:test] stored") {
+		t.Fatalf("response = %#v", response)
 	}
 }
 

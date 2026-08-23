@@ -87,7 +87,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
             <app-conditions-timeline [conditions]="vm.run.status?.conditions || []" />
           </section>
           <section>
-            <h2 class="mb-3 text-sm font-semibold">Logs</h2>
+            <h2 class="mb-3 text-sm font-semibold">Logs <span class="font-normal text-slate-500">({{ logBackend }})</span></h2>
             <app-logs-viewer [lines]="vm.logs" [loading]="logsLoading" [error]="logsError" [fileName]="vm.run.name + '.log'" />
           </section>
         </div>
@@ -117,6 +117,7 @@ export class BuildRunDetailPageComponent {
   error: ApiError | null = null;
   logsLoading = true;
   logsError = '';
+	logBackend = 'kubernetes-pod-logs';
   readonly params$ = this.route.paramMap.pipe(map((params) => ({ namespace: params.get('namespace') || '', name: params.get('name') || '' })));
   private readonly run$ = timer(0, 2000).pipe(
     switchMap(() => this.params$),
@@ -126,7 +127,7 @@ export class BuildRunDetailPageComponent {
   private readonly logs$ = timer(0, 2000).pipe(
     switchMap(() => this.params$),
     switchMap((params) => this.api.buildRunLogs(params.namespace, params.name)),
-    map((response) => { this.logsLoading = false; this.logsError = ''; return response.lines; }),
+    map((response) => { this.logsLoading = false; this.logsError = ''; this.logBackend = response.backend || 'kubernetes-pod-logs'; return response.lines; }),
     catchError((error: ApiError) => { this.logsLoading = false; this.logsError = `${error.code}: ${error.message}`; return of([] as string[]); })
   );
   readonly vm$ = combineLatest([this.run$, this.logs$, this.api.pipelineTemplates(), this.api.releases()]).pipe(

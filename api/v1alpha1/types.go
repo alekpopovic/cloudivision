@@ -562,6 +562,8 @@ type FailureStatus struct {
 }
 
 type BuildRunLogStatus struct {
+	Backend       string `json:"backend,omitempty"`
+	Ref           string `json:"ref,omitempty"`
 	PodName       string `json:"podName,omitempty"`
 	ContainerName string `json:"containerName,omitempty"`
 	// +kubebuilder:validation:MaxItems=20

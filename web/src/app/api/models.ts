@@ -241,6 +241,8 @@ export interface LogsResponse {
   namespace: string;
   buildRun: string;
   podName?: string;
+  backend?: string;
+  ref?: string;
   lines: string[];
 }
 

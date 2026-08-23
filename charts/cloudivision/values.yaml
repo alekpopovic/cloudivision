@@ -94,6 +94,12 @@ database:
 audit:
   backend: log
 
+logs:
+  backend: kubernetes-pod-logs
+  local:
+    root: /var/lib/cloudivision/logs
+    existingClaim: ""
+
 ingress:
   enabled: false
   className: ""

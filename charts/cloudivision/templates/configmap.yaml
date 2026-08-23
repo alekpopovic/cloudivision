@@ -22,6 +22,9 @@ data:
   CLOU_DIVISION_METRICS_ENABLED: {{ .Values.api.metrics.enabled | quote }}
   CLOU_DIVISION_CORS_ALLOWED_ORIGINS: {{ join "," .Values.api.cors.allowedOrigins | quote }}
   CLOU_DIVISION_AUDIT_BACKEND: {{ .Values.audit.backend | quote }}
+  CLOU_DIVISION_LOG_BACKEND: {{ .Values.logs.backend | quote }}
+  CLOU_DIVISION_LOG_ROOT: {{ .Values.logs.local.root | quote }}
+  CLOU_DIVISION_LOG_PVC: {{ .Values.logs.local.existingClaim | quote }}
   CLOU_DIVISION_ENABLE_TEKTON: {{ .Values.tekton.enabled | quote }}
   CLOU_DIVISION_RUNNER_IMAGE: {{ include "cloudivision.image" (list . .Values.runner.image) | quote }}
   CLOU_DIVISION_API_SERVICE_ACCOUNT_NAME: {{ printf "%s-api" (include "cloudivision.fullname" .) | quote }}

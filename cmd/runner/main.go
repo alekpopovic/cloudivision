@@ -4,8 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"strings"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	"github.com/cloudivision/cloudivision/internal/logstore"
 	"github.com/cloudivision/cloudivision/internal/runner"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -42,8 +44,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	buildRunner := runner.New(k8sClient, logger)
+	switch strings.ToLower(cfg.LogBackend) {
+	case "", "kubernetes-pod-logs":
+	case "local":
+		buildRunner.LogStore = logstore.LocalStore{Root: cfg.LogRoot}
+	case "object":
+		buildRunner.LogStore = logstore.ObjectStore{}
+	case "loki":
+		buildRunner.LogStore = logstore.LokiStore{}
+	default:
+		logger.Error("unsupported log backend", "backend", cfg.LogBackend)
+		os.Exit(1)
+	}
 	logger.Info("starting cloudivision build runner", "buildRun", cfg.BuildRunName, "namespace", cfg.BuildRunNamespace)
-	if err := runner.New(k8sClient, logger).Run(context.Background(), cfg); err != nil {
+	if err := buildRunner.Run(context.Background(), cfg); err != nil {
 		logger.Error("runner failed", "error", err)
 		os.Exit(1)
 	}

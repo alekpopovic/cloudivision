@@ -100,6 +100,10 @@ spec:
               mountPath: /etc/cloudivision/auth/groups.yaml
               subPath: groups.yaml
               readOnly: true
+            {{- if and (eq .Values.logs.backend "local") .Values.logs.local.existingClaim }}
+            - name: stored-logs
+              mountPath: {{ .Values.logs.local.root }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -119,6 +123,11 @@ spec:
             items:
               - key: groups.yaml
                 path: groups.yaml
+        {{- if and (eq .Values.logs.backend "local") .Values.logs.local.existingClaim }}
+        - name: stored-logs
+          persistentVolumeClaim:
+            claimName: {{ .Values.logs.local.existingClaim }}
+        {{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
