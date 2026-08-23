@@ -48,6 +48,7 @@ fi
 
 GIT_SHA="$(git -C "${ROOT_DIR}" rev-parse --verify HEAD)"
 SHORT_SHA="$(git -C "${ROOT_DIR}" rev-parse --short=12 HEAD)"
+BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 TARGET_GOOS="${RELEASE_GOOS:-linux}"
 TARGET_GOARCH="${RELEASE_GOARCH:-amd64}"
 BUILD_DIR="${RELEASE_DIR}/build"
@@ -58,9 +59,23 @@ for component in api controller runner; do
     -o "${BUILD_DIR}/cloudivision-${component}" "./cmd/${component}")
   tar -C "${BUILD_DIR}" -czf "${RELEASE_DIR}/cloudivision-${component}_${VERSION_VALUE}_${TARGET_GOOS}_${TARGET_GOARCH}.tar.gz" "cloudivision-${component}"
 done
-(cd "${ROOT_DIR}" && CGO_ENABLED=0 GOOS="${TARGET_GOOS}" GOARCH="${TARGET_GOARCH}" go build -trimpath -ldflags "-s -w -X main.version=${VERSION_VALUE}" \
-  -o "${BUILD_DIR}/cloudivision" "./cmd/cloudivision")
-tar -C "${BUILD_DIR}" -czf "${RELEASE_DIR}/cloudivision-cli_${VERSION_VALUE}_${TARGET_GOOS}_${TARGET_GOARCH}.tar.gz" cloudivision
+CLI_PLATFORMS="${RELEASE_CLI_PLATFORMS:-linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64}"
+for platform in ${CLI_PLATFORMS}; do
+  cli_os="${platform%/*}"
+  cli_arch="${platform#*/}"
+  cli_binary="cloudivision"
+  [[ "${cli_os}" != windows ]] || cli_binary="cloudivision.exe"
+  (cd "${ROOT_DIR}" && CGO_ENABLED=0 GOOS="${cli_os}" GOARCH="${cli_arch}" go build -trimpath \
+    -ldflags "-s -w -X main.version=${VERSION_VALUE} -X main.commit=${GIT_SHA} -X main.buildDate=${BUILD_DATE}" \
+    -o "${BUILD_DIR}/${cli_binary}" "./cmd/cloudivision")
+  if [[ "${cli_os}" == windows ]]; then
+    require zip
+    (cd "${BUILD_DIR}" && zip -q "${RELEASE_DIR}/cloudivision-cli_${VERSION_VALUE}_${cli_os}_${cli_arch}.zip" "${cli_binary}")
+  else
+    tar -C "${BUILD_DIR}" -czf "${RELEASE_DIR}/cloudivision-cli_${VERSION_VALUE}_${cli_os}_${cli_arch}.tar.gz" "${cli_binary}"
+  fi
+  rm -f -- "${BUILD_DIR}/${cli_binary}"
+done
 rm -rf -- "${BUILD_DIR}"
 tar -C "${ROOT_DIR}/web/dist/cloudivision-web/browser" -czf \
   "${RELEASE_DIR}/cloudivision-web_${VERSION_VALUE}.tar.gz" .

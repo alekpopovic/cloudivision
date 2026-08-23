@@ -36,6 +36,55 @@ func TestResolveConfigPrecedence(t *testing.T) {
 	}
 }
 
+func TestVersionIncludesBuildMetadataAndJSON(t *testing.T) {
+	app, stdout, stderr := testApp(t)
+	app.Version, app.Commit, app.BuildDate = "1.2.3", "abc123", "2026-08-23T00:00:00Z"
+	if code := app.Run([]string{"version", "--output", "json"}); code != 0 {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	var got map[string]string
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["version"] != "1.2.3" || got["commit"] != "abc123" || got["date"] == "" {
+		t.Fatalf("version output = %#v", got)
+	}
+}
+
+func TestCompletionAndErrorFormatting(t *testing.T) {
+	app, stdout, stderr := testApp(t)
+	if code := app.Run([]string{"completion", "bash"}); code != 0 || !strings.Contains(stdout.String(), "complete -F") {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	stdout.Reset()
+	if code := app.Run([]string{"completion", "invalid"}); code != 1 {
+		t.Fatalf("code=%d", code)
+	}
+	if got := stderr.String(); !strings.HasPrefix(got, "error: unsupported shell") {
+		t.Fatalf("stderr=%q", got)
+	}
+}
+
+func TestAPIClientUsesResolvedURLAndTokenAndFormatsAPIErrors(t *testing.T) {
+	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.String() != "https://api.test/api/v1/projects?namespace=ci" {
+			t.Fatalf("URL=%s", r.URL)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer secret" {
+			t.Fatalf("Authorization=%q", got)
+		}
+		return jsonResponse(http.StatusForbidden, `{"code":"forbidden","message":"access denied"}`), nil
+	})
+	app, _, stderr := testApp(t)
+	app.HTTP.Transport = transport
+	if code := app.Run([]string{"--api-url", "https://api.test", "--token", "secret", "-n", "ci", "project", "list"}); code != 1 {
+		t.Fatalf("code=%d", code)
+	}
+	if got := stderr.String(); got != "error: forbidden: access denied\n" {
+		t.Fatalf("stderr=%q", got)
+	}
+}
+
 func TestBuildTriggerGeneratesAPIRequest(t *testing.T) {
 	var received struct {
 		Name, Namespace string

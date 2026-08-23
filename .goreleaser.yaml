@@ -1,0 +1,32 @@
+version: 2
+
+project_name: cloudivision-cli
+
+builds:
+  - id: cloudivision
+    main: ./cmd/cloudivision
+    binary: cloudivision
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.buildDate={{.Date}}
+
+archives:
+  - ids: [cloudivision]
+    name_template: "cloudivision-cli_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums-cli.txt
+
+changelog:
+  use: git
+
+release:
+  disable: true

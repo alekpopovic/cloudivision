@@ -1,4 +1,4 @@
-.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all conformance upgrade-test scale-test security-check release-local vet lint build run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate sync-chart-crds install uninstall helm-template
+.PHONY: help fmt test test-unit test-controller test-api test-web test-e2e test-all conformance upgrade-test scale-test security-check release-local vet lint build build-cli install-cli-local cli-completions run-api run-controller run-controller-local run-runner docker-build-api docker-build-controller docker-build-runner docker-build-web manifests generate sync-chart-crds install uninstall helm-template
 
 IMAGE_REGISTRY ?= ghcr.io/alekpopovic/cloudivision
 IMAGE_TAG ?= dev
@@ -7,6 +7,10 @@ GOMODCACHE ?= $(CURDIR)/.cache/go-mod
 GOTMPDIR ?= $(CURDIR)/.cache/go-tmp
 CODEGEN_GOMODCACHE ?= /tmp/cloudivision-go-mod
 GOFLAGS ?= -p=1
+VERSION ?= $(shell tr -d '[:space:]' < VERSION)
+GIT_COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo none)
+BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+CLI_LDFLAGS = -s -w -X main.version=$(VERSION) -X main.commit=$(GIT_COMMIT) -X main.buildDate=$(BUILD_DATE)
 CONTROLLER_GEN ?= controller-gen
 CONTROLLER_GEN_API_PATHS ?= ./api/...
 CONTROLLER_GEN_MANIFEST_PATHS ?= ./api/...;./internal/controller/...
@@ -22,6 +26,9 @@ help:
 	@echo "  make test-all      Run Go, controller, API and web checks"
 	@echo "  make vet           Run go vet"
 	@echo "  make build         Build Go binaries and the Angular UI"
+	@echo "  make build-cli     Build the versioned cloudivision CLI"
+	@echo "  make install-cli-local Install CLI into GOPATH/bin"
+	@echo "  make cli-completions Generate shell completions in dist/completions"
 	@echo "  make manifests     Regenerate CRDs and RBAC with controller-gen"
 	@echo "  make sync-chart-crds Refresh the Helm CRD bundle from generated bases"
 	@echo "  make helm-template Render and security-check the Helm chart"
@@ -97,8 +104,20 @@ build:
 	go build -o bin/cloudivision-api ./cmd/api
 	go build -o bin/cloudivision-controller ./cmd/controller
 	go build -o bin/cloudivision-runner ./cmd/runner
-	go build -o bin/cloudivision ./cmd/cloudivision
+	$(MAKE) build-cli
 	@if [ -f web/package.json ]; then npm --prefix web run build; fi
+
+build-cli:
+	@mkdir -p $(GOTMPDIR) bin
+	go build -trimpath -ldflags "$(CLI_LDFLAGS)" -o bin/cloudivision ./cmd/cloudivision
+
+install-cli-local:
+	@mkdir -p $(GOTMPDIR)
+	go install -trimpath -ldflags "$(CLI_LDFLAGS)" ./cmd/cloudivision
+
+cli-completions: build-cli
+	@mkdir -p dist/completions
+	@for shell in bash zsh fish powershell; do bin/cloudivision completion $$shell > dist/completions/cloudivision.$$shell; done
 
 run-api:
 	@mkdir -p $(GOTMPDIR)

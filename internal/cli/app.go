@@ -30,17 +30,19 @@ func (execRunner) Run(ctx context.Context, name string, args ...string) (string,
 }
 
 type App struct {
-	Out, Err io.Writer
-	HTTP     *http.Client
-	Runner   CommandRunner
-	Sleep    func(time.Duration)
-	HomeDir  func() (string, error)
-	Now      func() time.Time
-	Version  string
+	Out, Err  io.Writer
+	HTTP      *http.Client
+	Runner    CommandRunner
+	Sleep     func(time.Duration)
+	HomeDir   func() (string, error)
+	Now       func() time.Time
+	Version   string
+	Commit    string
+	BuildDate string
 }
 
 func NewApp() *App {
-	return &App{Out: os.Stdout, Err: os.Stderr, HTTP: &http.Client{Timeout: 30 * time.Second}, Runner: execRunner{}, Sleep: time.Sleep, HomeDir: os.UserHomeDir, Now: time.Now, Version: "dev"}
+	return &App{Out: os.Stdout, Err: os.Stderr, HTTP: &http.Client{Timeout: 30 * time.Second}, Runner: execRunner{}, Sleep: time.Sleep, HomeDir: os.UserHomeDir, Now: time.Now, Version: "dev", Commit: "none", BuildDate: "unknown"}
 }
 
 func (a *App) Run(args []string) int {
@@ -64,7 +66,18 @@ func (a *App) Run(args []string) int {
 	ctx := context.Background()
 	switch args[0] {
 	case "version":
-		return a.printValue(map[string]string{"version": a.Version}, "cloudivision "+a.Version, options.Output)
+		info := map[string]string{"version": a.Version, "commit": a.Commit, "date": a.BuildDate}
+		return a.printValue(info, fmt.Sprintf("cloudivision %s (commit %s, built %s)", a.Version, a.Commit, a.BuildDate), options.Output)
+	case "completion":
+		if len(args) != 2 {
+			return a.fail(fmt.Errorf("usage: cloudivision completion bash|zsh|fish|powershell"))
+		}
+		completion, err := shellCompletion(args[1])
+		if err != nil {
+			return a.fail(err)
+		}
+		fmt.Fprint(a.Out, completion)
+		return 0
 	case "login":
 		if config.Token == "" {
 			return a.fail(fmt.Errorf("token is required through --token or CLOU_DIVISION_TOKEN"))
@@ -604,7 +617,7 @@ func (a *App) printValue(value any, human, output string) int {
 }
 func (a *App) fail(err error) int { fmt.Fprintln(a.Err, "error:", err); return 1 }
 func (a *App) usage() {
-	fmt.Fprintln(a.Out, "Usage: cloudivision [--api-url URL] [--token TOKEN] [--namespace NS] [--output table|json] COMMAND\nCommands: version, login, project, repo, pipeline, build, release, doctor")
+	fmt.Fprintln(a.Out, "Usage: cloudivision [--api-url URL] [--token TOKEN] [--namespace NS] [--output table|json] COMMAND\nCommands: version, completion, login, project, repo, pipeline, build, release, doctor")
 }
 func newFlags(name string, output io.Writer) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)

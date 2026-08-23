@@ -6,10 +6,16 @@ import (
 	"github.com/cloudivision/cloudivision/internal/cli"
 )
 
-var version = "dev"
+var (
+	version   = "dev"
+	commit    = "none"
+	buildDate = "unknown"
+)
 
 func main() {
 	app := cli.NewApp()
 	app.Version = version
+	app.Commit = commit
+	app.BuildDate = buildDate
 	os.Exit(app.Run(os.Args[1:]))
 }

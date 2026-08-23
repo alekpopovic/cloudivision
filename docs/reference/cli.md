@@ -1,6 +1,10 @@
 # cloudivision CLI
 
+See [CLI installation](../operations/install-cli.md) for release binaries, the verified install script, Windows instructions, and shell completion setup.
+
 Build the CLI with `make build` or `go build -o bin/cloudivision ./cmd/cloudivision`. The API URL is resolved from `--api-url`, `CLOU_DIVISION_API_URL`, `~/.cloudivision/config.yaml`, then `http://localhost:8080`. Token and namespace use the same flag → environment → config precedence; the default namespace is `default`.
+
+`cloudivision version` reports the semantic version, source commit, and UTC build date. Use `--output json` for machine-readable metadata.
 
 ```sh
 cloudivision --api-url http://localhost:8080 --token "$TOKEN" login
