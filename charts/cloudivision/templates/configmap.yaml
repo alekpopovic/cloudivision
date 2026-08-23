@@ -25,6 +25,9 @@ data:
   CLOU_DIVISION_LOG_BACKEND: {{ .Values.logs.backend | quote }}
   CLOU_DIVISION_LOG_ROOT: {{ .Values.logs.local.root | quote }}
   CLOU_DIVISION_LOG_PVC: {{ .Values.logs.local.existingClaim | quote }}
+  CLOU_DIVISION_ARTIFACT_BACKEND: {{ .Values.artifacts.backend | quote }}
+  CLOU_DIVISION_ARTIFACT_ROOT: {{ .Values.artifacts.local.root | quote }}
+  CLOU_DIVISION_ARTIFACT_PVC: {{ .Values.artifacts.local.existingClaim | quote }}
   CLOU_DIVISION_ENABLE_TEKTON: {{ .Values.tekton.enabled | quote }}
   CLOU_DIVISION_RUNNER_IMAGE: {{ include "cloudivision.image" (list . .Values.runner.image) | quote }}
   CLOU_DIVISION_API_SERVICE_ACCOUNT_NAME: {{ printf "%s-api" (include "cloudivision.fullname" .) | quote }}

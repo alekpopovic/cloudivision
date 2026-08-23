@@ -14,6 +14,7 @@ import (
 	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	"github.com/cloudivision/cloudivision/internal/artifacts"
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
 	"github.com/cloudivision/cloudivision/internal/logstore"
@@ -499,6 +500,31 @@ func TestBuildRunLogsReadsConfiguredStoreBeforePods(t *testing.T) {
 	}
 	if response.Backend != "memory" || len(response.Lines) != 1 || !strings.Contains(response.Lines[0], "[step:test] stored") {
 		t.Fatalf("response = %#v", response)
+	}
+}
+
+func TestBuildRunArtifactsListsStatusAndDownloadsContent(t *testing.T) {
+	store := artifacts.NewMemoryStore()
+	ref, err := store.Put(context.Background(), artifacts.PutArtifactRequest{Namespace: "ci", BuildRun: "build-1", Name: "report.xml", Path: "reports/report.xml", Type: "application/xml", Digest: "sha256:abc", Data: []byte("<testsuite/>")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	createdAt := metav1.NewTime(ref.CreatedAt)
+	buildRun := testActionBuildRun("build-1", cicdv1alpha1.BuildRunPhaseSucceeded)
+	buildRun.Status.Artifacts = []cicdv1alpha1.BuildRunArtifactStatus{{Name: ref.Name, Path: ref.Path, Type: ref.Type, Size: ref.Size, Digest: ref.Digest, Ref: ref.Ref, CreatedAt: &createdAt}}
+	server, _ := newTestServer(t, buildRun)
+	server.ArtifactStore = store
+
+	listRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(listRecorder, httptest.NewRequest(http.MethodGet, "/api/v1/build-runs/ci/build-1/artifacts", nil))
+	if listRecorder.Code != http.StatusOK || !strings.Contains(listRecorder.Body.String(), "report.xml") {
+		t.Fatalf("list status=%d body=%s", listRecorder.Code, listRecorder.Body.String())
+	}
+
+	downloadRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(downloadRecorder, httptest.NewRequest(http.MethodGet, "/api/v1/build-runs/ci/build-1/artifacts/report.xml", nil))
+	if downloadRecorder.Code != http.StatusOK || downloadRecorder.Body.String() != "<testsuite/>" || downloadRecorder.Header().Get("Content-Type") != "application/xml" {
+		t.Fatalf("download status=%d headers=%v body=%s", downloadRecorder.Code, downloadRecorder.Header(), downloadRecorder.Body.String())
 	}
 }
 

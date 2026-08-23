@@ -73,6 +73,13 @@ export class ApiClient {
     return this.post<BuildRun>(`/api/v1/build-runs/${namespace}/${name}/${action}`, undefined);
   }
 
+  downloadArtifact(namespace: string, buildRun: string, artifactName: string): Observable<Blob> {
+    return this.config$.pipe(
+      switchMap((config) => this.http.get(`${config.apiBaseUrl}/api/v1/build-runs/${namespace}/${buildRun}/artifacts/${encodeURIComponent(artifactName)}`, { responseType: 'blob' })),
+      catchError((error) => throwError(() => this.toApiError(error)))
+    );
+  }
+
   environments(): Observable<Environment[]> {
     return this.get<Environment[]>('/api/v1/environments');
   }

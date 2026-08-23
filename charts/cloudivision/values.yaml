@@ -100,6 +100,12 @@ logs:
     root: /var/lib/cloudivision/logs
     existingClaim: ""
 
+artifacts:
+  backend: disabled
+  local:
+    root: /var/lib/cloudivision/artifacts
+    existingClaim: ""
+
 ingress:
   enabled: false
   className: ""

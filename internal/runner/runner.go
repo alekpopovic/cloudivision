@@ -12,6 +12,7 @@ import (
 	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	"github.com/cloudivision/cloudivision/internal/artifacts"
 	"github.com/cloudivision/cloudivision/internal/build"
 	"github.com/cloudivision/cloudivision/internal/domain"
 	"github.com/cloudivision/cloudivision/internal/executor/steps"
@@ -46,17 +47,18 @@ type StepRunner interface {
 }
 
 type Runner struct {
-	Client     client.Client
-	Git        cloudivisiongit.Client
-	Steps      StepRunner
-	Builder    build.ImageBuilder
-	SBOM       supplychain.SBOMGenerator
-	Scanner    supplychain.VulnerabilityScanner
-	Signer     supplychain.ImageSigner
-	Provenance supplychain.ProvenanceWriter
-	Workspace  string
-	Logger     *slog.Logger
-	LogStore   logstore.LogStore
+	Client        client.Client
+	Git           cloudivisiongit.Client
+	Steps         StepRunner
+	Builder       build.ImageBuilder
+	SBOM          supplychain.SBOMGenerator
+	Scanner       supplychain.VulnerabilityScanner
+	Signer        supplychain.ImageSigner
+	Provenance    supplychain.ProvenanceWriter
+	Workspace     string
+	Logger        *slog.Logger
+	LogStore      logstore.LogStore
+	ArtifactStore artifacts.ArtifactStore
 }
 
 func New(k8sClient client.Client, logger *slog.Logger) Runner {
@@ -185,6 +187,13 @@ func (r Runner) Run(ctx context.Context, cfg Config) error {
 		return r.fail(ctx, buildRun, "StepFailed", redactor.Mask(err.Error()))
 	}
 	r.setCondition(buildRun, ConditionStepsCompleted, metav1.ConditionTrue, "StepsCompleted", "Pipeline steps completed.")
+	if r.ArtifactStore != nil {
+		artifactStatuses, err := r.collectArtifacts(ctx, buildRun, template, sourceDir)
+		if err != nil {
+			return r.fail(ctx, buildRun, "ArtifactCollectionFailed", redactor.Mask(err.Error()))
+		}
+		buildRun.Status.Artifacts = artifactStatuses
+	}
 	if err := r.updateStatus(ctx, buildRun); err != nil {
 		return err
 	}

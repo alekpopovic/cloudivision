@@ -365,6 +365,16 @@ type PipelineStep struct {
 	// +optional
 	TimeoutSeconds  int  `json:"timeoutSeconds,omitempty"`
 	ContinueOnError bool `json:"continueOnError,omitempty"`
+	// +optional
+	Artifacts *PipelineArtifactSpec `json:"artifacts,omitempty"`
+}
+
+type PipelineArtifactSpec struct {
+	// +kubebuilder:validation:MinItems=1
+	Paths    []string `json:"paths"`
+	Optional bool     `json:"optional,omitempty"`
+	// +kubebuilder:validation:Minimum=1
+	RetentionDays int `json:"retentionDays,omitempty"`
 }
 
 // +kubebuilder:validation:XValidation:rule="!self.enabled || self.mode == 'inline' || (has(self.ref) && self.ref != ”)",message="cache.ref is required for registry and local cache modes"
@@ -582,6 +592,17 @@ type BuildRunSupplyChainStatus struct {
 	LowVulnerabilities      int    `json:"lowVulnerabilities,omitempty"`
 }
 
+type BuildRunArtifactStatus struct {
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	Type   string `json:"type,omitempty"`
+	Size   int64  `json:"size"`
+	Digest string `json:"digest"`
+	Ref    string `json:"ref"`
+	// +optional
+	CreatedAt *metav1.Time `json:"createdAt,omitempty"`
+}
+
 type PolicyViolationStatus struct {
 	Policy    string `json:"policy"`
 	Severity  string `json:"severity"`
@@ -614,6 +635,7 @@ type BuildRunStatus struct {
 	Policy      PolicyDecisionStatus      `json:"policy,omitempty"`
 	Failure     FailureStatus             `json:"failure,omitempty"`
 	Log         BuildRunLogStatus         `json:"log,omitempty"`
+	Artifacts   []BuildRunArtifactStatus  `json:"artifacts,omitempty"`
 }
 
 // +kubebuilder:object:root=true

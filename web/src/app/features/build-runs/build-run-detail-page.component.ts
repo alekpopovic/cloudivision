@@ -39,6 +39,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
       <nav class="mb-4 flex gap-2 border-b border-slate-200" aria-label="BuildRun detail tabs">
         <button class="border-b-2 px-3 py-2 text-sm font-medium" [class.border-blue-600]="activeTab === 'details'" [class.text-blue-700]="activeTab === 'details'" (click)="activeTab = 'details'">Debug details</button>
         <button class="border-b-2 px-3 py-2 text-sm font-medium" [class.border-blue-600]="activeTab === 'supply-chain'" [class.text-blue-700]="activeTab === 'supply-chain'" (click)="activeTab = 'supply-chain'">Supply Chain</button>
+				<button class="border-b-2 px-3 py-2 text-sm font-medium" [class.border-blue-600]="activeTab === 'artifacts'" [class.text-blue-700]="activeTab === 'artifacts'" (click)="activeTab = 'artifacts'">Artifacts ({{ vm.run.status?.artifacts?.length || 0 }})</button>
       </nav>
 
       <ng-container *ngIf="activeTab === 'details'">
@@ -106,13 +107,29 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
           { key: 'Policy evidence', value: vm.run.status?.policy?.allowed ? 'Allowed' : (vm.run.status?.policy?.reason || 'Not evaluated') }
         ]" />
       </section>
+
+			<section *ngIf="activeTab === 'artifacts'" class="rounded-md border border-slate-200 bg-white p-4">
+				<h2 class="mb-3 text-sm font-semibold">Published artifacts</h2>
+				<div *ngIf="vm.run.status?.artifacts?.length; else noArtifacts" class="overflow-x-auto">
+					<table class="w-full text-left text-sm">
+						<thead class="text-xs text-slate-500"><tr><th class="pb-2">Name</th><th class="pb-2">Path</th><th class="pb-2">Size</th><th class="pb-2">Digest</th><th></th></tr></thead>
+						<tbody class="divide-y divide-slate-100">
+							<tr *ngFor="let artifact of vm.run.status?.artifacts">
+								<td class="py-2 font-medium">{{ artifact.name }}</td><td class="py-2 text-slate-600">{{ artifact.path }}</td><td class="py-2 text-slate-600">{{ artifact.size }} B</td><td class="max-w-48 truncate py-2 font-mono text-xs" [title]="artifact.digest">{{ artifact.digest }}</td>
+								<td class="py-2 text-right"><button type="button" class="rounded border border-slate-300 px-2 py-1 text-xs" (click)="downloadArtifact(vm.run, artifact.name)">Download</button></td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<ng-template #noArtifacts><p class="text-sm text-slate-500">No artifacts were published for this BuildRun.</p></ng-template>
+			</section>
     </ng-container>
   `
 })
 export class BuildRunDetailPageComponent {
   private readonly api = inject(ApiClient);
   private readonly route = inject(ActivatedRoute);
-  activeTab: 'details' | 'supply-chain' = 'details';
+  activeTab: 'details' | 'supply-chain' | 'artifacts' = 'details';
   actionInFlight = false;
   error: ApiError | null = null;
   logsLoading = true;
@@ -186,5 +203,20 @@ export class BuildRunDetailPageComponent {
       error: (error: ApiError) => { this.actionInFlight = false; this.error = error; }
     });
   }
+
+	downloadArtifact(run: BuildRun, artifactName: string): void {
+		this.api.downloadArtifact(run.namespace, run.name, artifactName).subscribe({
+			next: (blob) => {
+				if (typeof document === 'undefined' || typeof URL === 'undefined') return;
+				const href = URL.createObjectURL(blob);
+				const anchor = document.createElement('a');
+				anchor.href = href;
+				anchor.download = artifactName;
+				anchor.click();
+				URL.revokeObjectURL(href);
+			},
+			error: (error: ApiError) => (this.error = error)
+		});
+	}
 
 }

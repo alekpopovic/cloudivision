@@ -114,6 +114,25 @@ paths:
       responses:
         "200":
           description: Return runner pod logs for a BuildRun.
+  /api/v1/build-runs/{namespace}/{name}/artifacts:
+    get:
+      parameters:
+        - {name: namespace, in: path, required: true, schema: {type: string}}
+        - {name: name, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: List artifact metadata from BuildRun status.
+  /api/v1/build-runs/{namespace}/{name}/artifacts/{artifactName}:
+    get:
+      parameters:
+        - {name: namespace, in: path, required: true, schema: {type: string}}
+        - {name: name, in: path, required: true, schema: {type: string}}
+        - {name: artifactName, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Download artifact content from the configured backend.
+        "404":
+          description: Artifact metadata or content was not found.
   /api/v1/build-runs/{namespace}/{name}/cancel:
     post:
       parameters:

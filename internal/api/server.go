@@ -15,6 +15,7 @@ import (
 	"time"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	"github.com/cloudivision/cloudivision/internal/artifacts"
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
 	buildlogic "github.com/cloudivision/cloudivision/internal/build"
@@ -37,6 +38,7 @@ type Server struct {
 	Client           client.Client
 	LogReader        PodLogReader
 	LogStore         logstore.LogStore
+	ArtifactStore    artifacts.ArtifactStore
 	Logger           *slog.Logger
 	Audit            audit.Recorder
 	AuditEvents      audit.EventLister
@@ -72,6 +74,8 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/build-runs/{namespace}/{name}/retry", s.retryBuildRun)
 	mux.HandleFunc("POST /api/v1/build-runs/{namespace}/{name}/rerun", s.rerunBuildRun)
 	mux.HandleFunc("GET /api/v1/build-runs/{namespace}/{name}/logs", s.buildRunLogs)
+	mux.HandleFunc("GET /api/v1/build-runs/{namespace}/{name}/artifacts", s.buildRunArtifacts)
+	mux.HandleFunc("GET /api/v1/build-runs/{namespace}/{name}/artifacts/{artifactName}", s.buildRunArtifact)
 	mux.HandleFunc("GET /api/v1/environments", s.environments)
 	mux.HandleFunc("GET /api/v1/releases", s.releases)
 	mux.HandleFunc("POST /api/v1/releases/{namespace}/{name}/approve", s.approveRelease)

@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-23T00:01:53Z`
-Last executed prompt: `49`
-Next prompt: `50`
+Updated at: `2026-08-23T00:09:19Z`
+Last executed prompt: `50`
+Next prompt: `51`
 
 ## How to update
 
@@ -78,7 +78,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 47 | done | API | Branch, Tag and Pull Request Event Filters | `prompts/47-branch-tag-and-pull-request-event-filters.md` | Added auditable branch/tag/PR webhook filters, safe fork/trusted-actor defaults, Angular configuration/summary, CRD schemas, tests and docs. go test ./... and Angular build passed. |
 | 48 | done | Build Execution | BuildRun Retry, Cancel and Rerun | `prompts/48-buildrun-retry-cancel-and-rerun.md` | Added idempotent BuildRun cancel plus immutable retry/rerun API actions, audit events, API RBAC, CLI commands, safe Angular actions/relations, tests and docs. Go tests, Angular build and Helm render passed. |
 | 49 | done | Storage | Log Storage Abstraction | `prompts/49-log-storage-abstraction.md` | Added pluggable logstore interface with Kubernetes/default, memory/local, object/Loki skeletons, pre-persistence redaction, runner/API integration, BuildRun log status, Helm configuration, UI backend display, tests and operations docs. Go tests, Angular build and Helm renders passed. |
-| 50 | pending | Storage | Artifact Storage | `prompts/50-artifact-storage.md` |  |
+| 50 | done | Storage | Artifact Storage | `prompts/50-artifact-storage.md` | Added artifact storage abstraction with disabled/noop, memory/local, object/OCI skeleton backends; safe runner collection, SHA-256 metadata in BuildRun status, API list/download, Angular Artifacts tab, Helm local PVC config, demo pipeline, tests and docs. Go tests/vet, Angular tests/build, Helm renders and YAML validation passed. |
 | 51 | pending | Scale | Project Quotas and Runner Concurrency | `prompts/51-project-quotas-and-runner-concurrency.md` |  |
 | 52 | pending | API | API Pagination and Server-Side Filtering | `prompts/52-api-pagination-and-server-side-filtering.md` |  |
 | 53 | pending | Build Execution | Runner Workspace and Dependency Cache | `prompts/53-runner-workspace-and-dependency-cache.md` |  |

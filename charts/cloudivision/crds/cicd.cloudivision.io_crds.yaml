@@ -149,6 +149,33 @@ spec:
             type: object
           status:
             properties:
+              artifacts:
+                items:
+                  properties:
+                    createdAt:
+                      format: date-time
+                      type: string
+                    digest:
+                      type: string
+                    name:
+                      type: string
+                    path:
+                      type: string
+                    ref:
+                      type: string
+                    size:
+                      format: int64
+                      type: integer
+                    type:
+                      type: string
+                  required:
+                  - digest
+                  - name
+                  - path
+                  - ref
+                  - size
+                  type: object
+                type: array
               completedAt:
                 format: date-time
                 type: string
@@ -681,6 +708,21 @@ spec:
               steps:
                 items:
                   properties:
+                    artifacts:
+                      properties:
+                        optional:
+                          type: boolean
+                        paths:
+                          items:
+                            type: string
+                          minItems: 1
+                          type: array
+                        retentionDays:
+                          minimum: 1
+                          type: integer
+                      required:
+                      - paths
+                      type: object
                     args:
                       items:
                         type: string

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	"github.com/cloudivision/cloudivision/internal/artifacts"
 	"github.com/cloudivision/cloudivision/internal/logstore"
 	"github.com/cloudivision/cloudivision/internal/runner"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -55,6 +56,18 @@ func main() {
 		buildRunner.LogStore = logstore.LokiStore{}
 	default:
 		logger.Error("unsupported log backend", "backend", cfg.LogBackend)
+		os.Exit(1)
+	}
+	switch strings.ToLower(cfg.ArtifactBackend) {
+	case "", "disabled", "noop":
+	case "local":
+		buildRunner.ArtifactStore = artifacts.LocalStore{Root: cfg.ArtifactRoot}
+	case "object":
+		buildRunner.ArtifactStore = artifacts.ObjectStore{}
+	case "oci":
+		buildRunner.ArtifactStore = artifacts.OCIStore{}
+	default:
+		logger.Error("unsupported artifact backend", "backend", cfg.ArtifactBackend)
 		os.Exit(1)
 	}
 	logger.Info("starting cloudivision build runner", "buildRun", cfg.BuildRunName, "namespace", cfg.BuildRunNamespace)

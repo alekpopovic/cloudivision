@@ -104,6 +104,10 @@ spec:
             - name: stored-logs
               mountPath: {{ .Values.logs.local.root }}
             {{- end }}
+            {{- if and (eq .Values.artifacts.backend "local") .Values.artifacts.local.existingClaim }}
+            - name: stored-artifacts
+              mountPath: {{ .Values.artifacts.local.root }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -127,6 +131,11 @@ spec:
         - name: stored-logs
           persistentVolumeClaim:
             claimName: {{ .Values.logs.local.existingClaim }}
+        {{- end }}
+        {{- if and (eq .Values.artifacts.backend "local") .Values.artifacts.local.existingClaim }}
+        - name: stored-artifacts
+          persistentVolumeClaim:
+            claimName: {{ .Values.artifacts.local.existingClaim }}
         {{- end }}
 ---
 apiVersion: apps/v1

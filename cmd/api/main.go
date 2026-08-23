@@ -17,6 +17,7 @@ import (
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	cloudivisionapi "github.com/cloudivision/cloudivision/internal/api"
+	"github.com/cloudivision/cloudivision/internal/artifacts"
 	"github.com/cloudivision/cloudivision/internal/audit"
 	"github.com/cloudivision/cloudivision/internal/auth"
 	"github.com/cloudivision/cloudivision/internal/logstore"
@@ -88,11 +89,17 @@ func main() {
 		logger.Error("configure log backend", "error", err)
 		os.Exit(1)
 	}
+	configuredArtifactStore, err := configureArtifactStore()
+	if err != nil {
+		logger.Error("configure artifact backend", "error", err)
+		os.Exit(1)
+	}
 
 	apiServer := cloudivisionapi.Server{
 		Client:           k8sClient,
 		LogReader:        cloudivisionapi.KubernetesPodLogReader{Client: clientset},
 		LogStore:         configuredLogStore,
+		ArtifactStore:    configuredArtifactStore,
 		Logger:           logger,
 		Audit:            auditRecorder,
 		AuditEvents:      auditEvents,
@@ -152,6 +159,25 @@ func configureLogStore() (logstore.LogStore, error) {
 		return logstore.LokiStore{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported CLOU_DIVISION_LOG_BACKEND")
+	}
+}
+
+func configureArtifactStore() (artifacts.ArtifactStore, error) {
+	switch strings.ToLower(envOrDefault("CLOU_DIVISION_ARTIFACT_BACKEND", "disabled")) {
+	case "", "disabled", "noop":
+		return nil, nil
+	case "local":
+		root := os.Getenv("CLOU_DIVISION_ARTIFACT_ROOT")
+		if root == "" {
+			return nil, errors.New("CLOU_DIVISION_ARTIFACT_ROOT is required for the local artifact backend")
+		}
+		return artifacts.LocalStore{Root: root}, nil
+	case "object":
+		return artifacts.ObjectStore{}, nil
+	case "oci":
+		return artifacts.OCIStore{}, nil
+	default:
+		return nil, fmt.Errorf("unsupported CLOU_DIVISION_ARTIFACT_BACKEND")
 	}
 }
 

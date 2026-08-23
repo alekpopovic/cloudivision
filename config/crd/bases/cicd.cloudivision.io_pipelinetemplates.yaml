@@ -162,6 +162,21 @@ spec:
               steps:
                 items:
                   properties:
+                    artifacts:
+                      properties:
+                        optional:
+                          type: boolean
+                        paths:
+                          items:
+                            type: string
+                          minItems: 1
+                          type: array
+                        retentionDays:
+                          minimum: 1
+                          type: integer
+                      required:
+                      - paths
+                      type: object
                     args:
                       items:
                         type: string

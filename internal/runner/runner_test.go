@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
+	"github.com/cloudivision/cloudivision/internal/artifacts"
 	"github.com/cloudivision/cloudivision/internal/build"
 	"github.com/cloudivision/cloudivision/internal/executor/steps"
 	cloudivisiongit "github.com/cloudivision/cloudivision/internal/git"
@@ -132,6 +133,46 @@ func TestRunnerPersistsRedactedStepLogs(t *testing.T) {
 	}
 	if updated.Status.Log.Backend != "memory" || updated.Status.Log.Ref == "" {
 		t.Fatalf("log status = %#v", updated.Status.Log)
+	}
+}
+
+func TestRunnerCollectsConfiguredArtifacts(t *testing.T) {
+	ctx := context.Background()
+	repo := createGitRepository(t)
+	buildRun := testBuildRun(repo)
+	template := testPipelineTemplate([]cicdv1alpha1.PipelineStep{{Name: "test", Command: []string{"sh"}, Args: []string{"-c", "mkdir -p reports && printf passed > reports/result.txt"}, Artifacts: &cicdv1alpha1.PipelineArtifactSpec{Paths: []string{"reports/*.txt"}, RetentionDays: 7}}})
+	k8sClient := newFakeRunnerClient(t, buildRun, testRepository(repo), template)
+	store := artifacts.NewMemoryStore()
+	buildRunner := Runner{Client: k8sClient, Git: cloudivisiongit.ExecClient{}, Steps: steps.Runner{}, Builder: failBuilder{}, Workspace: filepath.Join(t.TempDir(), "workspace"), ArtifactStore: store}
+	if err := buildRunner.Run(ctx, testConfig(repo)); err != nil {
+		t.Fatal(err)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.Status.Artifacts) != 1 || updated.Status.Artifacts[0].Path != "reports/result.txt" || !strings.HasPrefix(updated.Status.Artifacts[0].Digest, "sha256:") {
+		t.Fatalf("artifacts = %#v", updated.Status.Artifacts)
+	}
+	refs, err := store.List(ctx, artifacts.ListArtifactsRequest{Namespace: buildRun.Namespace, BuildRun: buildRun.Name})
+	if err != nil || len(refs) != 1 {
+		t.Fatalf("refs=%#v err=%v", refs, err)
+	}
+}
+
+func TestArtifactCollectionRejectsSecretLikePaths(t *testing.T) {
+	if err := validateArtifactPattern("config/.env"); err == nil {
+		t.Fatal("validateArtifactPattern() error = nil")
+	}
+	if err := validateArtifactPattern("../outside"); err == nil {
+		t.Fatal("validateArtifactPattern() traversal error = nil")
+	}
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".env"), []byte("TOKEN=value"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := expandArtifactFiles(root, []string{filepath.Join(root, ".env")}); err == nil {
+		t.Fatal("expandArtifactFiles() protected file error = nil")
 	}
 }
 

@@ -131,6 +131,7 @@ export interface PipelineStep {
   env?: Array<{ name: string; value?: string }>;
   timeoutSeconds?: number;
   continueOnError?: boolean;
+  artifacts?: { paths: string[]; optional?: boolean; retentionDays?: number };
 }
 
 export interface BuildRun {
@@ -169,6 +170,7 @@ export interface BuildRun {
     };
     policy?: PolicyDecision;
     failure?: { reason?: string; message?: string };
+    artifacts?: Array<{ name: string; path: string; type?: string; size: number; digest: string; ref: string; createdAt?: string }>;
   };
 }
 

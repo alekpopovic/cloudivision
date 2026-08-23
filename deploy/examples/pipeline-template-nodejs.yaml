@@ -13,10 +13,15 @@ spec:
         - sh
       args:
         - -c
-        - test -f client/package.json && test -f Dockerfile
+        - test -f client/package.json && test -f Dockerfile && printf 'demo checks passed\n' > test-report.txt
       workingDir: .
       timeoutSeconds: 120
       continueOnError: false
+      artifacts:
+        paths:
+          - test-report.txt
+        optional: false
+        retentionDays: 7
   build:
     enabled: false
     contextDir: .
