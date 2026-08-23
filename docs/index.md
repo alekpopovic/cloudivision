@@ -6,12 +6,12 @@ home: true
 
 <section class="hero">
   <div class="hero-copy">
-    <span class="hero-badge">v0.2 alpha · Kubernetes native</span>
+    <span class="hero-badge">v0.2.1 alpha · Kubernetes native</span>
     <h1>Build in Kubernetes.<br><span>Deliver through GitOps.</span></h1>
     <p>cloudivision turns source events into observable BuildRuns, isolated runner Jobs, immutable artifacts, and auditable GitOps releases.</p>
     <div class="hero-actions">
       <a class="button button-primary" href="{{ '/getting-started/quickstart-kind.html' | relative_url }}">Start the kind quickstart</a>
-      <a class="button" href="{{ '/releases/v0.2.0.html' | relative_url }}">Read the v0.2.0 release notes</a>
+      <a class="button" href="{{ '/releases/v0.2.1.html' | relative_url }}">Read the v0.2.1 release notes</a>
     </div>
   </div>
   <div class="hero-visual">
@@ -63,7 +63,7 @@ The Kubernetes API stores desired and runtime state. Controllers reconcile that 
 
 ## Go deeper
 
-- Install the [v0.2.0 CLI](operations/install-cli.md) or the [released Helm chart](operations/install-helm.md), then verify checksums and run `cloudivision doctor`.
+- Install the [v0.2.1 CLI](operations/install-cli.md) or the [released Helm chart](operations/install-helm.md), then verify checksums and run `cloudivision doctor`.
 - Learn the resource model: [Project](concepts/project.md), [Repository](concepts/repository.md), [PipelineTemplate](concepts/pipeline-template.md), [BuildRun](concepts/buildrun.md), [Environment](concepts/environment.md), and [Release](concepts/release.md).
 - Operate confidently with [observability](operations/observability.md), [troubleshooting](operations/troubleshooting.md), and [security hardening](operations/security-hardening.md).
 - Extend the platform through the [executor and provider interfaces](development/architecture.md) and [contributor guide](development/contributing.md).

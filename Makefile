@@ -79,6 +79,7 @@ upgrade-test:
 	./test/upgrade/run.sh
 
 scale-test:
+	@mkdir -p $(GOTMPDIR)
 	./test/scale/run.sh
 
 security-check:
@@ -92,16 +93,19 @@ security-check:
 		./test/security/rbac-minimal.sh "$$rendered"
 
 release-local:
+	@mkdir -p $(GOTMPDIR)
 	./scripts/release/build-local.sh
 
 test-all: fmt test-unit test-controller test-api test-web vet build helm-template
 
 openapi-generate:
+	@mkdir -p $(GOTMPDIR)
 	go run ./cmd/sdkgen -spec docs/openapi.yaml -go-out sdk/go/client.gen.go -ts-out sdk/typescript/client.gen.ts
 
 sdk-generate: openapi-generate
 
 sdk-check:
+	@mkdir -p $(GOTMPDIR)
 	go run ./cmd/sdkgen -check -spec docs/openapi.yaml -go-out sdk/go/client.gen.go -ts-out sdk/typescript/client.gen.ts
 	go test ./sdk/go
 	web/node_modules/.bin/tsc -p sdk/typescript/tsconfig.json

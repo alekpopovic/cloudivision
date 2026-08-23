@@ -16,14 +16,14 @@
 <p align="center">
   <a href="https://github.com/alekpopovic/cloudivision/actions/workflows/ci.yaml"><img src="https://github.com/alekpopovic/cloudivision/actions/workflows/ci.yaml/badge.svg" alt="CI status"></a>
   <a href="https://github.com/alekpopovic/cloudivision/actions/workflows/docs-pages.yaml"><img src="https://github.com/alekpopovic/cloudivision/actions/workflows/docs-pages.yaml/badge.svg" alt="Documentation build status"></a>
-  <a href="https://github.com/alekpopovic/cloudivision/releases/tag/v0.2.0"><img src="https://img.shields.io/badge/release-v0.2.0-4F7CFF" alt="Release v0.2.0"></a>
+  <a href="https://github.com/alekpopovic/cloudivision/releases/tag/v0.2.1"><img src="https://img.shields.io/badge/release-v0.2.1-4F7CFF" alt="Release v0.2.1"></a>
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26">
   <img src="https://img.shields.io/badge/Angular-20-DD0031?logo=angular&logoColor=white" alt="Angular 20">
   <img src="https://img.shields.io/badge/Kubernetes-native-326CE5?logo=kubernetes&logoColor=white" alt="Kubernetes native">
 </p>
 
 > [!IMPORTANT]
-> v0.2.0 is an alpha release. The clean-cluster gate passes, but the default
+> v0.2.1 is an alpha release. The clean-cluster gate passes, but the default
 > disabled authentication mode is for development only. Read the
 > [final gate](docs/readiness/v0.2-final-gate.md) before production evaluation.
 
@@ -116,15 +116,15 @@ CLOU_DIVISION_API_URL=http://localhost:8080 \
   bin/cloudivision -n cloudivision doctor
 ```
 
-To install the published v0.2.0 CLI instead, use the checksum-verifying release
+To install the published v0.2.1 CLI instead, use the checksum-verifying release
 installer:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/alekpopovic/cloudivision/v0.2.0/scripts/install-cli.sh | \
-  CLOUDIVISION_CLI_VERSION=0.2.0 bash
+curl -fsSL https://raw.githubusercontent.com/alekpopovic/cloudivision/v0.2.1/scripts/install-cli.sh | \
+  CLOUDIVISION_CLI_VERSION=0.2.1 bash
 ```
 
-See the [v0.2.0 release notes](docs/releases/v0.2.0.md) for all CLI platforms,
+See the [v0.2.1 release notes](docs/releases/v0.2.1.md) for all CLI platforms,
 Helm/CRD assets, component images, compatibility notes, and known issues.
 
 ## Platform map
@@ -169,9 +169,9 @@ Browse the modern, searchable [cloudivision documentation site](https://alekpopo
 
 ## Release status
 
-- Version: **v0.2.0 alpha**
+- Version: **v0.2.1 alpha**
 - Readiness decision: **ship with known issues**
-- Release notes: [v0.2.0](docs/releases/v0.2.0.md)
+- Release notes: [v0.2.1](docs/releases/v0.2.1.md)
 - Next increment: [v0.3 roadmap](docs/roadmap/v0.3.md)
 - Prioritized work: [v0.3 backlog](docs/roadmap/v0.3-backlog.md)
 - Changes: [CHANGELOG.md](CHANGELOG.md)

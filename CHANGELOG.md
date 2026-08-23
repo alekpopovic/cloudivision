@@ -18,6 +18,27 @@ guarantees documented in `docs/api/compatibility-policy.md`.
 
 ### Known issues
 
+## [0.2.1] - 2026-08-23
+
+### Fixes
+
+- Create the configured Go temporary directory before SDK generation, scale
+  validation, and local release packaging so clean GitHub runners do not fail
+  immediately with `GOTMPDIR` errors.
+- Publish reviewed, version-specific release notes and a source SPDX SBOM from
+  the release workflow, and use those notes as the GitHub Release body.
+
+### Upgrade notes
+
+- v0.2.1 is a packaging and CLI patch over v0.2.0. CRD schemas are unchanged;
+  use the v0.2.1 chart, CRD bundle, CLI, and component images together.
+
+### Known issues
+
+- The v0.2.0 tag remains as immutable evidence of the failed first publication
+  attempt; its workflow stopped before images, artifacts, or a GitHub Release
+  were published. v0.2.1 is the installable release.
+
 ## [0.2.0] - 2026-08-23
 
 ### Features
@@ -149,6 +170,7 @@ guarantees documented in `docs/api/compatibility-policy.md`.
   (three high, three moderate); resolving them requires a breaking Angular major
   upgrade and is tracked for v0.2. Production dependencies audit clean.
 
-[Unreleased]: https://github.com/alekpopovic/cloudivision/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/alekpopovic/cloudivision/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/alekpopovic/cloudivision/releases/tag/v0.2.1
 [0.2.0]: https://github.com/alekpopovic/cloudivision/releases/tag/v0.2.0
 [0.1.0]: https://github.com/alekpopovic/cloudivision/releases/tag/v0.1.0

@@ -78,10 +78,11 @@ delete or blindly replace a CRD. Restore custom resources into an isolated clust
 when an older controller cannot read the new schema. Revoked images or signatures
 must remain auditable in release notes.
 
-## v0.2.0 checklist
+## Release checklist
 
 - [ ] Final gate recommends shipping; critical/high dependency findings triaged.
-- [ ] `VERSION`, chart version, appVersion, changelog and tag all equal `0.2.0`.
+- [ ] `VERSION`, chart version, appVersion, OpenAPI metadata, release notes,
+      changelog, and tag all name the same version.
 - [ ] `gofmt`, Go test/vet, npm ci/build/test, Helm and security checks pass.
 - [ ] Clean-cluster conformance, upgrade and limited scale evidence reviewed.
 - [ ] RC verifies first build, signed webhook, GitOps release and approval.

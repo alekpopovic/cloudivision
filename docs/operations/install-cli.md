@@ -7,8 +7,8 @@ Release binaries are statically linked and published for Linux, macOS, and Windo
 The installer detects the operating system and architecture, verifies the checksum, and installs to `/usr/local/bin`:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/alekpopovic/cloudivision/v0.2.0/scripts/install-cli.sh | \
-  CLOUDIVISION_CLI_VERSION=0.2.0 bash
+curl -fsSL https://raw.githubusercontent.com/alekpopovic/cloudivision/v0.2.1/scripts/install-cli.sh | \
+  CLOUDIVISION_CLI_VERSION=0.2.1 bash
 cloudivision version
 ```
 
@@ -19,8 +19,8 @@ reproducible installation.
 Use a pinned release and a user-owned destination when desired:
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/alekpopovic/cloudivision/v0.2.0/scripts/install-cli.sh
-CLOUDIVISION_CLI_VERSION=0.2.0 \
+curl -fsSLO https://raw.githubusercontent.com/alekpopovic/cloudivision/v0.2.1/scripts/install-cli.sh
+CLOUDIVISION_CLI_VERSION=0.2.1 \
 CLOUDIVISION_CLI_INSTALL_DIR="$HOME/.local/bin" \
   bash install-cli.sh
 ```
@@ -32,9 +32,9 @@ For a manual install, download `cloudivision-cli_VERSION_OS_ARCH.tar.gz`, verify
 Download `cloudivision-cli_VERSION_windows_amd64.zip` (or `windows_arm64.zip`) and `SHA256SUMS` from the GitHub release. In PowerShell, verify and install it:
 
 ```powershell
-(Get-FileHash .\cloudivision-cli_0.2.0_windows_amd64.zip -Algorithm SHA256).Hash
-Expand-Archive .\cloudivision-cli_0.2.0_windows_amd64.zip
-$env:Path += ";$PWD\cloudivision-cli_0.2.0_windows_amd64"
+(Get-FileHash .\cloudivision-cli_0.2.1_windows_amd64.zip -Algorithm SHA256).Hash
+Expand-Archive .\cloudivision-cli_0.2.1_windows_amd64.zip
+$env:Path += ";$PWD\cloudivision-cli_0.2.1_windows_amd64"
 cloudivision.exe version
 ```
 
@@ -63,4 +63,4 @@ Tagged releases run the release workflow and attach CLI archives for every suppo
 After installation, run `cloudivision doctor` with the API URL and credentials to validate connectivity. Tokens should come from `CLOU_DIVISION_TOKEN` or the mode-0600 CLI config, not shell history.
 
 The complete platform assets, upgrade impact, and known issues are recorded in
-the [v0.2.0 release notes](../releases/v0.2.0.md).
+the [v0.2.1 release notes](../releases/v0.2.1.md).
