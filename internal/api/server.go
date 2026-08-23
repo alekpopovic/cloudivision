@@ -26,6 +26,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/policy"
 	"github.com/cloudivision/cloudivision/internal/provider"
 	providernotifications "github.com/cloudivision/cloudivision/internal/provider/notifications"
+	providersecrets "github.com/cloudivision/cloudivision/internal/provider/secrets"
 	"github.com/cloudivision/cloudivision/internal/redact"
 	"github.com/cloudivision/cloudivision/internal/webhook"
 	corev1 "k8s.io/api/core/v1"
@@ -851,11 +852,12 @@ func (s Server) webhookSecret(ctx context.Context, repository *cicdv1alpha1.Repo
 	if ref.Name == "" || ref.Key == "" {
 		return "", fmt.Errorf("webhook secretRef.name and secretRef.key are required")
 	}
-	secret := &corev1.Secret{}
-	if err := s.Client.Get(ctx, client.ObjectKey{Name: ref.Name, Namespace: repository.Namespace}, secret); err != nil {
+	resolver := providersecrets.KubernetesProvider{Client: s.Client, AllowedNamespaces: []string{repository.Namespace}}
+	secret, err := resolver.Resolve(ctx, providersecrets.SecretRef{Namespace: repository.Namespace, Name: ref.Name, Keys: []string{ref.Key}})
+	if err != nil {
 		return "", fmt.Errorf("load webhook secret: %w", err)
 	}
-	value := secret.Data[ref.Key]
+	value := secret.Values[ref.Key]
 	if len(value) == 0 {
 		return "", fmt.Errorf("webhook secret key %q is empty or missing", ref.Key)
 	}

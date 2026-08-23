@@ -64,6 +64,20 @@ func TestProviderEndpointsExposeCapabilitiesAndHealth(t *testing.T) {
 	}
 }
 
+func TestProjectAPIResponseDoesNotExposeSecretValues(t *testing.T) {
+	project := &cicdv1alpha1.Project{ObjectMeta: metav1.ObjectMeta{Name: "project", Namespace: "ci"}, Spec: cicdv1alpha1.ProjectSpec{DisplayName: "Project", OwnerTeam: "team", Namespace: "ci", DefaultRegistry: "example.com", Isolation: cicdv1alpha1.ProjectIsolation{PodSecurityLevel: cicdv1alpha1.PodSecurityLevelRestricted}, Notifications: &cicdv1alpha1.ProjectNotificationSpec{Enabled: true, Provider: "webhook", SecretRef: &cicdv1alpha1.SecretKeyRef{Name: "notifications", Key: "url"}}}}
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "notifications", Namespace: "ci"}, Data: map[string][]byte{"url": []byte("https://notify.example/top-secret-token")}}
+	server, _ := newTestServer(t, project, secret)
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/projects?namespace=ci", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "top-secret-token") || strings.Contains(recorder.Body.String(), "notify.example") {
+		t.Fatalf("API exposed secret value: %s", recorder.Body.String())
+	}
+}
+
 func TestPostBuildRunCreatesCR(t *testing.T) {
 	server, k8sClient := newTestServer(t)
 	body := `{

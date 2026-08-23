@@ -175,6 +175,34 @@ func TestEnsureRunProjectsOnlyConfiguredRegistrySecret(t *testing.T) {
 	}
 }
 
+func TestEnsureRunProjectsOnlyRecognizedRegistryKeys(t *testing.T) {
+	ctx := context.Background()
+	scheme := newScheme(t)
+	buildRun, project, template := testBuildRun(), testProject(), testPipelineTemplate()
+	project.Spec.Registry = &cicdv1alpha1.ProjectRegistrySpec{Provider: cicdv1alpha1.RegistryProviderGHCR, CredentialSecretRef: &cicdv1alpha1.SecretKeyRef{Name: "registry-auth"}}
+	template.Spec.Build.Enabled, template.Spec.Build.Push = true, true
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "registry-auth", Namespace: "ci"}, Data: map[string][]byte{"username": []byte("robot"), "token": []byte("token"), "unrelated": []byte("must-not-mount")}}
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(buildRun, secret).Build()
+	jobExecutor := Executor{Client: fakeClient, Scheme: scheme}
+	ref, err := jobExecutor.EnsureRun(ctx, executor.EnsureRunRequest{BuildRun: buildRun, Project: project, Repository: testRepository(), Template: template})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := &batchv1.Job{}
+	if err := fakeClient.Get(ctx, types.NamespacedName{Name: ref.Name, Namespace: ref.Namespace}, job); err != nil {
+		t.Fatal(err)
+	}
+	items := job.Spec.Template.Spec.Volumes[0].Secret.Items
+	if len(items) != 2 {
+		t.Fatalf("projected items = %#v", items)
+	}
+	for _, item := range items {
+		if item.Key == "unrelated" {
+			t.Fatalf("unrelated key was projected: %#v", items)
+		}
+	}
+}
+
 func TestEnsureRunReportsMissingRegistrySecret(t *testing.T) {
 	project := testProject()
 	project.Spec.Registry = &cicdv1alpha1.ProjectRegistrySpec{

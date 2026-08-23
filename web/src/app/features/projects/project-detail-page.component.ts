@@ -29,6 +29,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
         { key: 'Runner namespace', value: project.spec.namespace },
         { key: 'Owner team', value: project.spec.ownerTeam },
         { key: 'Default registry', value: project.spec.defaultRegistry },
+        { key: 'Registry credentials', value: project.spec.registry?.credentialSecretRef?.name ? 'Configured' : 'Not configured' },
         { key: 'ServiceAccount', value: project.spec.serviceAccountName || 'cloudivision-runner' },
         { key: 'Concurrent builds', value: quotaNumber(project.spec.quotas?.maxConcurrentBuildRuns, 'Unlimited') },
         { key: 'Queued builds', value: quotaNumber(project.spec.quotas?.maxQueuedBuildRuns, 'Unlimited') },

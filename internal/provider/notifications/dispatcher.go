@@ -8,7 +8,7 @@ import (
 	"slices"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
-	corev1 "k8s.io/api/core/v1"
+	providersecrets "github.com/cloudivision/cloudivision/internal/provider/secrets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -32,15 +32,16 @@ func (d KubernetesDispatcher) Notify(ctx context.Context, request NotificationRe
 	if config.SecretRef == nil || config.SecretRef.Name == "" {
 		return errors.New("notification configuration invalid: endpoint secret is not configured")
 	}
-	secret := &corev1.Secret{}
-	if err := d.Client.Get(ctx, client.ObjectKey{Namespace: request.Namespace, Name: config.SecretRef.Name}, secret); err != nil {
-		return fmt.Errorf("load notification endpoint secret: %w", err)
-	}
 	key := config.SecretRef.Key
 	if key == "" {
 		key = "url"
 	}
-	endpoint := string(secret.Data[key])
+	resolver := providersecrets.KubernetesProvider{Client: d.Client, AllowedNamespaces: []string{request.Namespace}}
+	secret, err := resolver.Resolve(ctx, providersecrets.SecretRef{Namespace: request.Namespace, Name: config.SecretRef.Name, Keys: []string{key}})
+	if err != nil {
+		return fmt.Errorf("load notification endpoint secret: %w", err)
+	}
+	endpoint := string(secret.Values[key])
 	if endpoint == "" {
 		return errors.New("notification configuration invalid: endpoint key is missing")
 	}

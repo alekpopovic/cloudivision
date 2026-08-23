@@ -80,7 +80,7 @@ func main() {
 		logger.Error("configure auth", "error", err)
 		os.Exit(1)
 	}
-	providerRegistry, err := configureProviderRegistry()
+	providerRegistry, err := configureProviderRegistry(k8sClient)
 	if err != nil {
 		logger.Error("configure provider registry", "error", err)
 		os.Exit(1)
@@ -197,12 +197,12 @@ func configureCacheStore() (dependencycache.Store, error) {
 	return dependencycache.LocalStore{Root: root}, nil
 }
 
-func configureProviderRegistry() (*provider.Registry, error) {
+func configureProviderRegistry(k8sClient client.Client) (*provider.Registry, error) {
 	registry := provider.NewRegistry()
 	providers := []provider.Provider{
 		providergit.Generic(), providergit.GitHub(), providergit.GitLab(),
 		providerregistry.Generic(), providerregistry.GHCR(), providerregistry.GitLab(), providerregistry.Harbor(),
-		providerregistry.ECR(), providerregistry.GCR(), providerregistry.ACR(), providersecrets.Kubernetes(),
+		providerregistry.ECR(), providerregistry.GCR(), providerregistry.ACR(), providersecrets.Kubernetes(k8sClient), providersecrets.ExternalSecrets(k8sClient), providersecrets.Vault(providersecrets.VaultConfig{Address: os.Getenv("CLOU_DIVISION_VAULT_ADDRESS"), AuthMethod: os.Getenv("CLOU_DIVISION_VAULT_AUTH_METHOD"), Mount: os.Getenv("CLOU_DIVISION_VAULT_MOUNT")}),
 		providergitops.Generic(), providergitops.ArgoCD(), providerbuild.BuildKit(),
 		providernotifications.Noop(), providernotifications.Webhook(), providernotifications.Slack(), providernotifications.Teams(), providernotifications.Email(), providersupplychain.Noop(), providersupplychain.Syft(),
 		providersupplychain.Grype(), providersupplychain.Cosign(),

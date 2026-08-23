@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-23T01:24:39Z`
-Last executed prompt: `58`
-Next prompt: `59`
+Updated at: `2026-08-23T01:30:35Z`
+Last executed prompt: `59`
+Next prompt: `60`
 
 ## How to update
 
@@ -87,7 +87,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 56 | done | Release / GitOps | Argo CD and Flux Status Integration | `prompts/56-argo-cd-and-flux-status-integration.md` | Implemented unstructured Argo CD and Flux Kustomization/HelmRelease status readers, provider/resource absence conditions, deployment revision/time fields, UI, RBAC, tests, and docs. |
 | 57 | done | Release / GitOps | Release Promotion and Rollback | `prompts/57-release-promotion-and-rollback.md` | Added immutable release promotion and rollback endpoints, target policy/approval handling, audit events, lineage fields/UI, controller rollback phase, tests, OpenAPI, and docs. |
 | 58 | done | Providers | Notifications | `prompts/58-notifications.md` | Implemented Project-scoped notification configuration, generic webhook delivery with filtering/retries/redaction, Slack/Teams/email skeletons, controller/API event dispatch, failure conditions, provider health UI, tests, and docs. |
-| 59 | pending | Security | Secret Provider Integrations | `prompts/59-secret-provider-integrations.md` |  |
+| 59 | done | Security | Secret Provider Integrations | `prompts/59-secret-provider-integrations.md` | Implemented selected-key Kubernetes Secret provider with namespace enforcement/redaction, integrated registry/webhook/notification resolution, minimal runner projections, External Secrets CRD health detection, Vault skeleton, tests, RBAC, UI presence, and docs. |
 | 60 | pending | Templates | Pipeline Template Catalog | `prompts/60-pipeline-template-catalog.md` |  |
 | 61 | pending | Frontend | Angular Pipeline Editor Upgrade | `prompts/61-angular-pipeline-editor-upgrade.md` |  |
 | 62 | pending | Frontend | Angular First-Run and Onboarding Polish | `prompts/62-angular-first-run-and-onboarding-polish.md` |  |
