@@ -1,5 +1,8 @@
 # Product backlog after v0.1
 
+> Historical v0.2 planning document. Current priorities are in the
+> [v0.3 backlog](v0.3-backlog.md).
+
 This backlog implements the [v0.2 roadmap](v0.2.md). Priority is based on closing
 the verified v0.1 user-path gaps, not on feature count. Items inside each category
 are ordered; the team should finish a vertical slice before starting another.

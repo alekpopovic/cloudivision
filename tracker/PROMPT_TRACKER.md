@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-23T11:49:38Z`
-Last executed prompt: `74`
-Next prompt: `75`
+Updated at: `2026-08-23T11:55:01Z`
+Last executed prompt: `75`
+Next prompt: `None`
 
 ## How to update
 
@@ -103,4 +103,4 @@ Replace `21` with the last prompt that was successfully executed.
 | 72 | done | Extensibility | Plugin System v1 | `prompts/72-plugin-system-v1.md` | Added a static in-process plugin registry, provider adapters, discovery and health APIs, Angular Plugins page, OpenAPI/SDK updates, documentation, and tests. |
 | 73 | done | Examples | More Real-World Examples | `prompts/73-more-real-world-examples.md` | Added eight runnable application and release examples with tests, Dockerfiles where applicable, typed cloudivision resources, exact evaluation commands, documentation, and Go-example conformance coverage. |
 | 74 | done | Release | v0.2 Final Gate | `prompts/74-v0-2-final-gate.md` | Completed the v0.2 static and Kubernetes 1.36 live final gate; fixed CRD quadratic validation and Docker context regressions, aligned 0.2.0 metadata, passed API-backed conformance, dogfood, live upgrade, limited scale, and artifact checksum checks; recommendation is ship with known issues. |
-| 75 | pending | Roadmap | v0.3 Roadmap Planning | `prompts/75-v0-3-roadmap-planning.md` |  |
+| 75 | done | Roadmap | v0.3 Roadmap Planning | `prompts/75-v0-3-roadmap-planning.md` | Created a gate-driven v0.3 roadmap and prioritized backlog covering durable tenancy, runner pools and leased remote agents, GitOps lineage, persisted supply-chain evidence, plugin configuration lifecycle, and measurable operational maturity with explicit scope guardrails. |

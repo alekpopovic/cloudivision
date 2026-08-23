@@ -160,8 +160,8 @@ Browse the modern, searchable [cloudivision documentation site](https://alekpopo
 
 - Version: **v0.2.0 alpha**
 - Readiness decision: **ship with known issues**
-- Next increment: v0.3 roadmap
-- Prioritized work: [product backlog](docs/roadmap/backlog.md)
+- Next increment: [v0.3 roadmap](docs/roadmap/v0.3.md)
+- Prioritized work: [v0.3 backlog](docs/roadmap/v0.3-backlog.md)
 - Changes: [CHANGELOG.md](CHANGELOG.md)
 
 Useful local gates:
