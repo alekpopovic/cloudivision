@@ -23,6 +23,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
         <p class="font-semibold">{{ failure.reason }}</p><p class="mt-1">{{ failure.message }}</p>
       </section>
       <app-policy-decision *ngIf="vm.release.status?.policy" class="mb-5 block" [decision]="vm.release.status?.policy" />
+      <p *ngIf="actionError" class="mb-5 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{{ actionError }}</p>
       <div class="grid gap-5 lg:grid-cols-2">
         <section class="rounded-md border border-slate-200 bg-white p-4">
           <h2 class="mb-3 text-sm font-semibold">GitOps deployment</h2>
@@ -50,7 +51,15 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
           <p class="text-sm text-rose-700" *ngIf="vm.release.spec.approval?.rejectedBy">Rejected by <strong>{{ vm.release.spec.approval?.rejectedBy }}</strong> at {{ vm.release.spec.approval?.rejectedAt || 'unknown time' }}</p>
           <p class="text-sm text-slate-500" *ngIf="!vm.release.spec.approval?.approvedBy && !vm.release.spec.approval?.rejectedBy">No approval action recorded.</p>
           <p class="mt-2 text-xs text-slate-500" *ngIf="vm.release.spec.approval?.comment">{{ vm.release.spec.approval?.comment }}</p>
-          <button type="button" class="mt-4 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-500" disabled title="Rollback API is not available">Rollback (not available)</button>
+          <div class="mt-4 flex gap-2">
+            <button type="button" class="rounded-md bg-blue-700 px-3 py-2 text-sm text-white disabled:bg-slate-300" [disabled]="vm.release.status?.phase !== 'Deployed'" (click)="promote(vm.release)">Promote</button>
+            <button type="button" class="rounded-md border border-slate-300 px-3 py-2 text-sm" (click)="rollback(vm.release)">Rollback</button>
+          </div>
+          <app-key-value-list class="mt-4 block" [items]="[
+            { key: 'Promoted from', value: vm.release.spec.promotedFrom || '-' },
+            { key: 'Rollback of', value: vm.release.spec.rollbackOf || '-' },
+            { key: 'Rollback to', value: vm.release.spec.rollbackTo || '-' }
+          ]" />
         </section>
       </div>
       <section class="mt-5 rounded-md border border-slate-200 bg-white p-4">
@@ -63,6 +72,7 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
 export class ReleaseDetailPageComponent {
   private readonly api = inject(ApiClient);
   private readonly route = inject(ActivatedRoute);
+  actionError = '';
   readonly vm$ = combineLatest([this.api.releases(), this.api.buildRuns(), this.route.paramMap]).pipe(
     map(([releases, runs, params]) => {
       const release = releases.find((item) => item.namespace === params.get('namespace') && item.name === params.get('name')) as Release;
@@ -74,5 +84,20 @@ export class ReleaseDetailPageComponent {
     const repository = String(buildRun?.spec.gitOps?.['repoURL'] || '').replace(/\.git$/, '');
     const commit = release.status?.gitCommit;
     return repository && commit && /github\.com|gitlab\.com/.test(repository) ? `${repository}/commit/${commit}` : '';
+  }
+
+  promote(release: Release): void {
+    const targetEnvironmentRef = window.prompt('Target environment name');
+    if (!targetEnvironmentRef) return;
+    this.actionError = '';
+    this.api.promoteRelease(release.namespace, release.name, { targetEnvironmentRef }).subscribe({ next: (created) => window.location.assign(`/releases/${created.namespace}/${created.name}`), error: (error) => this.actionError = error.message });
+  }
+
+  rollback(release: Release): void {
+    const targetReleaseRef = window.prompt('Previous successful release name');
+    if (!targetReleaseRef) return;
+    const reason = window.prompt('Rollback reason') || '';
+    this.actionError = '';
+    this.api.rollbackRelease(release.namespace, release.name, { targetReleaseRef, reason }).subscribe({ next: (created) => window.location.assign(`/releases/${created.namespace}/${created.name}`), error: (error) => this.actionError = error.message });
   }
 }

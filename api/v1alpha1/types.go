@@ -852,6 +852,12 @@ type ReleaseSpec struct {
 	// DeploymentTimeout limits time spent preparing and waiting for GitOps deployment.
 	// +kubebuilder:default:="30m"
 	DeploymentTimeout metav1.Duration `json:"deploymentTimeout,omitempty"`
+	// PromotedFrom identifies the source Release for an environment promotion.
+	PromotedFrom string `json:"promotedFrom,omitempty"`
+	// RollbackOf identifies the Release whose deployment is being replaced.
+	RollbackOf string `json:"rollbackOf,omitempty"`
+	// RollbackTo identifies the previous successful Release whose image is restored.
+	RollbackTo string `json:"rollbackTo,omitempty"`
 }
 
 type ReleaseDeploymentStatus struct {

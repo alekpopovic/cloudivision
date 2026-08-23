@@ -102,6 +102,17 @@ type ReleaseApprovalRequest struct {
 	Comment string `json:"comment,omitempty"`
 }
 
+type ReleasePromoteRequest struct {
+	TargetEnvironmentRef string `json:"targetEnvironmentRef"`
+	Actor                string `json:"actor,omitempty"`
+}
+
+type ReleaseRollbackRequest struct {
+	TargetReleaseRef string `json:"targetReleaseRef"`
+	Actor            string `json:"actor,omitempty"`
+	Reason           string `json:"reason,omitempty"`
+}
+
 type LogsResponse struct {
 	Namespace string   `json:"namespace"`
 	BuildRun  string   `json:"buildRun"`

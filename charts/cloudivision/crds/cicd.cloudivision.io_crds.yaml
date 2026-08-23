@@ -1448,6 +1448,9 @@ spec:
               projectRef:
                 minLength: 1
                 type: string
+              promotedFrom:
+                description: PromotedFrom identifies the source Release for an environment promotion.
+                type: string
               promotionMode:
                 default: direct-commit
                 enum:
@@ -1471,6 +1474,12 @@ spec:
                   titleTemplate:
                     type: string
                 type: object
+              rollbackOf:
+                description: RollbackOf identifies the Release whose deployment is being replaced.
+                type: string
+              rollbackTo:
+                description: RollbackTo identifies the previous successful Release whose image is restored.
+                type: string
               strategy:
                 enum:
                 - gitops

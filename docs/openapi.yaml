@@ -260,6 +260,32 @@ paths:
           description: Reject a Release that requires approval.
         "409":
           description: Release is already rejected, failed, deploying or deployed.
+  /api/v1/releases/{namespace}/{name}/promote:
+    post:
+      parameters:
+        - {name: namespace, in: path, required: true, schema: {type: string}}
+        - {name: name, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ReleasePromoteRequest"}
+      responses:
+        "201": {description: A new Release targeting the requested Environment.}
+        "409": {description: Source is not deployed or policy prevents promotion.}
+  /api/v1/releases/{namespace}/{name}/rollback:
+    post:
+      parameters:
+        - {name: namespace, in: path, required: true, schema: {type: string}}
+        - {name: name, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ReleaseRollbackRequest"}
+      responses:
+        "201": {description: A new Release restoring a previous successful image.}
+        "409": {description: Rollback target or image violates policy.}
   /api/v1/audit/events:
     get:
       parameters:
@@ -454,3 +480,16 @@ components:
           type: string
         comment:
           type: string
+    ReleasePromoteRequest:
+      type: object
+      required: [targetEnvironmentRef]
+      properties:
+        targetEnvironmentRef: {type: string}
+        actor: {type: string}
+    ReleaseRollbackRequest:
+      type: object
+      required: [targetReleaseRef]
+      properties:
+        targetReleaseRef: {type: string}
+        actor: {type: string}
+        reason: {type: string}

@@ -17,6 +17,9 @@ export interface ApprovalActionRequest {
   comment?: string;
 }
 
+export interface ReleasePromoteRequest { targetEnvironmentRef: string; actor?: string; }
+export interface ReleaseRollbackRequest { targetReleaseRef: string; actor?: string; reason?: string; }
+
 export type Role = 'admin' | 'project-admin' | 'developer' | 'viewer';
 
 export interface Principal {
@@ -257,6 +260,9 @@ export interface Release {
 			reviewers?: string[];
 			labels?: string[];
 		};
+		promotedFrom?: string;
+		rollbackOf?: string;
+		rollbackTo?: string;
   };
   status?: {
     phase?: string;

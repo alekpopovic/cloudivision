@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-23T01:12:33Z`
-Last executed prompt: `56`
-Next prompt: `57`
+Updated at: `2026-08-23T01:17:09Z`
+Last executed prompt: `57`
+Next prompt: `58`
 
 ## How to update
 
@@ -85,7 +85,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 54 | done | Release / GitOps | GitOps Helm Values Production Flow | `prompts/54-gitops-helm-values-production-flow.md` | Hardened Helm-values GitOps with configurable values/field paths, comment-preserving YAML node updates, true no-op behavior, scoped failure reasons, idempotency/push tests and complete docs. |
 | 55 | done | Release / GitOps | GitOps Kustomize and Raw YAML Support | `prompts/55-gitops-kustomize-and-raw-yaml-support.md` | Added targeted idempotent Kustomize and raw-YAML GitOps configuration/mutators for custom files, image names, workload kinds/names and containers, with traversal safety, multi-workload tests, CRDs and docs. |
 | 56 | done | Release / GitOps | Argo CD and Flux Status Integration | `prompts/56-argo-cd-and-flux-status-integration.md` | Implemented unstructured Argo CD and Flux Kustomization/HelmRelease status readers, provider/resource absence conditions, deployment revision/time fields, UI, RBAC, tests, and docs. |
-| 57 | pending | Release / GitOps | Release Promotion and Rollback | `prompts/57-release-promotion-and-rollback.md` |  |
+| 57 | done | Release / GitOps | Release Promotion and Rollback | `prompts/57-release-promotion-and-rollback.md` | Added immutable release promotion and rollback endpoints, target policy/approval handling, audit events, lineage fields/UI, controller rollback phase, tests, OpenAPI, and docs. |
 | 58 | pending | Providers | Notifications | `prompts/58-notifications.md` |  |
 | 59 | pending | Security | Secret Provider Integrations | `prompts/59-secret-provider-integrations.md` |  |
 | 60 | pending | Templates | Pipeline Template Catalog | `prompts/60-pipeline-template-catalog.md` |  |

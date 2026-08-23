@@ -456,6 +456,9 @@ func (r *ReleaseReconciler) markWaitingForSync(ctx context.Context, release *cic
 func (r *ReleaseReconciler) markDeployed(ctx context.Context, release *cicdv1alpha1.Release, reason, message string) error {
 	now := metav1.Now()
 	release.Status.Phase = cicdv1alpha1.ReleasePhaseDeployed
+	if release.Spec.RollbackOf != "" {
+		release.Status.Phase = cicdv1alpha1.ReleasePhaseRolledBack
+	}
 	release.Status.CompletedAt = &now
 	release.Status.ObservedGeneration = release.Generation
 	domain.SetCondition(&release.Status.Conditions, metav1.Condition{

@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, map, of, shareReplay, switchMap, throwError } from 'rxjs';
 
 import { environment } from '../../environments/environment';
-import { ApiError, ApprovalActionRequest, BuildRun, Environment, LogsResponse, Page, PipelineTemplate, Principal, Project, ProviderHealthResult, ProviderSummary, Release, Repository } from './models';
+import { ApiError, ApprovalActionRequest, BuildRun, Environment, LogsResponse, Page, PipelineTemplate, Principal, Project, ProviderHealthResult, ProviderSummary, Release, ReleasePromoteRequest, ReleaseRollbackRequest, Repository } from './models';
 
 interface RuntimeConfig {
   apiBaseUrl?: string;
@@ -117,6 +117,14 @@ export class ApiClient {
 
   rejectRelease(namespace: string, name: string, body: ApprovalActionRequest): Observable<Release> {
     return this.post<Release>(`/api/v1/releases/${namespace}/${name}/reject`, body);
+  }
+
+  promoteRelease(namespace: string, name: string, body: ReleasePromoteRequest): Observable<Release> {
+    return this.post<Release>(`/api/v1/releases/${namespace}/${name}/promote`, body);
+  }
+
+  rollbackRelease(namespace: string, name: string, body: ReleaseRollbackRequest): Observable<Release> {
+    return this.post<Release>(`/api/v1/releases/${namespace}/${name}/rollback`, body);
   }
 
   webhookUrl(provider: Repository['spec']['provider'], repositoryName: string): Observable<string> {

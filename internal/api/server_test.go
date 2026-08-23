@@ -797,6 +797,100 @@ func TestRejectReleaseMarksFailedAndRecordsAudit(t *testing.T) {
 	}
 }
 
+func TestPromoteReleaseCreatesStagingRelease(t *testing.T) {
+	source := testRelease("dev-release")
+	source.Spec.EnvironmentRef = "dev"
+	source.Spec.Image.Digest = "sha256:abc"
+	source.Status.Phase = cicdv1alpha1.ReleasePhaseDeployed
+	target := &cicdv1alpha1.Environment{ObjectMeta: metav1.ObjectMeta{Name: "staging", Namespace: "ci"}, Spec: cicdv1alpha1.EnvironmentSpec{ProjectRef: "project", DisplayName: "Staging", Namespace: "staging", Type: cicdv1alpha1.EnvironmentTypeStaging, GitOps: cicdv1alpha1.EnvironmentGitOpsSpec{Provider: cicdv1alpha1.GitOpsProviderGeneric}}}
+	recorder := &fakeAuditRecorder{}
+	server, k8sClient := newTestServer(t, source, target)
+	server.Audit = recorder
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/releases/ci/dev-release/promote", bytes.NewBufferString(`{"targetEnvironmentRef":"staging","actor":"alice"}`))
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var response ReleaseResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	created := &cicdv1alpha1.Release{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: "ci", Name: response.Name}, created); err != nil {
+		t.Fatal(err)
+	}
+	if created.Spec.EnvironmentRef != "staging" || created.Spec.Image.Digest != "sha256:abc" || created.Spec.PromotedFrom != source.Name {
+		t.Fatalf("created = %#v", created.Spec)
+	}
+	if !hasAuditType(recorder.events, "ReleasePromoted") {
+		t.Fatalf("events = %#v", recorder.events)
+	}
+}
+
+func TestPromoteReleaseToProductionAwaitsApproval(t *testing.T) {
+	source := testRelease("staging-release")
+	source.Spec.Image.Digest = "sha256:abc"
+	source.Status.Phase = cicdv1alpha1.ReleasePhaseDeployed
+	target := &cicdv1alpha1.Environment{ObjectMeta: metav1.ObjectMeta{Name: "production", Namespace: "ci"}, Spec: cicdv1alpha1.EnvironmentSpec{ProjectRef: "project", DisplayName: "Production", Namespace: "production", Type: cicdv1alpha1.EnvironmentTypeProduction, RequiresApproval: true, GitOps: cicdv1alpha1.EnvironmentGitOpsSpec{Provider: cicdv1alpha1.GitOpsProviderGeneric}}}
+	server, _ := newTestServer(t, source, target)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/releases/ci/staging-release/promote", bytes.NewBufferString(`{"targetEnvironmentRef":"production"}`)))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var response ReleaseResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if !response.Spec.Approval.Required || response.Status.Phase != "" {
+		t.Fatalf("response = %#v", response)
+	}
+}
+
+func TestRollbackCreatesImmutableReplacement(t *testing.T) {
+	failed := testRelease("failed-release")
+	failed.Spec.Image.Digest = "sha256:new"
+	failed.Status.Phase = cicdv1alpha1.ReleasePhaseFailedProviderStatus
+	previous := testRelease("previous-release")
+	previous.Spec.Image.Digest = "sha256:old"
+	previous.Status.Phase = cicdv1alpha1.ReleasePhaseDeployed
+	environment := &cicdv1alpha1.Environment{ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "ci"}, Spec: cicdv1alpha1.EnvironmentSpec{ProjectRef: "project", DisplayName: "Prod", Namespace: "prod", Type: cicdv1alpha1.EnvironmentTypeProduction, RequiresApproval: true, GitOps: cicdv1alpha1.EnvironmentGitOpsSpec{Provider: cicdv1alpha1.GitOpsProviderGeneric}, Policy: cicdv1alpha1.EnvironmentPolicySpec{RequireImageDigest: true}}}
+	server, k8sClient := newTestServer(t, failed, previous, environment)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/releases/ci/failed-release/rollback", bytes.NewBufferString(`{"targetReleaseRef":"previous-release","reason":"health regression"}`)))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var response ReleaseResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Spec.RollbackOf != failed.Name || response.Spec.RollbackTo != previous.Name || response.Spec.Image.Digest != "sha256:old" {
+		t.Fatalf("response = %#v", response.Spec)
+	}
+	unchanged := &cicdv1alpha1.Release{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: "ci", Name: failed.Name}, unchanged); err != nil {
+		t.Fatal(err)
+	}
+	if unchanged.Spec.Image.Digest != "sha256:new" {
+		t.Fatalf("source mutated = %#v", unchanged.Spec)
+	}
+}
+
+func TestRollbackBlockedByDigestPolicy(t *testing.T) {
+	failed := testRelease("failed-release")
+	previous := testRelease("previous-release")
+	previous.Status.Phase = cicdv1alpha1.ReleasePhaseDeployed
+	environment := &cicdv1alpha1.Environment{ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "ci"}, Spec: cicdv1alpha1.EnvironmentSpec{ProjectRef: "project", DisplayName: "Prod", Namespace: "prod", Type: cicdv1alpha1.EnvironmentTypeProduction, RequiresApproval: true, GitOps: cicdv1alpha1.EnvironmentGitOpsSpec{Provider: cicdv1alpha1.GitOpsProviderGeneric}, Policy: cicdv1alpha1.EnvironmentPolicySpec{RequireImageDigest: true}}}
+	server, _ := newTestServer(t, failed, previous, environment)
+	rec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/releases/ci/failed-release/rollback", bytes.NewBufferString(`{"targetReleaseRef":"previous-release"}`)))
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "no digest") {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestApproveReleaseRejectsDeployedRelease(t *testing.T) {
 	release := testRelease("release-1")
 	release.Spec.Approval.Required = true

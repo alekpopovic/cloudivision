@@ -82,6 +82,8 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/releases", s.releases)
 	mux.HandleFunc("POST /api/v1/releases/{namespace}/{name}/approve", s.approveRelease)
 	mux.HandleFunc("POST /api/v1/releases/{namespace}/{name}/reject", s.rejectRelease)
+	mux.HandleFunc("POST /api/v1/releases/{namespace}/{name}/promote", s.promoteRelease)
+	mux.HandleFunc("POST /api/v1/releases/{namespace}/{name}/rollback", s.rollbackRelease)
 	mux.HandleFunc("GET /api/v1/audit/events", s.auditEvents)
 	mux.HandleFunc("GET /api/v1/providers", s.providers)
 	mux.HandleFunc("GET /api/v1/providers/health", s.providerHealth)
