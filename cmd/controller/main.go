@@ -8,6 +8,7 @@ import (
 	cloudivisioncontroller "github.com/cloudivision/cloudivision/internal/controller"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	"github.com/cloudivision/cloudivision/internal/policy"
+	providernotifications "github.com/cloudivision/cloudivision/internal/provider/notifications"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -57,11 +58,12 @@ func main() {
 		os.Exit(1)
 	}
 	policyEvaluator := policy.NewDefaultEvaluator()
-	if err := (&cloudivisioncontroller.BuildRunReconciler{Client: mgr.GetClient(), PolicyEvaluator: policyEvaluator, MaxConcurrentReconciles: envInt("CLOUDIVISION_BUILDRUN_CONCURRENCY", 10)}).SetupWithManager(mgr); err != nil {
+	notifier := providernotifications.KubernetesDispatcher{Client: mgr.GetClient()}
+	if err := (&cloudivisioncontroller.BuildRunReconciler{Client: mgr.GetClient(), PolicyEvaluator: policyEvaluator, Notifier: notifier, MaxConcurrentReconciles: envInt("CLOUDIVISION_BUILDRUN_CONCURRENCY", 10)}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create BuildRun controller")
 		os.Exit(1)
 	}
-	if err := (&cloudivisioncontroller.ReleaseReconciler{Client: mgr.GetClient(), PolicyEvaluator: policyEvaluator, MaxConcurrentReconciles: envInt("CLOUDIVISION_RELEASE_CONCURRENCY", 5)}).SetupWithManager(mgr); err != nil {
+	if err := (&cloudivisioncontroller.ReleaseReconciler{Client: mgr.GetClient(), PolicyEvaluator: policyEvaluator, Notifier: notifier, MaxConcurrentReconciles: envInt("CLOUDIVISION_RELEASE_CONCURRENCY", 5)}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create Release controller")
 		os.Exit(1)
 	}

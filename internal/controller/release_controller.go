@@ -13,6 +13,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	"github.com/cloudivision/cloudivision/internal/policy"
+	providernotifications "github.com/cloudivision/cloudivision/internal/provider/notifications"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
@@ -37,6 +38,7 @@ type ReleaseReconciler struct {
 	Recorder                EventRecorder
 	PolicyEvaluator         policy.Evaluator
 	MaxConcurrentReconciles int
+	Notifier                providernotifications.Dispatcher
 }
 
 // +kubebuilder:rbac:groups=cicd.cloudivision.io,resources=releases,verbs=get;list;watch;create;update;patch;delete
@@ -378,7 +380,11 @@ func (r *ReleaseReconciler) markAwaitingApproval(ctx context.Context, release *c
 		Message:            "Release requires approval before updating the GitOps repository.",
 		LastTransitionTime: now,
 	})
-	return r.updateReleaseStatus(ctx, release)
+	if err := r.updateReleaseStatus(ctx, release); err != nil {
+		return err
+	}
+	r.notifyRelease(ctx, release, providernotifications.ReleaseAwaitingApproval, "Release is awaiting approval.")
+	return nil
 }
 
 func (r *ReleaseReconciler) markPolicyDenied(ctx context.Context, release *cicdv1alpha1.Release, decision policy.Decision) error {
@@ -394,7 +400,11 @@ func (r *ReleaseReconciler) markPolicyDenied(ctx context.Context, release *cicdv
 	if r.Recorder != nil {
 		r.Recorder.Event(release, "Warning", "PolicyDenied", decision.Message)
 	}
-	return r.updateReleaseStatus(ctx, release)
+	if err := r.updateReleaseStatus(ctx, release); err != nil {
+		return err
+	}
+	r.notifyRelease(ctx, release, providernotifications.PolicyDenied, decision.Message)
+	return nil
 }
 
 func (r *ReleaseReconciler) markPreparingGitOpsChange(ctx context.Context, release *cicdv1alpha1.Release) error {
@@ -470,7 +480,11 @@ func (r *ReleaseReconciler) markDeployed(ctx context.Context, release *cicdv1alp
 		LastTransitionTime: now,
 	})
 	observeReleaseDuration(release, now.Time)
-	return r.updateReleaseStatus(ctx, release)
+	if err := r.updateReleaseStatus(ctx, release); err != nil {
+		return err
+	}
+	r.notifyRelease(ctx, release, providernotifications.ReleaseDeployed, message)
+	return nil
 }
 
 func (r *ReleaseReconciler) markFailed(ctx context.Context, release *cicdv1alpha1.Release, phase cicdv1alpha1.ReleasePhase, reason, message string) error {
@@ -497,7 +511,23 @@ func (r *ReleaseReconciler) markFailed(ctx context.Context, release *cicdv1alpha
 	}
 	observeGitOpsFailure(reason)
 	observeReleaseDuration(release, now.Time)
-	return r.updateReleaseStatus(ctx, release)
+	if err := r.updateReleaseStatus(ctx, release); err != nil {
+		return err
+	}
+	r.notifyRelease(ctx, release, providernotifications.ReleaseFailed, message)
+	return nil
+}
+
+func (r *ReleaseReconciler) notifyRelease(ctx context.Context, release *cicdv1alpha1.Release, event providernotifications.Event, message string) {
+	if r.Notifier == nil {
+		return
+	}
+	err := r.Notifier.Notify(ctx, providernotifications.NotificationRequest{Event: event, Project: release.Spec.ProjectRef, Environment: release.Spec.EnvironmentRef, Phase: string(release.Status.Phase), Namespace: release.Namespace, ResourceName: release.Name, Message: message, OccurredAt: time.Now().UTC()})
+	if err == nil {
+		return
+	}
+	domain.SetCondition(&release.Status.Conditions, metav1.Condition{Type: "NotificationDelivered", Status: metav1.ConditionFalse, ObservedGeneration: release.Generation, Reason: "ProviderDeliveryFailed", Message: "Notification delivery failed; release reconciliation was not affected.", LastTransitionTime: metav1.Now()})
+	_ = r.updateReleaseStatus(ctx, release)
 }
 
 func (r *ReleaseReconciler) persistGitCommitCheckpoint(ctx context.Context, release *cicdv1alpha1.Release, commit string) error {

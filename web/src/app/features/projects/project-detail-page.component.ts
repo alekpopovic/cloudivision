@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { switchMap } from 'rxjs';
+import { combineLatest, map, switchMap } from 'rxjs';
 
 import { ApiClient } from '../../api/client';
 import { ApiError } from '../../api/models';
@@ -15,7 +15,8 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
   standalone: true,
   imports: [CommonModule, PageHeaderComponent, StatusBadgeComponent, KeyValueListComponent, ConditionsTimelineComponent],
   template: `
-    <ng-container *ngIf="project$ | async as project">
+    <ng-container *ngIf="vm$ | async as vm">
+      <ng-container *ngIf="vm.project as project">
       <app-page-header [title]="project.spec.displayName || project.name" [description]="project.spec.description || 'Project detail'" />
       <div class="mb-4"><app-status-badge [status]="project.status?.phase || 'Pending'" /></div>
       <div class="mb-4 flex items-center gap-3">
@@ -37,6 +38,18 @@ import { StatusBadgeComponent } from '../../shared/status-badge.component';
       ]" />
       <h2 class="mt-6 mb-3 text-sm font-semibold">Conditions</h2>
       <app-conditions-timeline [conditions]="project.status?.conditions || []" />
+      <section class="mt-6 rounded-md border border-slate-200 bg-white p-4">
+        <h2 class="text-sm font-semibold">Notification settings</h2>
+        <app-key-value-list class="mt-3 block" [items]="[
+          { key: 'Enabled', value: project.spec.notifications?.enabled ? 'Yes' : 'No' },
+          { key: 'Provider', value: project.spec.notifications?.provider || 'Not configured' },
+          { key: 'Events', value: project.spec.notifications?.events?.join(', ') || 'All events' },
+          { key: 'Secret', value: project.spec.notifications?.secretRef?.name ? 'Configured' : 'Not configured' },
+          { key: 'Provider health', value: vm.notificationHealth }
+        ]" />
+        <p class="mt-2 text-xs text-slate-500">Endpoint URLs and tokens are never returned by the API.</p>
+      </section>
+      </ng-container>
     </ng-container>
   `
 })
@@ -48,6 +61,10 @@ export class ProjectDetailPageComponent {
   readonly project$ = this.route.paramMap.pipe(
     switchMap((params) => this.api.project(params.get('name') || '', params.get('namespace') || undefined))
   );
+  readonly vm$ = combineLatest([this.project$, this.api.providerHealth()]).pipe(map(([project, health]) => ({
+    project,
+    notificationHealth: health.find((item) => item.type === 'notifications' && item.name === project.spec.notifications?.provider)?.health.message || 'Not configured'
+  })));
 
   quotaNumber(value: number | undefined, fallback: string, suffix = ''): string {
     return value ? `${value}${suffix}` : fallback;

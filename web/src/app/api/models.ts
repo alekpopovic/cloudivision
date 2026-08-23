@@ -73,6 +73,13 @@ export interface Project {
       maxArtifactsSize?: string;
       maxLogSize?: string;
     };
+    notifications?: {
+      enabled: boolean;
+      provider: 'webhook' | 'slack' | 'teams' | 'email';
+      secretRef?: { name: string; key?: string };
+      events?: string[];
+      filters?: { project?: string; repository?: string; environment?: string; phase?: string };
+    };
     isolation?: {
       createNamespace: boolean;
       podSecurityLevel: 'baseline' | 'restricted';

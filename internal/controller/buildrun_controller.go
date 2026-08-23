@@ -17,6 +17,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/observability"
 	"github.com/cloudivision/cloudivision/internal/policy"
+	providernotifications "github.com/cloudivision/cloudivision/internal/provider/notifications"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -44,6 +45,7 @@ type BuildRunReconciler struct {
 	PolicyEvaluator         policy.Evaluator
 	MaxConcurrentReconciles int
 	QuotaRequeueAfter       time.Duration
+	Notifier                providernotifications.Dispatcher
 }
 
 // EventRecorder is the subset of Kubernetes event recording used by the reconciler.
@@ -324,7 +326,11 @@ func (r *BuildRunReconciler) markExecutorError(ctx context.Context, buildRun *ci
 		return markErr
 	}
 	r.record(buildRun, corev1.EventTypeWarning, "BuildFailed", err.Error())
-	return r.updateBuildRunStatus(ctx, buildRun)
+	if updateErr := r.updateBuildRunStatus(ctx, buildRun); updateErr != nil {
+		return updateErr
+	}
+	r.notifyBuildRun(ctx, buildRun, providernotifications.BuildRunFailed, err.Error())
+	return nil
 }
 
 func (r *BuildRunReconciler) markPolicyDenied(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, decision policy.Decision) error {
@@ -338,7 +344,11 @@ func (r *BuildRunReconciler) markPolicyDenied(ctx context.Context, buildRun *cic
 		Reason: decision.Reason, Message: decision.Message, LastTransitionTime: now,
 	})
 	r.record(buildRun, corev1.EventTypeWarning, "PolicyDenied", decision.Message)
-	return r.updateBuildRunStatus(ctx, buildRun)
+	if err := r.updateBuildRunStatus(ctx, buildRun); err != nil {
+		return err
+	}
+	r.notifyBuildRun(ctx, buildRun, providernotifications.PolicyDenied, decision.Message)
+	return nil
 }
 
 func (r *BuildRunReconciler) markQueued(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, ref executor.RunRef) error {
@@ -368,6 +378,7 @@ func (r *BuildRunReconciler) syncStatusFromRun(ctx context.Context, buildRun *ci
 		if err := r.updateBuildRunStatus(ctx, buildRun); err != nil {
 			return err
 		}
+		r.notifyBuildRun(ctx, buildRun, providernotifications.BuildRunSucceeded, "BuildRun succeeded.")
 		return r.ensureRelease(ctx, buildRun)
 	case executor.RunPhaseFailed:
 		if err := domain.MarkBuildRunFailed(buildRun, now, status.Failure.Reason, status.Failure.Message); err != nil {
@@ -377,7 +388,11 @@ func (r *BuildRunReconciler) syncStatusFromRun(ctx context.Context, buildRun *ci
 		if ref.Kind == "Job" {
 			observability.RunnerJobFailures.Inc()
 		}
-		return r.updateBuildRunStatus(ctx, buildRun)
+		if err := r.updateBuildRunStatus(ctx, buildRun); err != nil {
+			return err
+		}
+		r.notifyBuildRun(ctx, buildRun, providernotifications.BuildRunFailed, status.Failure.Message)
+		return nil
 	case executor.RunPhaseRunning:
 		wasRunning := buildRun.Status.Phase == cicdv1alpha1.BuildRunPhaseRunning
 		if err := domain.MarkBuildRunStarted(buildRun, now); err != nil {
@@ -389,7 +404,13 @@ func (r *BuildRunReconciler) syncStatusFromRun(ctx context.Context, buildRun *ci
 			}
 			r.record(buildRun, corev1.EventTypeNormal, "BuildStarted", "Pipeline run is running")
 		}
-		return r.updateBuildRunStatus(ctx, buildRun)
+		if err := r.updateBuildRunStatus(ctx, buildRun); err != nil {
+			return err
+		}
+		if !wasRunning {
+			r.notifyBuildRun(ctx, buildRun, providernotifications.BuildRunStarted, "BuildRun started.")
+		}
+		return nil
 	}
 
 	if buildRun.Status.Phase == "" {
@@ -485,6 +506,18 @@ func (r *BuildRunReconciler) record(buildRun *cicdv1alpha1.BuildRun, eventType, 
 	if r.Recorder != nil {
 		r.Recorder.Event(buildRun, eventType, reason, message)
 	}
+}
+
+func (r *BuildRunReconciler) notifyBuildRun(ctx context.Context, buildRun *cicdv1alpha1.BuildRun, event providernotifications.Event, message string) {
+	if r.Notifier == nil {
+		return
+	}
+	err := r.Notifier.Notify(ctx, providernotifications.NotificationRequest{Event: event, Project: buildRun.Spec.ProjectRef, Repository: buildRun.Spec.RepositoryRef, Phase: string(buildRun.Status.Phase), Namespace: buildRun.Namespace, ResourceName: buildRun.Name, Message: message, OccurredAt: time.Now().UTC()})
+	if err == nil {
+		return
+	}
+	domain.SetCondition(&buildRun.Status.Conditions, metav1.Condition{Type: "NotificationDelivered", Status: metav1.ConditionFalse, ObservedGeneration: buildRun.Generation, Reason: "ProviderDeliveryFailed", Message: "Notification delivery failed; build execution was not affected.", LastTransitionTime: metav1.Now()})
+	_ = r.updateBuildRunStatus(ctx, buildRun)
 }
 
 func releaseNameForBuildRun(buildRunName, environment string) string {

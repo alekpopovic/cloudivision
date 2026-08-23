@@ -225,6 +225,22 @@ type ProjectQuotaSpec struct {
 	MaxLogSize string `json:"maxLogSize,omitempty"`
 }
 
+type NotificationFilters struct {
+	Project     string `json:"project,omitempty"`
+	Repository  string `json:"repository,omitempty"`
+	Environment string `json:"environment,omitempty"`
+	Phase       string `json:"phase,omitempty"`
+}
+
+type ProjectNotificationSpec struct {
+	Enabled bool `json:"enabled"`
+	// +kubebuilder:validation:Enum=webhook;slack;teams;email
+	Provider  string              `json:"provider"`
+	SecretRef *SecretKeyRef       `json:"secretRef,omitempty"`
+	Events    []string            `json:"events,omitempty"`
+	Filters   NotificationFilters `json:"filters,omitempty"`
+}
+
 type ProjectSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	DisplayName string `json:"displayName"`
@@ -247,6 +263,9 @@ type ProjectSpec struct {
 	ImageTagPolicy *ProjectImageTagPolicySpec `json:"imageTagPolicy,omitempty"`
 	// +optional
 	Quotas *ProjectQuotaSpec `json:"quotas,omitempty"`
+	// Notifications routes selected controller events without exposing provider credentials.
+	// +optional
+	Notifications *ProjectNotificationSpec `json:"notifications,omitempty"`
 }
 
 type ProjectStatus struct {

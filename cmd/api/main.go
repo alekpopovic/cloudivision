@@ -118,6 +118,7 @@ func main() {
 		MetricsEnabled:   envBool("CLOU_DIVISION_METRICS_ENABLED", true),
 		Providers:        providerRegistry,
 		PolicyEvaluator:  policy.NewDefaultEvaluator(),
+		Notifier:         providernotifications.KubernetesDispatcher{Client: k8sClient},
 	}
 
 	addr := envOrDefault("CLOU_DIVISION_API_ADDR", envOrDefault("CLOUDIVISION_API_ADDR", ":8080"))
@@ -203,7 +204,7 @@ func configureProviderRegistry() (*provider.Registry, error) {
 		providerregistry.Generic(), providerregistry.GHCR(), providerregistry.GitLab(), providerregistry.Harbor(),
 		providerregistry.ECR(), providerregistry.GCR(), providerregistry.ACR(), providersecrets.Kubernetes(),
 		providergitops.Generic(), providergitops.ArgoCD(), providerbuild.BuildKit(),
-		providernotifications.Noop(), providersupplychain.Noop(), providersupplychain.Syft(),
+		providernotifications.Noop(), providernotifications.Webhook(), providernotifications.Slack(), providernotifications.Teams(), providernotifications.Email(), providersupplychain.Noop(), providersupplychain.Syft(),
 		providersupplychain.Grype(), providersupplychain.Cosign(),
 	}
 	for _, current := range providers {

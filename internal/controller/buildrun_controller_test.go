@@ -2,11 +2,13 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	cicdv1alpha1 "github.com/cloudivision/cloudivision/api/v1alpha1"
 	jobexecutor "github.com/cloudivision/cloudivision/internal/executor/job"
+	providernotifications "github.com/cloudivision/cloudivision/internal/provider/notifications"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -269,6 +271,42 @@ func TestBuildRunReconcileMarksSucceeded(t *testing.T) {
 	if updated.Status.Image == nil || updated.Status.Image.Repository != buildRun.Spec.Image.Repository {
 		t.Fatalf("status image repository = %q", updated.Status.Image.Repository)
 	}
+}
+
+func TestNotificationFailureDoesNotBreakBuildRunReconcile(t *testing.T) {
+	ctx := context.Background()
+	reconciler, buildRun := newBuildRunReconciler(t)
+	reconciler.Notifier = failingNotificationDispatcher{}
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatal(err)
+	}
+	job := getRunnerJob(t, ctx, reconciler, buildRun)
+	job.Status.Succeeded = 1
+	if err := reconciler.Status().Update(ctx, job); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reconciler.Reconcile(ctx, requestFor(buildRun)); err != nil {
+		t.Fatalf("notification failure broke reconcile: %v", err)
+	}
+	updated := &cicdv1alpha1.BuildRun{}
+	if err := reconciler.Get(ctx, client.ObjectKeyFromObject(buildRun), updated); err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, condition := range updated.Status.Conditions {
+		if condition.Type == "NotificationDelivered" && condition.Status == metav1.ConditionFalse {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("conditions = %#v", updated.Status.Conditions)
+	}
+}
+
+type failingNotificationDispatcher struct{}
+
+func (failingNotificationDispatcher) Notify(context.Context, providernotifications.NotificationRequest) error {
+	return errors.New("provider unavailable")
 }
 
 func TestBuildRunSuccessCreatesReleaseOnce(t *testing.T) {

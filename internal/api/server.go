@@ -25,6 +25,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/observability"
 	"github.com/cloudivision/cloudivision/internal/policy"
 	"github.com/cloudivision/cloudivision/internal/provider"
+	providernotifications "github.com/cloudivision/cloudivision/internal/provider/notifications"
 	"github.com/cloudivision/cloudivision/internal/redact"
 	"github.com/cloudivision/cloudivision/internal/webhook"
 	corev1 "k8s.io/api/core/v1"
@@ -51,6 +52,7 @@ type Server struct {
 	MetricsEnabled   bool
 	Providers        *provider.Registry
 	PolicyEvaluator  policy.Evaluator
+	Notifier         providernotifications.Dispatcher
 }
 
 func (s Server) Handler() http.Handler {
@@ -935,6 +937,9 @@ func (s Server) recordWebhookAudit(ctx context.Context, eventType string, provid
 			"deliveryID": eventID,
 		}),
 	})
+	if eventType == "WebhookRejected" && s.Notifier != nil && repository != nil {
+		_ = s.Notifier.Notify(ctx, providernotifications.NotificationRequest{Event: providernotifications.WebhookRejected, Project: repository.Spec.ProjectRef, Repository: repository.Name, Namespace: repository.Namespace, ResourceName: repository.Name, Message: "Webhook delivery rejected.", OccurredAt: time.Now().UTC()})
+	}
 }
 
 func (s Server) recordAudit(ctx context.Context, event audit.Event) {
