@@ -227,6 +227,26 @@ func TestUpdateKustomizationPrefersDigest(t *testing.T) {
 	}
 }
 
+func TestUpdateConfiguredKustomizationImage(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "prod-kustomization.yaml")
+	if err := os.WriteFile(path, []byte("images:\n- name: app-placeholder\n  newName: old/app\n  newTag: old\n- name: sidecar\n  newName: example/sidecar\n  newTag: stable\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := updateKustomizationConfigured(path, cicdv1alpha1.ImageRef{Repository: "ghcr.io/acme/app", Tag: "v2"}, "app-placeholder")
+	if err != nil || !changed {
+		t.Fatalf("updateKustomizationConfigured() = %v, %v", changed, err)
+	}
+	content := string(mustRead(t, path))
+	if !strings.Contains(content, "newName: ghcr.io/acme/app") || !strings.Contains(content, "newName: example/sidecar") {
+		t.Fatalf("kustomization =\n%s", content)
+	}
+	changed, err = updateKustomizationConfigured(path, cicdv1alpha1.ImageRef{Repository: "ghcr.io/acme/app", Tag: "v2"}, "app-placeholder")
+	if err != nil || changed {
+		t.Fatalf("second update = %v, %v, want no-op", changed, err)
+	}
+}
+
 func TestUpdateImageFilesRejectsPathTraversal(t *testing.T) {
 	dir := t.TempDir()
 	if err := updateImageFiles(dir, "../outside.yaml", cicdv1alpha1.GitOpsStrategyHelmValues, cicdv1alpha1.ImageRef{Repository: "example"}); err == nil {
@@ -293,6 +313,113 @@ spec:
 	}
 	if !strings.Contains(string(mustRead(t, path)), "image: ghcr.io/cloudivision/example@sha256:123") {
 		t.Fatalf("deployment.yaml =\n%s", string(mustRead(t, path)))
+	}
+}
+
+func TestUpdateRawYAMLMatchesConfiguredContainerOnly(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "deployment.yaml")
+	if err := os.WriteFile(path, []byte(`apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  template:
+    spec:
+      containers:
+      - name: api
+        image: old/api:v1
+      - name: metrics
+        image: example/metrics:stable
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := updateRawYAMLConfigured(dir, "", cicdv1alpha1.ImageRef{Repository: "ghcr.io/acme/api", Tag: "v2"}, rawYAMLConfig{
+		Files: []string{"deployment.yaml"}, WorkloadKind: "Deployment", WorkloadName: "api", ContainerName: "api",
+	})
+	if err != nil || !changed {
+		t.Fatalf("updateRawYAMLConfigured() = %v, %v", changed, err)
+	}
+	content := string(mustRead(t, path))
+	if !strings.Contains(content, "image: ghcr.io/acme/api:v2") || !strings.Contains(content, "image: example/metrics:stable") {
+		t.Fatalf("deployment.yaml =\n%s", content)
+	}
+	changed, err = updateRawYAMLConfigured(dir, "", cicdv1alpha1.ImageRef{Repository: "ghcr.io/acme/api", Tag: "v2"}, rawYAMLConfig{Files: []string{"deployment.yaml"}, ContainerName: "api"})
+	if err != nil || changed {
+		t.Fatalf("second update = %v, %v, want no-op", changed, err)
+	}
+}
+
+func TestUpdateRawYAMLSupportsAllWorkloadKinds(t *testing.T) {
+	for _, kind := range []string{"StatefulSet", "DaemonSet", "CronJob"} {
+		t.Run(kind, func(t *testing.T) {
+			dir := t.TempDir()
+			podTemplate := "spec:\n  template:\n    spec:\n      containers:\n      - name: app\n        image: old:v1\n"
+			if kind == "CronJob" {
+				podTemplate = "spec:\n  jobTemplate:\n    spec:\n      template:\n        spec:\n          containers:\n          - name: app\n            image: old:v1\n"
+			}
+			content := "apiVersion: apps/v1\nkind: " + kind + "\nmetadata:\n  name: app\n" + podTemplate
+			path := filepath.Join(dir, "workload.yaml")
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			changed, err := updateRawYAMLConfigured(dir, "workload.yaml", cicdv1alpha1.ImageRef{Repository: "example/app", Tag: "v2"}, rawYAMLConfig{})
+			if err != nil || !changed || !strings.Contains(string(mustRead(t, path)), "image: example/app:v2") {
+				t.Fatalf("update %s = %v, %v\n%s", kind, changed, err, mustRead(t, path))
+			}
+		})
+	}
+}
+
+func TestUpdateRawYAMLRejectsNoMatchAndInvalidYAML(t *testing.T) {
+	dir := t.TempDir()
+	noMatch := filepath.Join(dir, "deployment.yaml")
+	if err := os.WriteFile(noMatch, []byte(`kind: Deployment
+metadata: {name: api}
+spec:
+  template:
+    spec:
+      containers:
+      - {name: api, image: old/api:v1}
+      - {name: metrics, image: old/metrics:v1}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := updateRawYAMLConfigured(dir, "", cicdv1alpha1.ImageRef{Repository: "new/api", Tag: "v2"}, rawYAMLConfig{Files: []string{"deployment.yaml"}}); err == nil {
+		t.Fatal("no-match update error = nil")
+	}
+	invalid := filepath.Join(dir, "invalid.yaml")
+	if err := os.WriteFile(invalid, []byte("kind: [unterminated"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := updateRawYAMLConfigured(dir, "", cicdv1alpha1.ImageRef{Repository: "new/api"}, rawYAMLConfig{Files: []string{"invalid.yaml"}})
+	operationError := &OperationError{}
+	if !errors.As(err, &operationError) || operationError.Operation != OperationParse {
+		t.Fatalf("invalid YAML error = %v, want parse OperationError", err)
+	}
+}
+
+func TestGitRepositoryProviderKustomizeRepeatedUpdateCreatesOneCommit(t *testing.T) {
+	remote := createRemoteGitOpsRepo(t, map[string]string{"overlays/prod/kustomization.yaml": "images:\n- name: app-placeholder\n  newName: old/app\n  newTag: old\n"})
+	request := UpdateImageRequest{
+		RepositoryURL: remote, Branch: "main", Path: "overlays/prod", Strategy: cicdv1alpha1.GitOpsStrategyKustomizeImage,
+		KustomizeImageName: "app-placeholder", ReleaseName: "release-1", Image: cicdv1alpha1.ImageRef{Repository: "ghcr.io/acme/app", Tag: "v2"},
+	}
+	provider := GitRepositoryProvider{}
+	first, err := provider.UpdateImage(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := provider.UpdateImage(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Commit != second.Commit {
+		t.Fatalf("commits = %q, %q", first.Commit, second.Commit)
+	}
+	count := strings.TrimSpace(runGitTestOutput(t, "", "git", "--git-dir", remote, "rev-list", "--count", "main"))
+	if count != "2" {
+		t.Fatalf("commit count = %s, want 2", count)
 	}
 }
 

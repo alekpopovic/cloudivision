@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-23T00:52:56Z`
-Last executed prompt: `54`
-Next prompt: `55`
+Updated at: `2026-08-23T00:59:38Z`
+Last executed prompt: `55`
+Next prompt: `56`
 
 ## How to update
 
@@ -83,7 +83,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 52 | done | API | API Pagination and Server-Side Filtering | `prompts/52-api-pagination-and-server-side-filtering.md` | Added safe token pagination and server-side filtering/sorting for BuildRuns, Releases and audit events; Angular and CLI page navigation; API/OpenAPI docs and tests. |
 | 53 | done | Build Execution | Runner Workspace and Dependency Cache | `prompts/53-runner-workspace-and-dependency-cache.md` | Added opt-in scoped dependency cache with PVC snapshots, BuildKit registry mode, object-store skeleton, TTL/size/path hardening, runner restore/save, purge API/UI, Helm configuration, tests and security docs. |
 | 54 | done | Release / GitOps | GitOps Helm Values Production Flow | `prompts/54-gitops-helm-values-production-flow.md` | Hardened Helm-values GitOps with configurable values/field paths, comment-preserving YAML node updates, true no-op behavior, scoped failure reasons, idempotency/push tests and complete docs. |
-| 55 | pending | Release / GitOps | GitOps Kustomize and Raw YAML Support | `prompts/55-gitops-kustomize-and-raw-yaml-support.md` |  |
+| 55 | done | Release / GitOps | GitOps Kustomize and Raw YAML Support | `prompts/55-gitops-kustomize-and-raw-yaml-support.md` | Added targeted idempotent Kustomize and raw-YAML GitOps configuration/mutators for custom files, image names, workload kinds/names and containers, with traversal safety, multi-workload tests, CRDs and docs. |
 | 56 | pending | Release / GitOps | Argo CD and Flux Status Integration | `prompts/56-argo-cd-and-flux-status-integration.md` |  |
 | 57 | pending | Release / GitOps | Release Promotion and Rollback | `prompts/57-release-promotion-and-rollback.md` |  |
 | 58 | pending | Providers | Notifications | `prompts/58-notifications.md` |  |

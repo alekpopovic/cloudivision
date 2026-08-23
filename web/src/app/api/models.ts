@@ -173,7 +173,20 @@ export interface BuildRun {
     image: { repository: string; tag?: string; digest?: string };
     params?: Record<string, string>;
     executor?: 'job' | 'tekton';
-    gitOps?: Record<string, string | boolean>;
+    gitOps?: {
+      enabled?: boolean;
+      repoURL?: string;
+      branch?: string;
+      path?: string;
+      strategy?: 'helm-values' | 'kustomize-image' | 'raw-yaml';
+      environmentRef?: string;
+      valuesFile?: string;
+      imageRepositoryField?: string;
+      imageTagField?: string;
+      imageDigestField?: string;
+      kustomize?: { kustomizationFile?: string; imageName?: string };
+      rawYaml?: { files?: string[]; workloadKind?: 'Deployment' | 'StatefulSet' | 'DaemonSet' | 'CronJob'; workloadName?: string; containerName?: string };
+    };
   };
   status?: {
     phase?: string;

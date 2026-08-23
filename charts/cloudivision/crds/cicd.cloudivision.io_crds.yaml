@@ -82,8 +82,36 @@ spec:
                   imageTagField:
                     default: image.tag
                     type: string
+                  kustomize:
+                    properties:
+                      imageName:
+                        type: string
+                      kustomizationFile:
+                        default: kustomization.yaml
+                        type: string
+                    type: object
                   path:
                     type: string
+                  rawYaml:
+                    properties:
+                      containerName:
+                        type: string
+                      files:
+                        items:
+                          type: string
+                        maxItems: 32
+                        type: array
+                        uniqueItems: true
+                      workloadKind:
+                        enum:
+                        - Deployment
+                        - StatefulSet
+                        - DaemonSet
+                        - CronJob
+                        type: string
+                      workloadName:
+                        type: string
+                    type: object
                   repoURL:
                     minLength: 1
                     type: string

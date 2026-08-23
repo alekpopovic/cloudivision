@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,7 +32,13 @@ type OperationError struct {
 	Err       error
 }
 
-func (e *OperationError) Error() string { return fmt.Sprintf("git %s failed: %v", e.Operation, e.Err) }
+func (e *OperationError) Error() string {
+	scope := "git"
+	if e.Operation == OperationParse || e.Operation == OperationUpdate {
+		scope = "gitops mutation"
+	}
+	return fmt.Sprintf("%s %s failed: %v", scope, e.Operation, e.Err)
+}
 func (e *OperationError) Unwrap() error { return e.Err }
 
 type Provider interface {
@@ -55,6 +62,12 @@ type UpdateImageRequest struct {
 	ImageRepositoryField string
 	ImageTagField        string
 	ImageDigestField     string
+	KustomizationFile    string
+	KustomizeImageName   string
+	RawYAMLFiles         []string
+	WorkloadKind         string
+	WorkloadName         string
+	ContainerName        string
 }
 
 type UpdateImageResult struct {
@@ -178,6 +191,8 @@ func (p GitRepositoryProvider) UpdateImage(ctx context.Context, req UpdateImageR
 	changed, err := updateImageFilesConfigured(repoDir, req.Path, strategy, req.Image, helmValuesConfig{
 		ValuesFile: req.ValuesFile, RepositoryField: req.ImageRepositoryField,
 		TagField: req.ImageTagField, DigestField: req.ImageDigestField,
+	}, kustomizeConfig{KustomizationFile: req.KustomizationFile, ImageName: req.KustomizeImageName}, rawYAMLConfig{
+		Files: req.RawYAMLFiles, WorkloadKind: req.WorkloadKind, WorkloadName: req.WorkloadName, ContainerName: req.ContainerName,
 	})
 	if err != nil {
 		operationError := &OperationError{}
@@ -221,27 +236,39 @@ type helmValuesConfig struct {
 	DigestField     string
 }
 
+type kustomizeConfig struct {
+	KustomizationFile string
+	ImageName         string
+}
+
+type rawYAMLConfig struct {
+	Files         []string
+	WorkloadKind  string
+	WorkloadName  string
+	ContainerName string
+}
+
 func updateImageFiles(repoDir, targetPath string, strategy cicdv1alpha1.GitOpsStrategy, image cicdv1alpha1.ImageRef) error {
-	_, err := updateImageFilesConfigured(repoDir, targetPath, strategy, image, helmValuesConfig{})
+	_, err := updateImageFilesConfigured(repoDir, targetPath, strategy, image, helmValuesConfig{}, kustomizeConfig{}, rawYAMLConfig{})
 	return err
 }
 
-func updateImageFilesConfigured(repoDir, targetPath string, strategy cicdv1alpha1.GitOpsStrategy, image cicdv1alpha1.ImageRef, config helmValuesConfig) (bool, error) {
+func updateImageFilesConfigured(repoDir, targetPath string, strategy cicdv1alpha1.GitOpsStrategy, image cicdv1alpha1.ImageRef, helmConfig helmValuesConfig, kustomizeCfg kustomizeConfig, rawConfig rawYAMLConfig) (bool, error) {
 	switch strategy {
 	case cicdv1alpha1.GitOpsStrategyHelmValues:
-		path, err := helmValuesPath(repoDir, targetPath, config.ValuesFile)
+		path, err := helmValuesPath(repoDir, targetPath, helmConfig.ValuesFile)
 		if err != nil {
 			return false, &OperationError{Operation: OperationUpdate, Err: err}
 		}
-		return updateHelmValuesConfigured(path, image, config)
+		return updateHelmValuesConfigured(path, image, helmConfig)
 	case cicdv1alpha1.GitOpsStrategyKustomizeImage, "":
-		path, err := safeGitOpsFile(repoDir, targetPath, "kustomization.yaml")
+		path, err := kustomizationPath(repoDir, targetPath, kustomizeCfg.KustomizationFile)
 		if err != nil {
-			return false, err
+			return false, &OperationError{Operation: OperationUpdate, Err: err}
 		}
-		return true, updateKustomization(path, image)
+		return updateKustomizationConfigured(path, image, kustomizeCfg.ImageName)
 	case cicdv1alpha1.GitOpsStrategyRawYAML:
-		return true, updateRawYAML(repoDir, targetPath, image)
+		return updateRawYAMLConfigured(repoDir, targetPath, image, rawConfig)
 	default:
 		return false, fmt.Errorf("unsupported GitOps strategy %q", strategy)
 	}
@@ -254,7 +281,31 @@ func helmValuesPath(repoDir, targetPath, valuesFile string) (string, error) {
 	if targetPath != "" && isYAML(targetPath) && valuesFile == "values.yaml" {
 		return safeRepoPath(repoDir, targetPath)
 	}
+	if err := validateConfigFile(valuesFile, "valuesFile"); err != nil {
+		return "", err
+	}
 	return safeRepoPath(repoDir, filepath.Join(targetPath, valuesFile))
+}
+
+func kustomizationPath(repoDir, targetPath, kustomizationFile string) (string, error) {
+	if kustomizationFile == "" {
+		kustomizationFile = "kustomization.yaml"
+	}
+	if targetPath != "" && isYAML(targetPath) && kustomizationFile == "kustomization.yaml" {
+		return safeRepoPath(repoDir, targetPath)
+	}
+	if err := validateConfigFile(kustomizationFile, "kustomizationFile"); err != nil {
+		return "", err
+	}
+	return safeRepoPath(repoDir, filepath.Join(targetPath, kustomizationFile))
+}
+
+func validateConfigFile(value, field string) error {
+	cleaned := filepath.Clean(strings.TrimSpace(value))
+	if cleaned == "." || cleaned == "" || filepath.IsAbs(cleaned) || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("%s %q must be a relative file path within gitOps.path", field, value)
+	}
+	return nil
 }
 
 func safeGitOpsFile(repoDir, targetPath, defaultFile string) (string, error) {
@@ -447,119 +498,318 @@ func defaultString(value, fallback string) string {
 }
 
 func updateKustomization(path string, image cicdv1alpha1.ImageRef) error {
+	_, err := updateKustomizationConfigured(path, image, "")
+	return err
+}
+
+func updateKustomizationConfigured(path string, image cicdv1alpha1.ImageRef, configuredImageName string) (bool, error) {
 	kustomization, err := readYAMLMap(path)
 	if err != nil {
-		return err
+		return false, &OperationError{Operation: OperationParse, Err: err}
 	}
-	images, _ := kustomization["images"].([]any)
+	images, imagesOK := kustomization["images"].([]any)
+	if _, exists := kustomization["images"]; exists && !imagesOK {
+		return false, &OperationError{Operation: OperationUpdate, Err: fmt.Errorf("Kustomize images field in %s must be a list", path)}
+	}
+	imageName := configuredImageName
+	if imageName == "" {
+		imageName = image.Repository
+	}
 	updated := false
+	changed := false
 	for i := range images {
 		item, ok := images[i].(map[string]any)
 		if !ok {
 			continue
 		}
 		name, _ := item["name"].(string)
-		if name == image.Repository || name == "" {
-			item["name"] = image.Repository
-			item["newName"] = image.Repository
+		if name == imageName {
+			changed = setMapString(item, "name", imageName) || changed
+			changed = setMapString(item, "newName", image.Repository) || changed
 			if image.Digest != "" {
-				item["digest"] = image.Digest
-				delete(item, "newTag")
-			} else if image.Tag != "" {
-				item["newTag"] = image.Tag
-				delete(item, "digest")
+				changed = setMapString(item, "digest", image.Digest) || changed
+				changed = deleteMapKey(item, "newTag") || changed
+			} else {
+				changed = deleteMapKey(item, "digest") || changed
+				if image.Tag != "" {
+					changed = setMapString(item, "newTag", image.Tag) || changed
+				} else {
+					changed = deleteMapKey(item, "newTag") || changed
+				}
 			}
 			updated = true
 			break
 		}
 	}
 	if !updated {
-		item := map[string]any{"name": image.Repository, "newName": image.Repository}
+		if configuredImageName != "" {
+			return false, &OperationError{Operation: OperationUpdate, Err: fmt.Errorf("Kustomize image %q was not found in %s", configuredImageName, path)}
+		}
+		item := map[string]any{"name": imageName, "newName": image.Repository}
 		if image.Digest != "" {
 			item["digest"] = image.Digest
 		} else if image.Tag != "" {
 			item["newTag"] = image.Tag
 		}
 		images = append(images, item)
+		changed = true
+	}
+	if !changed {
+		return false, nil
 	}
 	kustomization["images"] = images
-	return writeYAML(path, kustomization)
+	if err := writeYAML(path, kustomization); err != nil {
+		return false, &OperationError{Operation: OperationUpdate, Err: err}
+	}
+	return true, nil
+}
+
+func setMapString(values map[string]any, key, value string) bool {
+	if existing, ok := values[key].(string); ok && existing == value {
+		return false
+	}
+	values[key] = value
+	return true
+}
+
+func deleteMapKey(values map[string]any, key string) bool {
+	if _, exists := values[key]; !exists {
+		return false
+	}
+	delete(values, key)
+	return true
 }
 
 func updateRawYAML(repoDir, targetPath string, image cicdv1alpha1.ImageRef) error {
-	path, err := safeRepoPath(repoDir, targetPath)
+	_, err := updateRawYAMLConfigured(repoDir, targetPath, image, rawYAMLConfig{})
+	return err
+}
+
+func updateRawYAMLConfigured(repoDir, targetPath string, image cicdv1alpha1.ImageRef, config rawYAMLConfig) (bool, error) {
+	paths, err := rawYAMLPaths(repoDir, targetPath, config.Files)
 	if err != nil {
-		return err
+		return false, &OperationError{Operation: OperationUpdate, Err: err}
 	}
-	if targetPath == "" {
-		path = repoDir
+	matched := false
+	changed := false
+	for _, path := range paths {
+		fileMatched, fileChanged, updateErr := updateRawYAMLFile(path, image, config)
+		if updateErr != nil {
+			return false, updateErr
+		}
+		matched = matched || fileMatched
+		changed = changed || fileChanged
+	}
+	if !matched {
+		return false, &OperationError{Operation: OperationUpdate, Err: fmt.Errorf("no matching raw YAML workload/container found under %q", targetPath)}
+	}
+	return changed, nil
+}
+
+func rawYAMLPaths(repoDir, targetPath string, files []string) ([]string, error) {
+	if len(files) > 0 {
+		paths := make([]string, 0, len(files))
+		for _, file := range files {
+			if err := validateConfigFile(file, "rawYaml.files entry"); err != nil {
+				return nil, err
+			}
+			path, err := safeRepoPath(repoDir, filepath.Join(targetPath, file))
+			if err != nil {
+				return nil, err
+			}
+			paths = append(paths, path)
+		}
+		return paths, nil
+	}
+	path := repoDir
+	if targetPath != "" {
+		var err error
+		path, err = safeRepoPath(repoDir, targetPath)
+		if err != nil {
+			return nil, err
+		}
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("read raw YAML target: %w", err)
+		return nil, fmt.Errorf("read raw YAML target: %w", err)
 	}
 	if !info.IsDir() {
-		return updateWorkloadImage(path, image)
+		return []string{path}, nil
 	}
-	var changed bool
-	err = filepath.WalkDir(path, func(path string, entry os.DirEntry, err error) error {
-		if err != nil || entry.IsDir() || !isYAML(path) {
-			return err
+	paths := []string{}
+	err = filepath.WalkDir(path, func(candidate string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
-		updated, err := updateWorkloadImageIfPresent(path, image)
-		if err != nil {
-			return err
+		if !entry.IsDir() && isYAML(candidate) {
+			paths = append(paths, candidate)
 		}
-		changed = changed || updated
 		return nil
 	})
+	return paths, err
+}
+
+func updateRawYAMLFile(path string, image cicdv1alpha1.ImageRef, config rawYAMLConfig) (bool, bool, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return false, false, &OperationError{Operation: OperationParse, Err: fmt.Errorf("read raw YAML %s: %w", path, err)}
+	}
+	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
+	documents := []*yaml.Node{}
+	matched := false
+	changed := false
+	for {
+		document := &yaml.Node{}
+		if err := decoder.Decode(document); errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			return false, false, &OperationError{Operation: OperationParse, Err: fmt.Errorf("parse raw YAML %s: %w", path, err)}
+		}
+		documents = append(documents, document)
+		if len(document.Content) == 0 || document.Content[0].Kind != yaml.MappingNode {
+			continue
+		}
+		documentMatched, documentChanged, updateErr := updateRawWorkloadNode(document.Content[0], image, config)
+		if updateErr != nil {
+			return false, false, &OperationError{Operation: OperationUpdate, Err: fmt.Errorf("update raw YAML %s: %w", path, updateErr)}
+		}
+		matched = matched || documentMatched
+		changed = changed || documentChanged
 	}
 	if !changed {
-		return fmt.Errorf("no Deployment or StatefulSet image found under %s", path)
+		return matched, false, nil
 	}
-	return nil
-}
-
-func updateWorkloadImage(path string, image cicdv1alpha1.ImageRef) error {
-	updated, err := updateWorkloadImageIfPresent(path, image)
-	if err != nil {
-		return err
-	}
-	if !updated {
-		return fmt.Errorf("no Deployment or StatefulSet image found in %s", path)
-	}
-	return nil
-}
-
-func updateWorkloadImageIfPresent(path string, image cicdv1alpha1.ImageRef) (bool, error) {
-	manifest, err := readYAMLMap(path)
-	if err != nil {
-		return false, err
-	}
-	kind, _ := manifest["kind"].(string)
-	if kind != "Deployment" && kind != "StatefulSet" {
-		return false, nil
-	}
-	template, ok := nestedMap(manifest, "spec", "template", "spec")
-	if !ok {
-		return false, fmt.Errorf("workload %s has no pod template spec", path)
-	}
-	fullImage := imageString(image)
-	updateContainerImages(template, "containers", fullImage)
-	updateContainerImages(template, "initContainers", fullImage)
-	return true, writeYAML(path, manifest)
-}
-
-func updateContainerImages(template map[string]any, field, image string) {
-	containers, _ := template[field].([]any)
-	for i := range containers {
-		container, ok := containers[i].(map[string]any)
-		if ok {
-			container["image"] = image
+	var output strings.Builder
+	encoder := yaml.NewEncoder(&output)
+	encoder.SetIndent(2)
+	for _, document := range documents {
+		if err := encoder.Encode(document); err != nil {
+			return false, false, &OperationError{Operation: OperationUpdate, Err: fmt.Errorf("encode raw YAML %s: %w", path, err)}
 		}
 	}
+	if err := encoder.Close(); err != nil {
+		return false, false, &OperationError{Operation: OperationUpdate, Err: fmt.Errorf("encode raw YAML %s: %w", path, err)}
+	}
+	if err := os.WriteFile(path, []byte(output.String()), 0o644); err != nil {
+		return false, false, &OperationError{Operation: OperationUpdate, Err: fmt.Errorf("write raw YAML %s: %w", path, err)}
+	}
+	return matched, true, nil
+}
+
+func updateRawWorkloadNode(root *yaml.Node, image cicdv1alpha1.ImageRef, config rawYAMLConfig) (bool, bool, error) {
+	kindNode := yamlMapValue(root, "kind")
+	if kindNode == nil || !supportedWorkloadKind(kindNode.Value) || config.WorkloadKind != "" && kindNode.Value != config.WorkloadKind {
+		return false, false, nil
+	}
+	metadata := yamlMapValue(root, "metadata")
+	nameNode := yamlMapValue(metadata, "name")
+	if config.WorkloadName != "" && (nameNode == nil || nameNode.Value != config.WorkloadName) {
+		return false, false, nil
+	}
+	var podSpec *yaml.Node
+	if kindNode.Value == "CronJob" {
+		podSpec = yamlNodeAt(root, "spec", "jobTemplate", "spec", "template", "spec")
+	} else {
+		podSpec = yamlNodeAt(root, "spec", "template", "spec")
+	}
+	if podSpec == nil || podSpec.Kind != yaml.MappingNode {
+		return false, false, fmt.Errorf("%s %q has no pod template spec", kindNode.Value, nodeValue(nameNode))
+	}
+	candidates := rawContainerCandidates(podSpec)
+	selected := []rawContainer{}
+	if config.ContainerName != "" {
+		for _, candidate := range candidates {
+			if candidate.Name == config.ContainerName {
+				selected = append(selected, candidate)
+			}
+		}
+	} else {
+		for _, candidate := range candidates {
+			if imageRepository(candidate.Image.Value) == image.Repository {
+				selected = append(selected, candidate)
+			}
+		}
+		if len(selected) == 0 && len(candidates) == 1 {
+			selected = candidates
+		}
+	}
+	if len(selected) == 0 {
+		return false, false, nil
+	}
+	desired := imageString(image)
+	changed := false
+	for _, candidate := range selected {
+		if candidate.Image.Value != desired {
+			candidate.Image.Value = desired
+			candidate.Image.Tag = "!!str"
+			changed = true
+		}
+	}
+	return true, changed, nil
+}
+
+type rawContainer struct {
+	Name  string
+	Image *yaml.Node
+}
+
+func rawContainerCandidates(podSpec *yaml.Node) []rawContainer {
+	result := []rawContainer{}
+	for _, field := range []string{"containers", "initContainers"} {
+		sequence := yamlMapValue(podSpec, field)
+		if sequence == nil || sequence.Kind != yaml.SequenceNode {
+			continue
+		}
+		for _, item := range sequence.Content {
+			if item.Kind != yaml.MappingNode {
+				continue
+			}
+			name := yamlMapValue(item, "name")
+			image := yamlMapValue(item, "image")
+			if name != nil && image != nil && image.Kind == yaml.ScalarNode {
+				result = append(result, rawContainer{Name: name.Value, Image: image})
+			}
+		}
+	}
+	return result
+}
+
+func yamlNodeAt(root *yaml.Node, keys ...string) *yaml.Node {
+	current := root
+	for _, key := range keys {
+		current = yamlMapValue(current, key)
+		if current == nil {
+			return nil
+		}
+	}
+	return current
+}
+
+func nodeValue(node *yaml.Node) string {
+	if node == nil {
+		return ""
+	}
+	return node.Value
+}
+
+func supportedWorkloadKind(kind string) bool {
+	switch kind {
+	case "Deployment", "StatefulSet", "DaemonSet", "CronJob":
+		return true
+	default:
+		return false
+	}
+}
+
+func imageRepository(value string) string {
+	if index := strings.Index(value, "@"); index >= 0 {
+		value = value[:index]
+	}
+	lastSlash := strings.LastIndex(value, "/")
+	if index := strings.LastIndex(value, ":"); index > lastSlash {
+		value = value[:index]
+	}
+	return value
 }
 
 func readYAMLMap(path string) (map[string]any, error) {

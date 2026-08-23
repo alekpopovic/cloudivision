@@ -131,6 +131,12 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 			ImageRepositoryField: buildRun.Spec.GitOps.ImageRepositoryField,
 			ImageTagField:        buildRun.Spec.GitOps.ImageTagField,
 			ImageDigestField:     buildRun.Spec.GitOps.ImageDigestField,
+			KustomizationFile:    buildRun.Spec.GitOps.Kustomize.KustomizationFile,
+			KustomizeImageName:   buildRun.Spec.GitOps.Kustomize.ImageName,
+			RawYAMLFiles:         buildRun.Spec.GitOps.RawYAML.Files,
+			WorkloadKind:         buildRun.Spec.GitOps.RawYAML.WorkloadKind,
+			WorkloadName:         buildRun.Spec.GitOps.RawYAML.WorkloadName,
+			ContainerName:        buildRun.Spec.GitOps.RawYAML.ContainerName,
 		})
 		if err != nil {
 			phase, reason := gitFailure(err)

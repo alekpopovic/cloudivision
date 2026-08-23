@@ -1,9 +1,9 @@
 {
   "project": "cloudivision",
   "created_at": "2026-08-21",
-  "updated_at": "2026-08-23T00:52:56Z",
-  "last_executed_prompt": 54,
-  "next_prompt": 55,
+  "updated_at": "2026-08-23T00:59:38Z",
+  "last_executed_prompt": 55,
+  "next_prompt": 56,
   "status_legend": {
     "done": "Prompt has been executed successfully.",
     "in_progress": "Prompt is currently being executed.",
@@ -512,8 +512,9 @@
       "title": "GitOps Kustomize and Raw YAML Support",
       "phase": "Release / GitOps",
       "file": "prompts/55-gitops-kustomize-and-raw-yaml-support.md",
-      "status": "pending",
-      "notes": ""
+      "status": "done",
+      "notes": "Added targeted idempotent Kustomize and raw-YAML GitOps configuration/mutators for custom files, image names, workload kinds/names and containers, with traversal safety, multi-workload tests, CRDs and docs.",
+      "executed_at": "2026-08-23T00:59:38Z"
     },
     {
       "id": 56,

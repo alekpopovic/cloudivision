@@ -587,11 +587,32 @@ type BuildRunGitOpsSpec struct {
 	// +kubebuilder:default:=image.tag
 	ImageTagField string `json:"imageTagField,omitempty"`
 	// +kubebuilder:default:=image.digest
-	ImageDigestField string `json:"imageDigestField,omitempty"`
+	ImageDigestField string              `json:"imageDigestField,omitempty"`
+	Kustomize        GitOpsKustomizeSpec `json:"kustomize,omitempty"`
+	RawYAML          GitOpsRawYAMLSpec   `json:"rawYaml,omitempty"`
 	// +kubebuilder:validation:Enum=helm-values;kustomize-image;raw-yaml
 	Strategy GitOpsStrategy `json:"strategy,omitempty"`
 	// +kubebuilder:validation:MinLength=1
 	EnvironmentRef string `json:"environmentRef,omitempty"`
+}
+
+type GitOpsKustomizeSpec struct {
+	// +kubebuilder:default:=kustomization.yaml
+	KustomizationFile string `json:"kustomizationFile,omitempty"`
+	// +optional
+	ImageName string `json:"imageName,omitempty"`
+}
+
+type GitOpsRawYAMLSpec struct {
+	// +kubebuilder:validation:MaxItems=32
+	// +listType=set
+	Files []string `json:"files,omitempty"`
+	// +kubebuilder:validation:Enum=Deployment;StatefulSet;DaemonSet;CronJob
+	WorkloadKind string `json:"workloadKind,omitempty"`
+	// +optional
+	WorkloadName string `json:"workloadName,omitempty"`
+	// +optional
+	ContainerName string `json:"containerName,omitempty"`
 }
 
 type BuildRunSpec struct {

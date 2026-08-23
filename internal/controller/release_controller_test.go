@@ -64,6 +64,9 @@ func TestReleaseReconcileUpdatesGitOpsOnce(t *testing.T) {
 	if provider.updateCalls != 1 {
 		t.Fatalf("updateCalls = %d, want 1", provider.updateCalls)
 	}
+	if provider.lastRequest.KustomizationFile != "prod.yaml" || provider.lastRequest.KustomizeImageName != "app-placeholder" || provider.lastRequest.ContainerName != "app" || len(provider.lastRequest.RawYAMLFiles) != 1 {
+		t.Fatalf("GitOps strategy config was not forwarded: %#v", provider.lastRequest)
+	}
 	if prProvider.createCalls != 0 || prProvider.readCalls != 0 {
 		t.Fatalf("direct commit unexpectedly called PR provider: %#v", prProvider)
 	}
@@ -605,6 +608,8 @@ func newReleaseReconciler(t *testing.T) (*ReleaseReconciler, *cicdv1alpha1.Relea
 	buildRun.Spec.GitOps.RepoURL = "https://github.com/cloudivision/gitops.git"
 	buildRun.Spec.GitOps.Branch = "main"
 	buildRun.Spec.GitOps.Path = "apps/sample"
+	buildRun.Spec.GitOps.Kustomize = cicdv1alpha1.GitOpsKustomizeSpec{KustomizationFile: "prod.yaml", ImageName: "app-placeholder"}
+	buildRun.Spec.GitOps.RawYAML = cicdv1alpha1.GitOpsRawYAMLSpec{Files: []string{"deployment.yaml"}, WorkloadKind: "Deployment", WorkloadName: "sample", ContainerName: "app"}
 	release := &cicdv1alpha1.Release{
 		ObjectMeta: metav1.ObjectMeta{Name: "sample-buildrun-sample-environment", Namespace: "ci"},
 		Spec: cicdv1alpha1.ReleaseSpec{
