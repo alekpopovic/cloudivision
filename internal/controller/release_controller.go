@@ -120,13 +120,17 @@ func (r *ReleaseReconciler) reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 		branch, baseBranch := gitOpsBranches(release, buildRun)
 		result, err := provider.UpdateImage(ctx, gitops.UpdateImageRequest{
-			RepositoryURL: buildRun.Spec.GitOps.RepoURL,
-			Branch:        branch,
-			BaseBranch:    baseBranch,
-			Path:          buildRun.Spec.GitOps.Path,
-			Strategy:      buildRun.Spec.GitOps.Strategy,
-			ReleaseName:   release.Name,
-			Image:         release.Spec.Image,
+			RepositoryURL:        buildRun.Spec.GitOps.RepoURL,
+			Branch:               branch,
+			BaseBranch:           baseBranch,
+			Path:                 buildRun.Spec.GitOps.Path,
+			Strategy:             buildRun.Spec.GitOps.Strategy,
+			ReleaseName:          release.Name,
+			Image:                release.Spec.Image,
+			ValuesFile:           buildRun.Spec.GitOps.ValuesFile,
+			ImageRepositoryField: buildRun.Spec.GitOps.ImageRepositoryField,
+			ImageTagField:        buildRun.Spec.GitOps.ImageTagField,
+			ImageDigestField:     buildRun.Spec.GitOps.ImageDigestField,
 		})
 		if err != nil {
 			phase, reason := gitFailure(err)
@@ -580,6 +584,10 @@ func gitFailure(err error) (cicdv1alpha1.ReleasePhase, string) {
 		switch operationError.Operation {
 		case gitops.OperationClone:
 			return cicdv1alpha1.ReleasePhaseFailedGitClone, "GitCloneFailed"
+		case gitops.OperationParse:
+			return cicdv1alpha1.ReleasePhaseFailedGitCommit, "GitOpsParseFailed"
+		case gitops.OperationUpdate:
+			return cicdv1alpha1.ReleasePhaseFailedGitCommit, "GitOpsUpdateFailed"
 		case gitops.OperationPush:
 			return cicdv1alpha1.ReleasePhaseFailedGitPush, "GitPushFailed"
 		}
@@ -616,6 +624,10 @@ func observeGitOpsFailure(reason string) {
 		operation = "clone"
 	case "GitCommitFailed", "EmptyGitCommit":
 		operation = "commit"
+	case "GitOpsParseFailed":
+		operation = "parse"
+	case "GitOpsUpdateFailed":
+		operation = "update"
 	case "GitPushFailed":
 		operation = "push"
 	case "PullRequestCreateFailed", "PullRequestStatusFailed":

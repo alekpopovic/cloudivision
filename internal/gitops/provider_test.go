@@ -2,6 +2,7 @@ package gitops
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -112,8 +113,96 @@ func TestUpdateHelmValues(t *testing.T) {
 	if image["repository"] != "ghcr.io/cloudivision/example" || image["digest"] != "sha256:123" {
 		t.Fatalf("image values = %#v", image)
 	}
-	if _, exists := image["tag"]; exists {
-		t.Fatalf("image values retain mutable tag when digest exists: %#v", image)
+	if image["tag"] != "v1" {
+		t.Fatalf("image tag = %#v, want v1", image["tag"])
+	}
+}
+
+func TestUpdateHelmValuesUsesNestedConfiguredFieldsAndPreservesComments(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "production.yaml")
+	content := "# production values\nworkloads:\n  api:\n    container:\n      repository: old # keep this comment\n      tag: old\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := updateHelmValuesConfigured(path, cicdv1alpha1.ImageRef{Repository: "ghcr.io/acme/api", Tag: "v2", Digest: "sha256:abc"}, helmValuesConfig{
+		RepositoryField: "workloads.api.container.repository",
+		TagField:        "workloads.api.container.tag",
+		DigestField:     "workloads.api.container.digest",
+	})
+	if err != nil || !changed {
+		t.Fatalf("updateHelmValuesConfigured() = %v, %v", changed, err)
+	}
+	updated := string(mustRead(t, path))
+	if !strings.Contains(updated, "# production values") || !strings.Contains(updated, "# keep this comment") || !strings.Contains(updated, "digest: sha256:abc") {
+		t.Fatalf("production.yaml =\n%s", updated)
+	}
+}
+
+func TestUpdateHelmValuesReportsMissingAndInvalidYAML(t *testing.T) {
+	dir := t.TempDir()
+	for _, test := range []struct {
+		name string
+		path string
+	}{
+		{name: "missing", path: filepath.Join(dir, "missing.yaml")},
+		{name: "invalid", path: filepath.Join(dir, "invalid.yaml")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if test.name == "invalid" {
+				if err := os.WriteFile(test.path, []byte("image: [unterminated"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, err := updateHelmValuesConfigured(test.path, cicdv1alpha1.ImageRef{Repository: "example/app", Tag: "v1"}, helmValuesConfig{})
+			operationError := &OperationError{}
+			if !errors.As(err, &operationError) || operationError.Operation != OperationParse {
+				t.Fatalf("error = %v, want parse OperationError", err)
+			}
+		})
+	}
+}
+
+func TestGitRepositoryProviderHelmValuesIsIdempotent(t *testing.T) {
+	remote := createRemoteGitOpsRepo(t, map[string]string{
+		"apps/api/production.yaml": "# keep\nimage:\n  repository: old\n  tag: old\n",
+	})
+	request := UpdateImageRequest{
+		RepositoryURL: remote, Branch: "main", Path: "apps/api", ValuesFile: "production.yaml",
+		Strategy: cicdv1alpha1.GitOpsStrategyHelmValues, ReleaseName: "release-1",
+		Image: cicdv1alpha1.ImageRef{Repository: "ghcr.io/acme/api", Tag: "v2", Digest: "sha256:abc"},
+	}
+	provider := GitRepositoryProvider{}
+	first, err := provider.UpdateImage(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := provider.UpdateImage(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Commit == "" || first.Commit != second.Commit {
+		t.Fatalf("commits = %q, %q", first.Commit, second.Commit)
+	}
+	count := strings.TrimSpace(runGitTestOutput(t, "", "git", "--git-dir", remote, "rev-list", "--count", "main"))
+	if count != "2" {
+		t.Fatalf("commit count = %s, want initial plus one release commit", count)
+	}
+}
+
+func TestGitRepositoryProviderReportsPushFailure(t *testing.T) {
+	remote := createRemoteGitOpsRepo(t, map[string]string{"values.yaml": "image:\n  repository: old\n  tag: old\n"})
+	hook := filepath.Join(remote, "hooks", "pre-receive")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := (GitRepositoryProvider{}).UpdateImage(context.Background(), UpdateImageRequest{
+		RepositoryURL: remote, Branch: "main", Strategy: cicdv1alpha1.GitOpsStrategyHelmValues,
+		ReleaseName: "release-1", Image: cicdv1alpha1.ImageRef{Repository: "example/app", Tag: "v2"},
+	})
+	operationError := &OperationError{}
+	if !errors.As(err, &operationError) || operationError.Operation != OperationPush {
+		t.Fatalf("error = %v, want push OperationError", err)
 	}
 }
 

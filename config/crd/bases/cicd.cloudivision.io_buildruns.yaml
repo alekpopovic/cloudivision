@@ -73,6 +73,15 @@ spec:
                   environmentRef:
                     minLength: 1
                     type: string
+                  imageDigestField:
+                    default: image.digest
+                    type: string
+                  imageRepositoryField:
+                    default: image.repository
+                    type: string
+                  imageTagField:
+                    default: image.tag
+                    type: string
                   path:
                     type: string
                   repoURL:
@@ -83,6 +92,9 @@ spec:
                     - helm-values
                     - kustomize-image
                     - raw-yaml
+                    type: string
+                  valuesFile:
+                    default: values.yaml
                     type: string
                 required:
                 - enabled

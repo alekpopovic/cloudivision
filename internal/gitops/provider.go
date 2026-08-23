@@ -19,6 +19,8 @@ type Operation string
 
 const (
 	OperationClone  Operation = "clone"
+	OperationParse  Operation = "parse"
+	OperationUpdate Operation = "update"
 	OperationCommit Operation = "commit"
 	OperationPush   Operation = "push"
 )
@@ -42,13 +44,17 @@ type StatusReader interface {
 }
 
 type UpdateImageRequest struct {
-	RepositoryURL string
-	Branch        string
-	BaseBranch    string
-	Path          string
-	Strategy      cicdv1alpha1.GitOpsStrategy
-	ReleaseName   string
-	Image         cicdv1alpha1.ImageRef
+	RepositoryURL        string
+	Branch               string
+	BaseBranch           string
+	Path                 string
+	Strategy             cicdv1alpha1.GitOpsStrategy
+	ReleaseName          string
+	Image                cicdv1alpha1.ImageRef
+	ValuesFile           string
+	ImageRepositoryField string
+	ImageTagField        string
+	ImageDigestField     string
 }
 
 type UpdateImageResult struct {
@@ -169,8 +175,23 @@ func (p GitRepositoryProvider) UpdateImage(ctx context.Context, req UpdateImageR
 	if err != nil {
 		return nil, &OperationError{Operation: OperationClone, Err: err}
 	}
-	if err := updateImageFiles(repoDir, req.Path, strategy, req.Image); err != nil {
-		return nil, &OperationError{Operation: OperationCommit, Err: err}
+	changed, err := updateImageFilesConfigured(repoDir, req.Path, strategy, req.Image, helmValuesConfig{
+		ValuesFile: req.ValuesFile, RepositoryField: req.ImageRepositoryField,
+		TagField: req.ImageTagField, DigestField: req.ImageDigestField,
+	})
+	if err != nil {
+		operationError := &OperationError{}
+		if errors.As(err, &operationError) {
+			return nil, err
+		}
+		return nil, &OperationError{Operation: OperationUpdate, Err: err}
+	}
+	if !changed {
+		commit, headErr := gitClient.Head(ctx, repoDir)
+		if headErr != nil {
+			return nil, &OperationError{Operation: OperationCommit, Err: headErr}
+		}
+		return &UpdateImageResult{Commit: commit}, nil
 	}
 	if err := gitClient.AddAll(ctx, repoDir); err != nil {
 		return nil, &OperationError{Operation: OperationCommit, Err: err}
@@ -193,25 +214,47 @@ func (p GitRepositoryProvider) ReadDeploymentStatus(context.Context, DeploymentS
 	return nil, ErrDeploymentStatusUnavailable
 }
 
+type helmValuesConfig struct {
+	ValuesFile      string
+	RepositoryField string
+	TagField        string
+	DigestField     string
+}
+
 func updateImageFiles(repoDir, targetPath string, strategy cicdv1alpha1.GitOpsStrategy, image cicdv1alpha1.ImageRef) error {
+	_, err := updateImageFilesConfigured(repoDir, targetPath, strategy, image, helmValuesConfig{})
+	return err
+}
+
+func updateImageFilesConfigured(repoDir, targetPath string, strategy cicdv1alpha1.GitOpsStrategy, image cicdv1alpha1.ImageRef, config helmValuesConfig) (bool, error) {
 	switch strategy {
 	case cicdv1alpha1.GitOpsStrategyHelmValues:
-		path, err := safeGitOpsFile(repoDir, targetPath, "values.yaml")
+		path, err := helmValuesPath(repoDir, targetPath, config.ValuesFile)
 		if err != nil {
-			return err
+			return false, &OperationError{Operation: OperationUpdate, Err: err}
 		}
-		return updateHelmValues(path, image)
+		return updateHelmValuesConfigured(path, image, config)
 	case cicdv1alpha1.GitOpsStrategyKustomizeImage, "":
 		path, err := safeGitOpsFile(repoDir, targetPath, "kustomization.yaml")
 		if err != nil {
-			return err
+			return false, err
 		}
-		return updateKustomization(path, image)
+		return true, updateKustomization(path, image)
 	case cicdv1alpha1.GitOpsStrategyRawYAML:
-		return updateRawYAML(repoDir, targetPath, image)
+		return true, updateRawYAML(repoDir, targetPath, image)
 	default:
-		return fmt.Errorf("unsupported GitOps strategy %q", strategy)
+		return false, fmt.Errorf("unsupported GitOps strategy %q", strategy)
 	}
+}
+
+func helmValuesPath(repoDir, targetPath, valuesFile string) (string, error) {
+	if valuesFile == "" {
+		valuesFile = "values.yaml"
+	}
+	if targetPath != "" && isYAML(targetPath) && valuesFile == "values.yaml" {
+		return safeRepoPath(repoDir, targetPath)
+	}
+	return safeRepoPath(repoDir, filepath.Join(targetPath, valuesFile))
 }
 
 func safeGitOpsFile(repoDir, targetPath, defaultFile string) (string, error) {
@@ -245,26 +288,162 @@ func safeRepoPath(repoDir, targetPath string) (string, error) {
 }
 
 func updateHelmValues(path string, image cicdv1alpha1.ImageRef) error {
-	values, err := readYAMLMap(path)
+	_, err := updateHelmValuesConfigured(path, image, helmValuesConfig{})
+	return err
+}
+
+func updateHelmValuesConfigured(path string, image cicdv1alpha1.ImageRef, config helmValuesConfig) (bool, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return false, &OperationError{Operation: OperationParse, Err: fmt.Errorf("read Helm values %s: %w", path, err)}
 	}
-	imageValues, _ := values["image"].(map[string]any)
-	if imageValues == nil {
-		imageValues = map[string]any{}
-		values["image"] = imageValues
+	var document yaml.Node
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		return false, &OperationError{Operation: OperationParse, Err: fmt.Errorf("parse Helm values %s: %w", path, err)}
 	}
-	imageValues["repository"] = image.Repository
+	if len(document.Content) != 1 || document.Content[0].Kind != yaml.MappingNode {
+		return false, &OperationError{Operation: OperationParse, Err: fmt.Errorf("parse Helm values %s: document root must be a mapping", path)}
+	}
+	repositoryField := defaultString(config.RepositoryField, "image.repository")
+	tagField := defaultString(config.TagField, "image.tag")
+	digestField := defaultString(config.DigestField, "image.digest")
+	changed, err := setYAMLField(document.Content[0], repositoryField, image.Repository)
+	if err != nil {
+		return false, &OperationError{Operation: OperationUpdate, Err: err}
+	}
+	fieldChanged, err := setOrDeleteYAMLField(document.Content[0], tagField, image.Tag)
+	if err != nil {
+		return false, &OperationError{Operation: OperationUpdate, Err: err}
+	}
+	changed = changed || fieldChanged
 	if image.Digest != "" {
-		imageValues["digest"] = image.Digest
-		delete(imageValues, "tag")
+		fieldChanged, err = setYAMLField(document.Content[0], digestField, image.Digest)
 	} else {
-		delete(imageValues, "digest")
-		if image.Tag != "" {
-			imageValues["tag"] = image.Tag
+		fieldChanged, err = deleteYAMLField(document.Content[0], digestField)
+	}
+	if err != nil {
+		return false, &OperationError{Operation: OperationUpdate, Err: err}
+	}
+	changed = changed || fieldChanged
+	if !changed {
+		return false, nil
+	}
+	var output strings.Builder
+	encoder := yaml.NewEncoder(&output)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(&document); err != nil {
+		return false, &OperationError{Operation: OperationUpdate, Err: fmt.Errorf("encode Helm values %s: %w", path, err)}
+	}
+	if err := encoder.Close(); err != nil {
+		return false, &OperationError{Operation: OperationUpdate, Err: fmt.Errorf("encode Helm values %s: %w", path, err)}
+	}
+	if err := os.WriteFile(path, []byte(output.String()), 0o644); err != nil {
+		return false, &OperationError{Operation: OperationUpdate, Err: fmt.Errorf("write Helm values %s: %w", path, err)}
+	}
+	return true, nil
+}
+
+func setOrDeleteYAMLField(root *yaml.Node, field, value string) (bool, error) {
+	if value == "" {
+		return deleteYAMLField(root, field)
+	}
+	return setYAMLField(root, field, value)
+}
+
+func setYAMLField(root *yaml.Node, field, value string) (bool, error) {
+	parts, err := yamlFieldParts(field)
+	if err != nil {
+		return false, err
+	}
+	current := root
+	for _, part := range parts[:len(parts)-1] {
+		next := yamlMapValue(current, part)
+		if next == nil {
+			keyNode := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: part}
+			next = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+			current.Content = append(current.Content, keyNode, next)
+		} else if next.Kind != yaml.MappingNode {
+			return false, fmt.Errorf("Helm values field %q traverses non-map key %q", field, part)
+		}
+		current = next
+	}
+	leaf := parts[len(parts)-1]
+	existing := yamlMapValue(current, leaf)
+	if existing != nil {
+		if existing.Kind != yaml.ScalarNode {
+			return false, fmt.Errorf("Helm values field %q is not a scalar", field)
+		}
+		if existing.Value == value && existing.Tag == "!!str" {
+			return false, nil
+		}
+		existing.Tag = "!!str"
+		existing.Value = value
+		return true, nil
+	}
+	current.Content = append(current.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: leaf},
+		&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value},
+	)
+	return true, nil
+}
+
+func deleteYAMLField(root *yaml.Node, field string) (bool, error) {
+	parts, err := yamlFieldParts(field)
+	if err != nil {
+		return false, err
+	}
+	current := root
+	for _, part := range parts[:len(parts)-1] {
+		next := yamlMapValue(current, part)
+		if next == nil {
+			return false, nil
+		}
+		if next.Kind != yaml.MappingNode {
+			return false, fmt.Errorf("Helm values field %q traverses non-map key %q", field, part)
+		}
+		current = next
+	}
+	leaf := parts[len(parts)-1]
+	for index := 0; index+1 < len(current.Content); index += 2 {
+		if current.Content[index].Value == leaf {
+			current.Content = append(current.Content[:index], current.Content[index+2:]...)
+			return true, nil
 		}
 	}
-	return writeYAML(path, values)
+	return false, nil
+}
+
+func yamlMapValue(mapping *yaml.Node, key string) *yaml.Node {
+	if mapping == nil || mapping.Kind != yaml.MappingNode {
+		return nil
+	}
+	for index := 0; index+1 < len(mapping.Content); index += 2 {
+		if mapping.Content[index].Value == key {
+			return mapping.Content[index+1]
+		}
+	}
+	return nil
+}
+
+func yamlFieldParts(field string) ([]string, error) {
+	field = strings.TrimSpace(field)
+	if field == "" {
+		return nil, fmt.Errorf("Helm values field path is required")
+	}
+	parts := strings.Split(field, ".")
+	for _, part := range parts {
+		if strings.TrimSpace(part) == "" {
+			return nil, fmt.Errorf("Helm values field path %q contains an empty segment", field)
+		}
+	}
+	return parts, nil
+}
+
+func defaultString(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func updateKustomization(path string, image cicdv1alpha1.ImageRef) error {

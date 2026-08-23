@@ -105,7 +105,7 @@ spec:
 
 ## BuildRun
 
-BuildRun is one immutable-intent CI execution. It references a Project, Repository and PipelineTemplate; identifies `revision`, optional branch/commit SHA and trigger; selects `job` or `tekton`; and provides output image and parameters. `gitOps.enabled` requests Release creation after success and carries repository, branch, path, strategy (`helm-values`, `kustomize-image`, `raw-yaml`) and Environment reference.
+BuildRun is one immutable-intent CI execution. It references a Project, Repository and PipelineTemplate; identifies `revision`, optional branch/commit SHA and trigger; selects `job` or `tekton`; and provides output image and parameters. `gitOps.enabled` requests Release creation after success and carries repository, branch, path, strategy (`helm-values`, `kustomize-image`, `raw-yaml`) and Environment reference. Helm-values releases may additionally select `valuesFile` and dotted `imageRepositoryField`, `imageTagField`, and `imageDigestField` paths.
 
 Lifecycle: empty/Pending → Queued → Running → Succeeded, Failed or Cancelled. Status includes start/completion timestamps, Job/PipelineRun reference, produced image, supply-chain references, structured failure and recent log metadata. Controllers must not create a new child for a terminal run.
 

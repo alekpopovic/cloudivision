@@ -580,6 +580,14 @@ type BuildRunGitOpsSpec struct {
 	Branch string `json:"branch,omitempty"`
 	// +optional
 	Path string `json:"path,omitempty"`
+	// +kubebuilder:default:=values.yaml
+	ValuesFile string `json:"valuesFile,omitempty"`
+	// +kubebuilder:default:=image.repository
+	ImageRepositoryField string `json:"imageRepositoryField,omitempty"`
+	// +kubebuilder:default:=image.tag
+	ImageTagField string `json:"imageTagField,omitempty"`
+	// +kubebuilder:default:=image.digest
+	ImageDigestField string `json:"imageDigestField,omitempty"`
 	// +kubebuilder:validation:Enum=helm-values;kustomize-image;raw-yaml
 	Strategy GitOpsStrategy `json:"strategy,omitempty"`
 	// +kubebuilder:validation:MinLength=1

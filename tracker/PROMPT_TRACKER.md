@@ -2,9 +2,9 @@
 
 Project: `cloudivision`
 Created at: `2026-08-21`
-Updated at: `2026-08-23T00:47:48Z`
-Last executed prompt: `53`
-Next prompt: `54`
+Updated at: `2026-08-23T00:52:56Z`
+Last executed prompt: `54`
+Next prompt: `55`
 
 ## How to update
 
@@ -82,7 +82,7 @@ Replace `21` with the last prompt that was successfully executed.
 | 51 | done | Scale | Project Quotas and Runner Concurrency | `prompts/51-project-quotas-and-runner-concurrency.md` | Added enforceable project concurrency, queue, resource, duration, artifact, and log quotas with status/metrics/UI/docs coverage. |
 | 52 | done | API | API Pagination and Server-Side Filtering | `prompts/52-api-pagination-and-server-side-filtering.md` | Added safe token pagination and server-side filtering/sorting for BuildRuns, Releases and audit events; Angular and CLI page navigation; API/OpenAPI docs and tests. |
 | 53 | done | Build Execution | Runner Workspace and Dependency Cache | `prompts/53-runner-workspace-and-dependency-cache.md` | Added opt-in scoped dependency cache with PVC snapshots, BuildKit registry mode, object-store skeleton, TTL/size/path hardening, runner restore/save, purge API/UI, Helm configuration, tests and security docs. |
-| 54 | pending | Release / GitOps | GitOps Helm Values Production Flow | `prompts/54-gitops-helm-values-production-flow.md` |  |
+| 54 | done | Release / GitOps | GitOps Helm Values Production Flow | `prompts/54-gitops-helm-values-production-flow.md` | Hardened Helm-values GitOps with configurable values/field paths, comment-preserving YAML node updates, true no-op behavior, scoped failure reasons, idempotency/push tests and complete docs. |
 | 55 | pending | Release / GitOps | GitOps Kustomize and Raw YAML Support | `prompts/55-gitops-kustomize-and-raw-yaml-support.md` |  |
 | 56 | pending | Release / GitOps | Argo CD and Flux Status Integration | `prompts/56-argo-cd-and-flux-status-integration.md` |  |
 | 57 | pending | Release / GitOps | Release Promotion and Rollback | `prompts/57-release-promotion-and-rollback.md` |  |

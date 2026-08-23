@@ -221,10 +221,13 @@ func TestReleaseGitOperationFailuresUseSpecificPhases(t *testing.T) {
 		name      string
 		operation gitops.Operation
 		phase     cicdv1alpha1.ReleasePhase
+		reason    string
 	}{
-		{name: "clone", operation: gitops.OperationClone, phase: cicdv1alpha1.ReleasePhaseFailedGitClone},
-		{name: "commit", operation: gitops.OperationCommit, phase: cicdv1alpha1.ReleasePhaseFailedGitCommit},
-		{name: "push", operation: gitops.OperationPush, phase: cicdv1alpha1.ReleasePhaseFailedGitPush},
+		{name: "clone", operation: gitops.OperationClone, phase: cicdv1alpha1.ReleasePhaseFailedGitClone, reason: "GitCloneFailed"},
+		{name: "parse", operation: gitops.OperationParse, phase: cicdv1alpha1.ReleasePhaseFailedGitCommit, reason: "GitOpsParseFailed"},
+		{name: "update", operation: gitops.OperationUpdate, phase: cicdv1alpha1.ReleasePhaseFailedGitCommit, reason: "GitOpsUpdateFailed"},
+		{name: "commit", operation: gitops.OperationCommit, phase: cicdv1alpha1.ReleasePhaseFailedGitCommit, reason: "GitCommitFailed"},
+		{name: "push", operation: gitops.OperationPush, phase: cicdv1alpha1.ReleasePhaseFailedGitPush, reason: "GitPushFailed"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -243,6 +246,9 @@ func TestReleaseGitOperationFailuresUseSpecificPhases(t *testing.T) {
 			}
 			if updated.Status.Phase != test.phase {
 				t.Fatalf("phase = %q, want %q", updated.Status.Phase, test.phase)
+			}
+			if updated.Status.Failure.Reason != test.reason {
+				t.Fatalf("reason = %q, want %q", updated.Status.Failure.Reason, test.reason)
 			}
 			if updated.Status.Failure.Reason == "" || updated.Status.Failure.Message == "" {
 				t.Fatalf("failure = %#v, want preserved reason and message", updated.Status.Failure)
