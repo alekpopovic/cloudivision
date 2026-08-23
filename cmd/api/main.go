@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -22,6 +23,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/auth"
 	dependencycache "github.com/cloudivision/cloudivision/internal/cache"
 	"github.com/cloudivision/cloudivision/internal/logstore"
+	"github.com/cloudivision/cloudivision/internal/plugin"
 	"github.com/cloudivision/cloudivision/internal/policy"
 	"github.com/cloudivision/cloudivision/internal/provider"
 	providerbuild "github.com/cloudivision/cloudivision/internal/provider/build"
@@ -85,6 +87,11 @@ func main() {
 		logger.Error("configure provider registry", "error", err)
 		os.Exit(1)
 	}
+	pluginRegistry, err := configurePluginRegistry(providerRegistry)
+	if err != nil {
+		logger.Error("configure plugin registry", "error", err)
+		os.Exit(1)
+	}
 	organizationDirectory := auth.OrganizationDirectory(auth.NewDevelopmentDirectory())
 	if authMode != "disabled" {
 		organizationDirectory = &auth.MemoryDirectory{}
@@ -127,6 +134,7 @@ func main() {
 		PolicyEvaluator:  policy.NewDefaultEvaluator(),
 		Notifier:         providernotifications.KubernetesDispatcher{Client: k8sClient},
 		Organizations:    organizationDirectory,
+		Plugins:          pluginRegistry,
 	}
 
 	addr := envOrDefault("CLOU_DIVISION_API_ADDR", envOrDefault("CLOUDIVISION_API_ADDR", ":8080"))
@@ -157,6 +165,24 @@ func main() {
 	}
 
 	logger.Info("api server stopped")
+}
+
+func configurePluginRegistry(providers *provider.Registry) (*plugin.Registry, error) {
+	registry := plugin.NewRegistry()
+	for _, current := range providers.List() {
+		adapted := plugin.FromProvider(current)
+		switch adapted.Metadata().Type {
+		case plugin.TypeGit, plugin.TypeRegistry, plugin.TypeBuild, plugin.TypeGitOps, plugin.TypeNotification, plugin.TypeSupplyChain:
+			if err := registry.Register(adapted); err != nil {
+				return nil, err
+			}
+		}
+	}
+	policyPlugin := plugin.Static{Info: plugin.Metadata{Name: "default", Type: plugin.TypePolicy, Version: "builtin", Capabilities: []provider.Capability{{Name: "build-policy", Description: "Evaluate BuildRun execution policy"}, {Name: "release-policy", Description: "Evaluate release supply-chain and environment policy"}}, ConfigSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`), Configured: true, ConfigurationStatus: "built in", DocsURL: "/plugins/"}, Health: provider.ProviderHealth{Healthy: true, Message: "default policy evaluator is available"}}
+	if err := registry.Register(policyPlugin); err != nil {
+		return nil, err
+	}
+	return registry, nil
 }
 
 func configureLogStore() (logstore.LogStore, error) {

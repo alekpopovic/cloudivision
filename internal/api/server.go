@@ -23,6 +23,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/kube"
 	"github.com/cloudivision/cloudivision/internal/logstore"
 	"github.com/cloudivision/cloudivision/internal/observability"
+	"github.com/cloudivision/cloudivision/internal/plugin"
 	"github.com/cloudivision/cloudivision/internal/policy"
 	"github.com/cloudivision/cloudivision/internal/provider"
 	providernotifications "github.com/cloudivision/cloudivision/internal/provider/notifications"
@@ -55,6 +56,7 @@ type Server struct {
 	PolicyEvaluator  policy.Evaluator
 	Notifier         providernotifications.Dispatcher
 	Organizations    auth.OrganizationDirectory
+	Plugins          *plugin.Registry
 }
 
 func (s Server) Handler() http.Handler {
@@ -103,6 +105,9 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/reports/security", s.securityReport)
 	mux.HandleFunc("GET /api/v1/providers", s.providers)
 	mux.HandleFunc("GET /api/v1/providers/health", s.providerHealth)
+	mux.HandleFunc("GET /api/v1/plugins", s.plugins)
+	mux.HandleFunc("GET /api/v1/plugins/health", s.pluginHealth)
+	mux.HandleFunc("GET /api/v1/plugins/{type}/{name}", s.plugin)
 	mux.HandleFunc("POST /api/v1/webhooks/github/{repositoryName}", s.webhook(webhook.ProviderGitHub))
 	mux.HandleFunc("POST /api/v1/webhooks/gitlab/{repositoryName}", s.webhook(webhook.ProviderGitLab))
 	mux.HandleFunc("POST /api/v1/webhooks/gitea/{repositoryName}", s.webhook(webhook.ProviderGitea))
@@ -198,6 +203,33 @@ func (s Server) providerHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s.Providers.HealthCheckAll(r.Context()))
+}
+
+func (s Server) plugins(w http.ResponseWriter, _ *http.Request) {
+	if s.Plugins == nil {
+		writeJSON(w, http.StatusOK, []plugin.Metadata{})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.Plugins.List())
+}
+func (s Server) pluginHealth(w http.ResponseWriter, r *http.Request) {
+	if s.Plugins == nil {
+		writeJSON(w, http.StatusOK, []plugin.HealthResult{})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.Plugins.Health(r.Context()))
+}
+func (s Server) plugin(w http.ResponseWriter, r *http.Request) {
+	if s.Plugins == nil {
+		s.writeError(w, apiError{status: http.StatusNotFound, code: "not_found", message: "plugin not found"})
+		return
+	}
+	value, err := s.Plugins.Get(plugin.Type(r.PathValue("type")), r.PathValue("name"))
+	if err != nil {
+		s.writeError(w, apiError{status: http.StatusNotFound, code: "not_found", message: err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, value.Metadata())
 }
 
 func (s Server) clusterTargets(w http.ResponseWriter, r *http.Request) {

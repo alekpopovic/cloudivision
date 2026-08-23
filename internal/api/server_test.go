@@ -20,6 +20,7 @@ import (
 	"github.com/cloudivision/cloudivision/internal/auth"
 	dependencycache "github.com/cloudivision/cloudivision/internal/cache"
 	"github.com/cloudivision/cloudivision/internal/logstore"
+	"github.com/cloudivision/cloudivision/internal/plugin"
 	"github.com/cloudivision/cloudivision/internal/policy"
 	"github.com/cloudivision/cloudivision/internal/provider"
 	"github.com/cloudivision/cloudivision/internal/webhook"
@@ -61,6 +62,36 @@ func TestProviderEndpointsExposeCapabilitiesAndHealth(t *testing.T) {
 	}
 	if len(health) != 1 || !health[0].Health.Healthy || health[0].Health.CheckedAt.IsZero() {
 		t.Fatalf("health = %#v", health)
+	}
+}
+
+func TestPluginEndpointsExposeMetadataAndHealth(t *testing.T) {
+	server, _ := newTestServer(t)
+	server.Plugins = plugin.NewRegistry()
+	registered := plugin.Static{
+		Info: plugin.Metadata{
+			Name: "default", Type: plugin.TypePolicy, Version: "1.0.0",
+			Capabilities: []provider.Capability{{Name: "evaluate", Description: "evaluate policy"}},
+			ConfigSchema: json.RawMessage(`{"type":"object"}`), Configured: true, ConfigurationStatus: "ready",
+		},
+		Health: provider.ProviderHealth{Healthy: true, Message: "ready"},
+	}
+	if err := server.Plugins.Register(registered); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{"/api/v1/plugins", "/api/v1/plugins/policy/default", "/api/v1/plugins/health"} {
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s status=%d body=%s", path, recorder.Code, recorder.Body.String())
+		}
+	}
+
+	missing := httptest.NewRecorder()
+	server.Handler().ServeHTTP(missing, httptest.NewRequest(http.MethodGet, "/api/v1/plugins/git/missing", nil))
+	if missing.Code != http.StatusNotFound {
+		t.Fatalf("missing status=%d body=%s", missing.Code, missing.Body.String())
 	}
 }
 

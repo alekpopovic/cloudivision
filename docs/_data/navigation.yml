@@ -32,6 +32,8 @@
       url: /concepts/release.html
     - title: Providers
       url: /concepts/providers.html
+    - title: Plugins
+      url: /plugins/
     - title: Policy
       url: /concepts/policy.html
 
@@ -84,6 +86,8 @@
       url: /development/testing.html
     - title: Add a provider
       url: /development/adding-provider.html
+    - title: Create a plugin
+      url: /plugins/creating-plugin.html
     - title: Contributing
       url: /development/contributing.html
     - title: Docs site development

@@ -4,7 +4,7 @@ import { Observable, catchError, map, of, shareReplay, switchMap, throwError } f
 
 import { environment } from '../../environments/environment';
 import { OrganizationContext } from '../core/organization-context.service';
-import { ApiError, ApprovalActionRequest, BuildReport, BuildRun, CatalogPipelineTemplate, Environment, LogsResponse, Membership, Organization, Page, PipelineTemplate, Principal, Project, ProjectAccess, ProviderHealthResult, ProviderSummary, Release, ReleasePromoteRequest, ReleaseReport, ReleaseRollbackRequest, Repository, SecurityReport, Team } from './models';
+import { ApiError, ApprovalActionRequest, BuildReport, BuildRun, CatalogPipelineTemplate, Environment, LogsResponse, Membership, Organization, Page, PipelineTemplate, PluginHealthResult, PluginMetadata, PluginType, Principal, Project, ProjectAccess, ProviderHealthResult, ProviderSummary, Release, ReleasePromoteRequest, ReleaseReport, ReleaseRollbackRequest, Repository, SecurityReport, Team } from './models';
 
 interface RuntimeConfig {
   apiBaseUrl?: string;
@@ -135,6 +135,18 @@ export class ApiClient {
 	providerHealth(): Observable<ProviderHealthResult[]> {
 		return this.get<ProviderHealthResult[]>('/api/v1/providers/health');
 	}
+
+  plugins(): Observable<PluginMetadata[]> {
+    return this.get<PluginMetadata[]>('/api/v1/plugins');
+  }
+
+  plugin(type: PluginType, name: string): Observable<PluginMetadata> {
+    return this.get<PluginMetadata>(`/api/v1/plugins/${encodeURIComponent(type)}/${encodeURIComponent(name)}`);
+  }
+
+  pluginHealth(): Observable<PluginHealthResult[]> {
+    return this.get<PluginHealthResult[]>('/api/v1/plugins/health');
+  }
 
   approveRelease(namespace: string, name: string, body: ApprovalActionRequest): Observable<Release> {
     return this.post<Release>(`/api/v1/releases/${namespace}/${name}/approve`, body);

@@ -331,3 +331,21 @@ export interface ProviderSummary {
 export interface ProviderHealthResult extends ProviderSummary {
   health: { healthy: boolean; message: string; checkedAt: string };
 }
+
+export type PluginType = 'git' | 'registry' | 'build' | 'gitops' | 'notification' | 'policy' | 'supply-chain';
+
+export interface PluginMetadata {
+  name: string;
+  type: PluginType;
+  version: string;
+  capabilities: ProviderCapability[];
+  configSchema: Record<string, unknown>;
+  configured: boolean;
+  configurationStatus: string;
+  docsUrl?: string;
+}
+
+export interface PluginHealthResult {
+  metadata: PluginMetadata;
+  health: { healthy: boolean; message: string; checkedAt: string };
+}

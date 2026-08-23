@@ -427,6 +427,34 @@ paths:
       responses:
         "200":
           description: Run provider health checks and return messages and timestamps.
+  /api/v1/plugins:
+    get:
+      responses:
+        "200":
+          description: List statically registered plugins and their metadata.
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/PluginMetadata"}}
+  /api/v1/plugins/health:
+    get:
+      responses:
+        "200":
+          description: Run health checks for every registered plugin.
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: "#/components/schemas/PluginHealthResult"}}
+  /api/v1/plugins/{type}/{name}:
+    get:
+      parameters:
+        - {name: type, in: path, required: true, schema: {type: string, enum: [git, registry, build, gitops, notification, policy, supply-chain]}}
+        - {name: name, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Plugin metadata.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PluginMetadata"}
+        "404": {description: Plugin not found.}
   /api/v1/webhooks/github/{repositoryName}:
     post:
       parameters:
@@ -576,6 +604,36 @@ components:
               severity: {type: string}
               message: {type: string}
               fieldPath: {type: string}
+    PluginCapability:
+      type: object
+      required: [name, description]
+      properties:
+        name: {type: string}
+        description: {type: string}
+    PluginMetadata:
+      type: object
+      required: [name, type, version, capabilities, configSchema, configured, configurationStatus]
+      properties:
+        name: {type: string}
+        type: {type: string, enum: [git, registry, build, gitops, notification, policy, supply-chain]}
+        version: {type: string}
+        capabilities: {type: array, items: {$ref: "#/components/schemas/PluginCapability"}}
+        configSchema: {type: object, additionalProperties: true}
+        configured: {type: boolean}
+        configurationStatus: {type: string}
+        docsUrl: {type: string}
+    PluginHealthResult:
+      type: object
+      required: [metadata, health]
+      properties:
+        metadata: {$ref: "#/components/schemas/PluginMetadata"}
+        health:
+          type: object
+          required: [healthy, message, checkedAt]
+          properties:
+            healthy: {type: boolean}
+            message: {type: string}
+            checkedAt: {type: string, format: date-time}
   securitySchemes:
     bearerAuth:
       type: http

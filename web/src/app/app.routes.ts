@@ -14,6 +14,7 @@ import { ProvidersPageComponent } from './features/providers/providers-page.comp
 import { OrganizationsPageComponent } from './features/organizations/organizations-page.component';
 import { AuditExportPageComponent } from './features/reports/audit-export-page.component';
 import { ReportsPageComponent } from './features/reports/reports-page.component';
+import { PluginsPageComponent } from './features/plugins/plugins-page.component';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'dashboard' },
@@ -27,6 +28,7 @@ export const routes: Routes = [
   { path: 'repositories', component: RepositoriesPageComponent },
   { path: 'pipeline-templates', component: PipelineTemplatesPageComponent },
 	{ path: 'providers', component: ProvidersPageComponent },
+  { path: 'plugins', component: PluginsPageComponent },
   { path: 'build-runs', component: BuildRunsPageComponent },
   { path: 'build-runs/:namespace/:name', component: BuildRunDetailPageComponent },
   { path: 'environments', component: EnvironmentsPageComponent },

@@ -28,6 +28,7 @@ export class AppComponent {
     { label: 'Repositories', path: '/repositories', icon: 'source' },
     { label: 'Pipeline Templates', path: '/pipeline-templates', icon: 'pipeline' },
     { label: 'Providers', path: '/providers', icon: 'platform' },
+    { label: 'Plugins', path: '/plugins', icon: 'platform' },
     { label: 'Build Runs', path: '/build-runs', icon: 'build' },
     { label: 'Environments', path: '/environments', icon: 'deploy' },
     { label: 'Releases', path: '/releases', icon: 'deploy' },
